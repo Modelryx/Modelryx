@@ -1,0 +1,37 @@
+{
+  "Rules": [
+    {
+      "ID": "DeleteOldConversionArtifacts",
+      "Filter": {
+        "Prefix": "processing/"
+      },
+      "Expiration": {
+        "Days": 30
+      },
+      "Status": "Enabled"
+    },
+    {
+      "ID": "DeleteOldUploadSessions",
+      "Filter": {
+        "Prefix": "uploads/"
+      },
+      "Expiration": {
+        "Days": 7
+      },
+      "Status": "Enabled"
+    },
+    {
+      "ID": "TransitionOldArchives",
+      "Filter": {
+        "Prefix": "archives/"
+      },
+      "Transitions": [
+        {
+          "Days": 30,
+          "StorageClass": "GLACIER"
+        }
+      ],
+      "Status": "Enabled"
+    }
+  ]
+}

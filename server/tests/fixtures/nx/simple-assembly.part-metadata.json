@@ -1,0 +1,414 @@
+{
+  "schema": "modelryx.part-metadata",
+  "schema_version": "1.0",
+  "source": {
+    "system": "siemens_nx",
+    "system_version": "unlicensed-sdk-free-fixture",
+    "nxopen_version": null,
+    "worker": "modelryx-nx-worker",
+    "worker_version": "1.0.0.0",
+    "extracted_at": "2026-10-28T20:05:18.0312042\u002B00:00"
+  },
+  "identity": {
+    "name": "Fixture Assembly",
+    "display_name": "Fixture Assembly",
+    "description": "Synthetic fixture for NX worker development without Siemens NX",
+    "kind": "assembly",
+    "part_number": "NX-FIXTURE-001",
+    "revision": "A"
+  },
+  "geometry": {
+    "bounding_box": {
+      "x_mm": 100,
+      "y_mm": 40,
+      "z_mm": 20
+    },
+    "center": {
+      "x_mm": 45,
+      "y_mm": 20,
+      "z_mm": 10
+    },
+    "shape": {
+      "volume_mm3": 1000,
+      "surface_area_mm2": 600
+    },
+    "topology": {
+      "solid_count": 2,
+      "shell_count": 1,
+      "face_count": 24,
+      "edge_count": 48,
+      "vertex_count": 32
+    }
+  },
+  "features": {
+    "source": "history",
+    "summary": {
+      "extrusion_count": 1
+    },
+    "items": [
+      {
+        "persistent_id": "feature:1",
+        "name": "EXTRUDE(1)",
+        "type": "EXTRUSION",
+        "properties": {}
+      }
+    ]
+  },
+  "parameters": [
+    {
+      "name": "length",
+      "display_name": "length",
+      "value": 100,
+      "unit": "mm",
+      "expression": "100",
+      "is_key": false,
+      "is_user": true,
+      "native_name": "length"
+    }
+  ],
+  "assembly": {
+    "is_assembly": true,
+    "instance_count": 3,
+    "unique_component_count": 3,
+    "subassembly_count": 1,
+    "components": [
+      {
+        "occurrence_id": "occurrence:1",
+        "parent_occurrence_id": null,
+        "name": "Component 1",
+        "part_number": null,
+        "revision": null,
+        "quantity": 1,
+        "bom_structure": "NORMAL",
+        "suppressed": false,
+        "visible": true,
+        "reference": false,
+        "substitute": false,
+        "configuration": "Default",
+        "reference_set": "MODEL",
+        "native_prototype_id": "prototype:component",
+        "dependency_status": "resolved",
+        "dependency_document": "components/component.prt",
+        "dependency_external": false,
+        "material": null,
+        "mass_kg": null
+      },
+      {
+        "occurrence_id": "occurrence:1/component:1",
+        "parent_occurrence_id": "occurrence:1",
+        "name": "Repeated Component 1",
+        "part_number": "REPEAT-001",
+        "revision": "A",
+        "quantity": 1,
+        "bom_structure": "NORMAL",
+        "suppressed": false,
+        "visible": true,
+        "reference": false,
+        "substitute": false,
+        "configuration": "Default",
+        "reference_set": "MODEL",
+        "native_prototype_id": "prototype:repeated-component",
+        "dependency_status": "resolved",
+        "dependency_document": "components/repeated.prt",
+        "dependency_external": false,
+        "material": null,
+        "mass_kg": null
+      },
+      {
+        "occurrence_id": "occurrence:1/component:2",
+        "parent_occurrence_id": "occurrence:1",
+        "name": "Repeated Component 2",
+        "part_number": "REPEAT-001",
+        "revision": "A",
+        "quantity": 1,
+        "bom_structure": "NORMAL",
+        "suppressed": true,
+        "visible": false,
+        "reference": false,
+        "substitute": false,
+        "configuration": "Service",
+        "reference_set": "EMPTY",
+        "native_prototype_id": "prototype:repeated-component",
+        "dependency_status": "resolved",
+        "dependency_document": "components/repeated.prt",
+        "dependency_external": false,
+        "material": null,
+        "mass_kg": null
+      },
+      {
+        "occurrence_id": "occurrence:missing",
+        "parent_occurrence_id": null,
+        "name": "Missing Component",
+        "part_number": null,
+        "revision": null,
+        "quantity": 1,
+        "bom_structure": "NORMAL",
+        "suppressed": false,
+        "visible": false,
+        "reference": false,
+        "substitute": false,
+        "configuration": "Default",
+        "reference_set": "MODEL",
+        "native_prototype_id": "prototype:missing",
+        "dependency_status": "missing",
+        "dependency_document": "components/missing.prt",
+        "dependency_external": false,
+        "material": null,
+        "mass_kg": null
+      }
+    ],
+    "component_groups": [
+      { "parent_occurrence_id": null, "native_prototype_id": "prototype:component", "prototype_path": "components/component.prt", "part_number": null, "revision": null, "reference_set": "MODEL", "configuration": "Default", "load_state": "loaded", "suppressed": false, "visible": true, "reference": false, "substitute": false, "document_kind": "subassembly", "representation_mode": null, "position_status": null, "quantity": 1, "occurrence_ids": ["occurrence:1"] },
+      { "parent_occurrence_id": "occurrence:1", "native_prototype_id": "prototype:repeated-component", "prototype_path": "components/repeated.prt", "part_number": "REPEAT-001", "revision": "A", "reference_set": "MODEL", "configuration": "Default", "load_state": "loaded", "suppressed": false, "visible": true, "reference": false, "substitute": false, "document_kind": "part", "representation_mode": null, "position_status": null, "quantity": 1, "occurrence_ids": ["occurrence:1/component:1"] },
+      { "parent_occurrence_id": "occurrence:1", "native_prototype_id": "prototype:repeated-component", "prototype_path": "components/repeated.prt", "part_number": "REPEAT-001", "revision": "A", "reference_set": "EMPTY", "configuration": "Service", "load_state": "loaded", "suppressed": true, "visible": false, "reference": false, "substitute": false, "document_kind": "part", "representation_mode": null, "position_status": null, "quantity": 1, "occurrence_ids": ["occurrence:1/component:2"] },
+      { "parent_occurrence_id": null, "native_prototype_id": "prototype:missing", "prototype_path": "components/missing.prt", "part_number": null, "revision": null, "reference_set": "MODEL", "configuration": "Default", "load_state": "missing", "suppressed": false, "visible": false, "reference": false, "substitute": false, "document_kind": "part", "representation_mode": null, "position_status": null, "quantity": 1, "occurrence_ids": ["occurrence:missing"] }
+    ]
+  },
+  "properties": {
+    "document_type": "assembly",
+    "native_units": "millimeter",
+    "active_reference_set": "MODEL",
+    "active_arrangement": "Default",
+    "fixture": true,
+    "DB_PART_NO": "NX-FIXTURE-001",
+    "RELEASED": false
+  },
+  "quality": {
+    "geometry": "complete",
+    "physical": "complete",
+    "features": "complete",
+    "assembly": "partial",
+    "metadata": "complete",
+    "warnings": [
+      "1 NX occurrence(s) have an unresolved or unloaded prototype."
+    ]
+  },
+  "native": {
+    "document_type": "assembly",
+    "nxopen_version": null,
+    "active_reference_set": "MODEL",
+    "active_arrangement": "Default",
+    "work_part": "fixture-assembly.prt",
+    "display_part": "fixture-assembly.prt",
+    "root_attributes": {
+      "fixture": true
+    },
+    "attributes": [
+      {
+        "title": "DB_PART_NO",
+        "value_type": "string",
+        "string_value": "NX-FIXTURE-001",
+        "number_value": null,
+        "integer_value": null,
+        "boolean_value": null,
+        "unit": null,
+        "category": "identity"
+      },
+      {
+        "title": "RELEASED",
+        "value_type": "boolean",
+        "string_value": null,
+        "number_value": null,
+        "integer_value": null,
+        "boolean_value": false,
+        "unit": null,
+        "category": "lifecycle-evidence"
+      }
+    ],
+    "promoted_attribute_properties": [
+      {
+        "property": "DB_PART_NO",
+        "value_type": "string",
+        "unit": null,
+        "category": "identity"
+      },
+      {
+        "property": "RELEASED",
+        "value_type": "boolean",
+        "unit": null,
+        "category": "lifecycle-evidence"
+      }
+    ],
+    "unpromoted_attribute_properties": [],
+    "attribute_property_coverage": {
+      "native_attribute_count": 1,
+      "native_attribute_property_count": 1,
+      "native_attribute_native_only_count": 0,
+      "typed_attribute_count": 2,
+      "typed_attribute_property_count": 2,
+      "typed_attribute_native_only_count": 0
+    },
+    "bodies": [
+      {
+        "id": "body:1",
+        "name": "Main Body",
+        "kind": "solid",
+        "visible": true,
+        "layer_visible": true,
+        "physical": null
+      }
+    ],
+    "pmi": [
+      {
+        "id": "pmi:1",
+        "type": "GDT",
+        "text": "FLATNESS 0.1",
+        "value": 0.1,
+        "unit": "mm",
+        "properties": {}
+      }
+    ],
+    "occurrences": [
+      {
+        "id": "occurrence:1",
+        "name": "Component 1",
+        "prototype_id": "prototype:component",
+        "parent_id": null,
+        "prototype_path": "components/component.prt",
+        "document_kind": "subassembly",
+        "transform": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1
+        ],
+        "suppressed": false,
+        "visible": true,
+        "load_state": "loaded",
+        "reference_set": "MODEL",
+        "arrangement": "Default",
+        "attributes": {},
+        "typed_attributes": [],
+        "physical": null
+      },
+      {
+        "id": "occurrence:1/component:1",
+        "name": "Repeated Component 1",
+        "prototype_id": "prototype:repeated-component",
+        "parent_id": "occurrence:1",
+        "prototype_path": "components/repeated.prt",
+        "document_kind": "part",
+        "transform": [
+          1,
+          0,
+          0,
+          10,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1
+        ],
+        "suppressed": false,
+        "visible": true,
+        "load_state": "loaded",
+        "reference_set": "MODEL",
+        "arrangement": "Default",
+        "attributes": {},
+        "typed_attributes": [],
+        "physical": null
+      },
+      {
+        "id": "occurrence:1/component:2",
+        "name": "Repeated Component 2",
+        "prototype_id": "prototype:repeated-component",
+        "parent_id": "occurrence:1",
+        "prototype_path": "components/repeated.prt",
+        "document_kind": "part",
+        "transform": [
+          1,
+          0,
+          0,
+          -10,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1
+        ],
+        "suppressed": true,
+        "visible": false,
+        "load_state": "loaded",
+        "reference_set": "EMPTY",
+        "arrangement": "Service",
+        "attributes": {},
+        "typed_attributes": [],
+        "physical": null
+      },
+      {
+        "id": "occurrence:missing",
+        "name": "Missing Component",
+        "prototype_id": "prototype:missing",
+        "parent_id": null,
+        "prototype_path": "components/missing.prt",
+        "document_kind": "part",
+        "transform": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          20,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1
+        ],
+        "suppressed": false,
+        "visible": false,
+        "load_state": "missing",
+        "reference_set": "MODEL",
+        "arrangement": "Default",
+        "attributes": {},
+        "typed_attributes": [],
+        "physical": null
+      }
+    ],
+    "drawing_sheets": []
+  },
+  "physical": {
+    "material": {
+      "name": "Steel",
+      "normalized_name": "Steel"
+    },
+    "mass_kg": 0.0078,
+    "density_kg_m3": 7800,
+    "center_of_mass": {
+      "x_mm": 45,
+      "y_mm": 20,
+      "z_mm": 10
+    }
+  }
+}

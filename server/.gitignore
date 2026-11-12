@@ -1,0 +1,16 @@
+.env
+.pytest_cache/
+.pytest-tmp-*/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+.venv/
+data/
+src/viewer/node_modules/
+src/viewer/dist/
+src/web/node_modules/
+.viewer-build/
+web/dist/
+src/web/dist/
+src/web/test-results/
+src/web/playwright-report/

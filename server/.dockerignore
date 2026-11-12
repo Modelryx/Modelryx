@@ -1,0 +1,14 @@
+.git
+.pytest_cache
+.ruff_cache
+**/__pycache__
+src/viewer/node_modules
+src/viewer/dist
+src/viewer/tsconfig.tsbuildinfo
+src/web
+src/clients/*
+!src/clients/freecad
+src/clients/freecad/*
+!src/clients/freecad/part_metadata_normalizer.py
+!src/clients/freecad/modelryx_checkin.py
+src/tools

@@ -1,0 +1,12 @@
+[
+  {"query":"Find aluminum motor housings between 100 and 150 mm wide","expected":{"entity_type":"part","filters.material.family":"aluminum","filters.geometry.width_mm.gte":100.0,"filters.geometry.width_mm.lte":150.0}},
+  {"query":"Find shafts longer than 12 inches long","expected":{"filters.geometry.length_mm.gt":304.8}},
+  {"query":"Find housings weighing less than 2 lb","expected":{"filters.mass_kg.lt":0.907185}},
+  {"query":"Show ready assemblies","expected":{"entity_type":"assembly","filters.status":"READY"}},
+  {"query":"Find motor brackets revision C from FreeCAD","expected":{"filters.revision":"C","filters.cad_system":"FreeCAD"}},
+  {"query":"Find parts classified as housing","expected":{"filters.classification":"housing"}},
+  {"query":"Find parts owned by Jane Doe","expected":{"filters.owner":"Jane Doe"}},
+  {"query":"Find parts modified after 2026-01-15","expected":{"filters.modified.after":"2026-01-15T00:00:00+00:00"}},
+  {"query":"Find part PF-10042","expected":{"filters.identifiers.0":"PF-10042"}},
+  {"query":"Find large motor housings","expected":{"text.terms.0":"motor"},"warning_contains":"large"}
+]

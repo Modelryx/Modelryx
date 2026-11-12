@@ -1,0 +1,58 @@
+.ai-assistant {
+  max-width: 900px;
+  margin: 0 auto;
+}
+.ai-assistant h1 { margin-bottom: 8px; }
+
+.ai-intro {
+  color: var(--muted);
+  max-width: 720px;
+  line-height: 1.5;
+}
+.ai-index-status { display: inline-block; margin: 8px 0; padding: 7px 11px; border: 1px solid var(--border); border-radius: 8px; background: var(--soft); color: var(--muted); font-size: 12px; }
+
+.ai-assistant form {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+}
+
+.ai-assistant textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+  resize: vertical;
+  font: inherit;
+}
+
+.ai-assistant form button {
+  justify-self: start;
+}
+
+.ai-result {
+  margin-top: 2rem;
+}
+
+.ai-answer {
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+.ai-sources li {
+  margin-bottom: 1rem;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.ai-sources p {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+}

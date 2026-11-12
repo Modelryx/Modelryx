@@ -1,0 +1,8 @@
+{
+  "identity": {"kind": "part"},
+  "geometry": {
+    "bounding_box": {"x_mm": 100.0, "y_mm": 60.0, "z_mm": 10.0},
+    "shape": {"volume_mm3": 57989.380659, "surface_area_mm2": 15803.185789},
+    "topology": {"solid_count": 1}
+  }
+}

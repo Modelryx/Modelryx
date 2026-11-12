@@ -1,0 +1,296 @@
+name: modelryx-platform
+
+services:
+  step-worker:
+    build:
+      context: ./workers/step
+    restart: unless-stopped
+    environment:
+      STEP_WORKER_DATA_ROOT: /data/jobs
+      STEP_WORKER_TIMEOUT_SECONDS: 600
+      STEP_WORKER_MAX_INPUT_BYTES: 536870912
+      STEP_WORKER_MAX_OUTPUT_BYTES: 268435456
+      MODELRYX_INTERNAL_WORKER_KEY: ${MODELRYX_INTERNAL_WORKER_KEY:?Set MODELRYX_INTERNAL_WORKER_KEY in .env}
+      STEP_WORKER_RETENTION_SECONDS: ${MODELRYX_STEP_WORKER_RETENTION_SECONDS:-86400}
+      MODELRYX_SERVER_URL: http://api:8000
+      MODELRYX_HEARTBEAT_SECONDS: 10
+    ports:
+      - "0.0.0.0:8080:8080"
+    volumes:
+      - step-worker-data:/data/jobs
+
+  db:
+    image: pgvector/pgvector:0.8.6-pg17
+    restart: "no"
+    environment:
+      POSTGRES_DB: modelryx
+      POSTGRES_USER: modelryx
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Error: POSTGRES_PASSWORD must be set in .env}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U modelryx -d modelryx"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  migrate:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    command: ["alembic", "upgrade", "head"]
+    environment: &app-environment
+      MODELRYX_DATABASE_URL: postgresql://modelryx:${POSTGRES_PASSWORD:?Error: POSTGRES_PASSWORD must be set in .env}@db:5432/modelryx
+      MODELRYX_ENVIRONMENT: ${MODELRYX_ENVIRONMENT:?Error: MODELRYX_ENVIRONMENT must be set in .env}
+      MODELRYX_STORAGE_ROOT: /var/lib/modelryx/objects
+      MODELRYX_JWT_SECRET: ${MODELRYX_JWT_SECRET:?Error: MODELRYX_JWT_SECRET must be set in .env}
+      MODELRYX_AI_GATEWAY_BASE_URL: ${MODELRYX_AI_GATEWAY_BASE_URL:-}
+      MODELRYX_AI_GATEWAY_API_KEY: ${MODELRYX_AI_GATEWAY_API_KEY:-}
+      MODELRYX_AI_CHAT_MODEL: ${MODELRYX_AI_CHAT_MODEL:-}
+      MODELRYX_AI_EMBEDDING_MODEL: ${MODELRYX_AI_EMBEDDING_MODEL:-}
+      MODELRYX_AI_EMBEDDING_DIMENSIONS: ${MODELRYX_AI_EMBEDDING_DIMENSIONS:-1536}
+      MODELRYX_SERVER_URL: http://api:8000
+      MODELRYX_CAD_ANALYZER_URL: ${MODELRYX_CAD_ANALYZER_URL:-http://freecad-analyzer:8090}
+      MODELRYX_STEP_WORKER_URL: http://step-worker:8080
+      MODELRYX_FREECAD_WORKER_URL: ${MODELRYX_FREECAD_WORKER_URL:-}
+      MODELRYX_CONVERTER_VERSION: ${MODELRYX_CONVERTER_VERSION:-modelryx-fcstd-29}
+      MODELRYX_INTERNAL_WORKER_KEY: ${MODELRYX_INTERNAL_WORKER_KEY:?Set MODELRYX_INTERNAL_WORKER_KEY in .env}
+      MODELRYX_AUTOCAD_WORKER_URL: ${MODELRYX_AUTOCAD_WORKER_URL:-http://host.docker.internal:5080}
+      MODELRYX_INVENTOR_WORKER_URL: ${MODELRYX_INVENTOR_WORKER_URL:-http://host.docker.internal:5091}
+      MODELRYX_NX_WORKER_URL: ${MODELRYX_NX_WORKER_URL:-}
+      MODELRYX_NX_ALLOW_UNQUALIFIED_PROCESSING: ${MODELRYX_NX_ALLOW_UNQUALIFIED_PROCESSING:-false}
+      MODELRYX_BOOTSTRAP_ADMIN_USERNAME: ${MODELRYX_BOOTSTRAP_ADMIN_USERNAME:-admin}
+      MODELRYX_BOOTSTRAP_ADMIN_PASSWORD: ${MODELRYX_BOOTSTRAP_ADMIN_PASSWORD:?Error: MODELRYX_BOOTSTRAP_ADMIN_PASSWORD must be set in .env}
+      MODELRYX_CORS_ORIGINS: ${MODELRYX_CORS_ORIGINS:-["http://localhost:5173","http://localhost:5174"]}
+      MODELRYX_REQUIRE_RELEASE_APPROVAL: ${MODELRYX_REQUIRE_RELEASE_APPROVAL:-false}
+      MODELRYX_APPROVAL_REQUIRED_COUNT: ${MODELRYX_APPROVAL_REQUIRED_COUNT:-1}
+      MODELRYX_APPROVAL_ASSEMBLY_REQUIRED_COUNT: ${MODELRYX_APPROVAL_ASSEMBLY_REQUIRED_COUNT:-1}
+      MODELRYX_APPROVAL_DUE_HOURS: ${MODELRYX_APPROVAL_DUE_HOURS:-72}
+      MODELRYX_APPROVAL_EMERGENCY_DUE_HOURS: ${MODELRYX_APPROVAL_EMERGENCY_DUE_HOURS:-4}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  storage-init:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+      target: runtime
+    user: "0:0"
+    command: ["sh", "-c", "mkdir -p /var/lib/modelryx/objects && chown -R 100:101 /var/lib/modelryx/objects"]
+    volumes:
+      - object-data:/var/lib/modelryx/objects
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    environment: *app-environment
+    ports:
+      - "0.0.0.0:8000:8000"
+    volumes:
+      - object-data:/var/lib/modelryx/objects
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      storage-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  general-worker:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+      target: runtime
+    command: ["python", "-m", "modelryx.services.processing"]
+    environment:
+      <<: *app-environment
+      MODELRYX_PROCESSING_WORKER_ROLE: general
+      MODELRYX_STEP_WORKER_URL: http://step-worker:8080
+    volumes:
+      - object-data:/var/lib/modelryx/objects
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      storage-init:
+        condition: service_completed_successfully
+      step-worker:
+        condition: service_healthy
+    restart: unless-stopped
+
+  freecad-worker:
+    build:
+      context: .
+      dockerfile: workers/freecad/Dockerfile
+    mem_limit: ${MODELRYX_FREECAD_MEMORY_LIMIT:-8g}
+    pids_limit: ${MODELRYX_FREECAD_PIDS_LIMIT:-512}
+    environment:
+      <<: *app-environment
+      MODELRYX_PROCESSING_WORKER_ROLE: freecad
+      MODELRYX_FREECAD_STAGE_TIMEOUT_SECONDS: ${MODELRYX_FREECAD_STAGE_TIMEOUT_SECONDS:-}
+      MODELRYX_STEP_WORKER_URL: http://step-worker:8080
+    volumes:
+      - object-data:/var/lib/modelryx/objects
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      storage-init:
+        condition: service_completed_successfully
+      step-worker:
+        condition: service_healthy
+    restart: unless-stopped
+
+  freecad-analyzer:
+    build:
+      context: .
+      dockerfile: workers/freecad/Dockerfile
+    mem_limit: ${MODELRYX_FREECAD_MEMORY_LIMIT:-8g}
+    pids_limit: ${MODELRYX_FREECAD_PIDS_LIMIT:-512}
+    command: ["uvicorn", "analyzer_api:app", "--app-dir", "/opt/modelryx-converter", "--host", "0.0.0.0", "--port", "8090"]
+    environment:
+      MODELRYX_INTERNAL_WORKER_KEY: ${MODELRYX_INTERNAL_WORKER_KEY:?Set MODELRYX_INTERNAL_WORKER_KEY in .env}
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Error: MINIO_ROOT_USER must be set in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Error: MINIO_ROOT_PASSWORD must be set in .env}
+    command: server /data --console-address ":9001"
+    ports:
+      - "0.0.0.0:9000:9000"
+      - "0.0.0.0:9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    restart: "no"
+    entrypoint: >
+      sh -c "
+      /usr/bin/mc alias set minio http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD;
+      /usr/bin/mc mb minio/modelryx-objects --ignore-existing;
+      /usr/bin/mc version enable minio/modelryx-objects;
+      /usr/bin/mc ilm import minio/modelryx-objects < /tmp/lifecycle-policy.json || true;
+      echo 'MinIO initialization complete'
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Error: MINIO_ROOT_USER must be set in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Error: MINIO_ROOT_PASSWORD must be set in .env}
+    volumes:
+      - ./scripts/minio-lifecycle-policy.json:/tmp/lifecycle-policy.json:ro
+    depends_on:
+      minio:
+        condition: service_healthy
+
+  test:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+      target: test
+    environment:
+      <<: *app-environment
+      MODELRYX_DATABASE_URL: postgresql+psycopg://modelryx:modelryx@db-test:5432/modelryx_test
+      MODELRYX_ENVIRONMENT: test
+      MODELRYX_AUTOCAD_WORKER_URL: ""
+      MODELRYX_INVENTOR_WORKER_URL: ""
+    user: "100:101"
+    volumes:
+      - test-object-data:/var/lib/modelryx/objects
+    depends_on:
+      migrate-test:
+        condition: service_completed_successfully
+      storage-test-init:
+        condition: service_completed_successfully
+
+  db-test:
+    profiles: ["test"]
+    image: pgvector/pgvector:0.8.6-pg17
+    restart: "no"
+    environment:
+      POSTGRES_DB: modelryx_test
+      POSTGRES_USER: modelryx
+      POSTGRES_PASSWORD: modelryx
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U modelryx -d modelryx_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  reset-test-db:
+    profiles: ["test"]
+    image: pgvector/pgvector:0.8.6-pg17
+    restart: "no"
+    environment:
+      PGPASSWORD: modelryx
+    command:
+      ["psql", "-h", "db-test", "-U", "modelryx", "-d", "modelryx_test", "-v", "ON_ERROR_STOP=1", "-c", "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"]
+    depends_on:
+      db-test:
+        condition: service_healthy
+
+  migrate-test:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      <<: *app-environment
+      MODELRYX_DATABASE_URL: postgresql+psycopg://modelryx:modelryx@db-test:5432/modelryx_test
+      MODELRYX_ENVIRONMENT: test
+    depends_on:
+      reset-test-db:
+        condition: service_completed_successfully
+    restart: "no"
+
+  storage-test-init:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+      target: runtime
+    user: "0:0"
+    command: ["sh", "-c", "mkdir -p /var/lib/modelryx/objects && chown -R 100:101 /var/lib/modelryx/objects"]
+    volumes:
+      - test-object-data:/var/lib/modelryx/objects
+    restart: "no"
+
+  reconcile:
+    profiles: ["maintenance"]
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+      target: runtime
+    command: ["python", "-m", "modelryx.services.reconcile"]
+    environment: *app-environment
+    volumes:
+      - object-data:/var/lib/modelryx/objects
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      storage-init:
+        condition: service_completed_successfully
+
+volumes:
+  postgres-data:
+  object-data:
+  test-object-data:
+  step-worker-data:
+  minio-data:
+

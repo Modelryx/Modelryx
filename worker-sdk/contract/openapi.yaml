@@ -1,0 +1,199 @@
+openapi: 3.1.0
+info:
+  title: Modelryx standalone CAD worker
+  version: "1.0"
+  description: Read-only CAD conversion protocol. See the SDK README for package and lifecycle rules.
+security:
+  - WorkerKey: []
+paths:
+  /health:
+    get:
+      security: []
+      responses:
+        "200": {description: Worker process is alive}
+  /ready:
+    get:
+      security: []
+      responses:
+        "200": {description: Worker can accept jobs}
+        "503": {description: Worker is unavailable}
+  /api/v1/capabilities:
+    get:
+      responses:
+        "200":
+          description: Supported conversion capabilities
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Capabilities"}
+        "401": {description: Invalid worker key}
+  /api/v1/jobs:
+    post:
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [request, source]
+              properties:
+                request: {$ref: "#/components/schemas/JobRequest"}
+                source: {type: string, format: binary}
+            encoding:
+              request: {contentType: application/json}
+      responses:
+        "202":
+          description: Job accepted or replayed
+          headers:
+            Location: {required: true, schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/JobRecord"}
+        "400": {description: Invalid job or source}
+        "401": {description: Invalid worker key}
+        "409": {description: Job ID conflicts with an existing request}
+        "429": {description: Worker has reached capacity}
+  /api/v1/jobs/{jobId}:
+    parameters:
+      - $ref: "#/components/parameters/JobId"
+    get:
+      responses:
+        "200":
+          description: Job status
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/JobRecord"}
+        "401": {description: Invalid worker key}
+        "404": {description: Job unknown or reclaimed}
+  /api/v1/jobs/{jobId}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/JobId"
+    post:
+      responses:
+        "202": {description: Cancellation requested}
+        "401": {description: Invalid worker key}
+        "404": {description: Job unknown or reclaimed}
+  /api/v1/jobs/{jobId}/outputs/{role}:
+    parameters:
+      - $ref: "#/components/parameters/JobId"
+      - name: role
+        in: path
+        required: true
+        schema: {$ref: "#/components/schemas/Role"}
+    get:
+      responses:
+        "200":
+          description: Finalized output bytes with the manifest media type
+          content:
+            application/octet-stream:
+              schema: {type: string, format: binary}
+        "401": {description: Invalid worker key}
+        "404": {description: Output unavailable}
+  /analyze:
+    post:
+      summary: Optional FreeCAD dependency analyzer
+      description: Available when dependencyAnalysis is true. The server authorizes the caller before forwarding the package.
+      parameters:
+        - name: X-Modelryx-Root-Path-B64
+          in: header
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/zip:
+            schema: {type: string, format: binary}
+      responses:
+        "200": {description: Dependency analysis report}
+        "401": {description: Invalid worker key}
+        "422": {description: Invalid root or package}
+components:
+  securitySchemes:
+    WorkerKey: {type: apiKey, in: header, name: X-Modelryx-Worker-Key}
+  parameters:
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  schemas:
+    Role: {type: string, pattern: "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"}
+    Digest: {type: string, pattern: "^[0-9a-fA-F]{64}$"}
+    Capabilities:
+      type: object
+      required: [contractVersion, cadSystem, documentKinds, sourceExtensions, outputRoles]
+      properties:
+        contractVersion: {const: "1.0"}
+        cadSystem: {type: string, minLength: 1}
+        documentKinds: {type: array, items: {type: string}}
+        sourceExtensions: {type: array, items: {type: string, pattern: "^\\."}}
+        outputRoles: {type: array, items: {$ref: "#/components/schemas/Role"}}
+        dependencyAnalysis: {type: boolean}
+    JobRequest:
+      type: object
+      required: [contractVersion, jobId, attempt, cadSystem, documentKind, source, configuration, requiredOutputs, preferredOutputs, expiresAt]
+      properties:
+        contractVersion: {const: "1.0"}
+        jobId: {type: string, format: uuid}
+        attempt: {type: integer, minimum: 1}
+        cadSystem: {type: string, minLength: 1}
+        documentKind: {type: string, minLength: 1}
+        source:
+          type: object
+          required: [snapshotId, sha256, size, rootPath]
+          properties:
+            snapshotId: {type: string, format: uuid}
+            sha256: {$ref: "#/components/schemas/Digest"}
+            size: {type: integer, minimum: 1}
+            rootPath: {type: string, minLength: 1}
+        configuration: {type: [object, "null"]}
+        requiredOutputs: {type: array, minItems: 1, uniqueItems: true, items: {$ref: "#/components/schemas/Role"}}
+        preferredOutputs: {type: array, uniqueItems: true, items: {$ref: "#/components/schemas/Role"}}
+        expiresAt: {type: string, format: date-time}
+    Output:
+      type: object
+      required: [role, mediaType, size, sha256, downloadUrl, provenance]
+      properties:
+        role: {$ref: "#/components/schemas/Role"}
+        mediaType: {type: string, minLength: 1}
+        size: {type: integer, minimum: 1}
+        sha256: {$ref: "#/components/schemas/Digest"}
+        downloadUrl: {type: string, pattern: "^/api/v1/jobs/"}
+        provenance:
+          type: object
+          required: [source_role, generator]
+          properties:
+            source_role: {type: string, minLength: 1}
+            generator: {type: string, minLength: 1}
+    JobResult:
+      type: object
+      required: [contractVersion, jobId, attempt, cadSystem, configuration, sourceSha256, adapterVersion, status, warnings, outputs]
+      properties:
+        contractVersion: {const: "1.0"}
+        jobId: {type: string, format: uuid}
+        attempt: {type: integer, minimum: 1}
+        cadSystem: {type: string}
+        configuration: {type: [object, "null"]}
+        sourceSha256: {$ref: "#/components/schemas/Digest"}
+        adapterVersion: {type: string, minLength: 1}
+        cadVersion: {type: [string, "null"]}
+        status: {enum: [complete, partial]}
+        warnings: {type: array, items: {type: string, minLength: 1}}
+        outputs: {type: array, items: {$ref: "#/components/schemas/Output"}}
+        diagnostics: {}
+    JobRecord:
+      type: object
+      required: [id, state, stage, progress]
+      properties:
+        id: {type: string, format: uuid}
+        state: {enum: [Queued, Reconstructing, Extracting, Validating, ReadyToPublish, Partial, Failed, Cancelled, Expired]}
+        stage: {type: string}
+        progress: {type: integer, minimum: 0, maximum: 100}
+        result: {$ref: "#/components/schemas/JobResult"}
+        error:
+          type: object
+          required: [code, message, retryable, stage]
+          properties:
+            code: {type: string}
+            message: {type: string}
+            retryable: {type: boolean}
+            stage: {type: string}

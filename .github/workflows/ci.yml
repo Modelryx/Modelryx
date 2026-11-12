@@ -1,0 +1,86 @@
+name: Platform CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run migrated database test suite
+        env: {MODELRYX_INTERNAL_WORKER_KEY: ci-only-worker-key}
+        run: docker compose --profile test run --rm test
+  frontend:
+    runs-on: ubuntu-24.04
+    defaults: {run: {working-directory: front-end}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm, cache-dependency-path: front-end/package-lock.json}
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Run browser workflow tests
+        run: npm run test:e2e
+  worker-sdk:
+    name: Worker SDK
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install "pytest>=8.3,<9" './worker-sdk[conformance]'
+      - run: python -m pytest -q worker-sdk/tests scripts/tests/test_export_public.py
+  freecad-worker:
+    name: FreeCAD worker
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install "pytest>=8.3,<9" "httpx>=0.28,<1" ./worker-sdk -r workers/freecad/standalone/requirements.txt
+      - run: pytest -q
+        working-directory: workers/freecad
+      - name: Build native FreeCAD worker image
+        run: docker build --file workers/freecad/Dockerfile --tag modelryx-freecad-ci .
+      - name: Run native FreeCAD release gates
+        run: |
+          docker run --rm modelryx-freecad-ci python /opt/modelryx-converter/golden_integration_test.py
+          docker run --rm modelryx-freecad-ci python /opt/modelryx-preprocessor/dependency_integration_test.py
+          docker run --rm modelryx-freecad-ci python /opt/modelryx-converter/production_fixture_test.py
+          docker run --rm modelryx-freecad-ci python /opt/modelryx-converter/process_tree_integration_test.py
+  step-worker:
+    name: STEP worker
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Install STEP worker contract-test dependencies
+        run: pip install "pytest>=8.3,<9" "fastapi>=0.115,<1" "httpx>=0.27,<1" "python-multipart>=0.0.18" "numpy>=1.20" "trimesh>=4,<5"
+      - name: Check converter syntax
+        run: python -m compileall -q app converter tests
+        working-directory: workers/step
+      - name: Test API, bundle units and GLB contracts
+        run: python -m pytest -q tests/test_api_contract.py tests/test_component_bundle_api.py tests/test_component_bundle_units.py tests/test_glb_utils.py
+        working-directory: workers/step
+  repository-safety:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject common committed secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -nE '(sk-proj-[A-Za-z0-9_-]{20,}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|ghp_[A-Za-z0-9]{30,})'; then
+            echo "Potential credential found in tracked files."
+            exit 1
+          fi
+      - name: Validate Compose
+        env: {MODELRYX_INTERNAL_WORKER_KEY: ci-only-worker-key}
+        run: docker compose config --quiet

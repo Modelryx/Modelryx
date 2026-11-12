@@ -1,0 +1,92 @@
+[
+  {
+    "name": "no changes",
+    "expected_status": "COMPLETED",
+    "expected_change_count": 0
+  },
+  {
+    "name": "unit-aware physical delta",
+    "path": "geometry.volume_mm3",
+    "old": 1000.0,
+    "new": 1100.0,
+    "unit": "mm3",
+    "delta": 100.0,
+    "percent_change": 10.0
+  },
+  {
+    "name": "zero denominator",
+    "path": "physical.mass_kg",
+    "old": 0.0,
+    "new": 1.0,
+    "percent_change": null
+  },
+  {
+    "name": "missing value is explicit",
+    "path": "classification.family",
+    "old": null,
+    "new": "bracket",
+    "change_type": "ADDED"
+  },
+  {
+    "name": "unsupported domain remains visible",
+    "domain": "DRAWING",
+    "expected_domain_status": "UNSUPPORTED",
+    "expected_comparison_status": "PARTIAL"
+  },
+  {
+    "name": "low-confidence feature match remains uncertain",
+    "domain": "FEATURES",
+    "match_method": "TYPE_ONLY",
+    "confidence": 0.65,
+    "requires_review": true
+  },
+  {
+    "name": "BOM placement tolerance suppresses numeric noise",
+    "domain": "BOM",
+    "old_transform_value": 1.0,
+    "new_transform_value": 1.0000001,
+    "tolerance": 0.000001,
+    "expected_change_count": 0
+  },
+  {
+    "name": "ambiguous BOM fallback remains unknown",
+    "domain": "BOM",
+    "match_method": "AMBIGUOUS",
+    "change_type": "UNKNOWN",
+    "confidence": 0.0,
+    "requires_review": true
+  },
+  {
+    "name": "drawing layout whitespace is not an engineering text change",
+    "domain": "DRAWING",
+    "old_text": "REMOVE ALL BURRS",
+    "new_text": " REMOVE   ALL\nBURRS ",
+    "expected_change_count": 0
+  },
+  {
+    "name": "structured drawing tolerance change retains citation",
+    "domain": "DRAWING",
+    "entity_type": "TOLERANCE",
+    "old": 0.2,
+    "new": 0.1,
+    "unit": "mm",
+    "page": 1,
+    "provenance": "EXACT_NORMALIZED_DRAWING_ENTITY"
+  },
+  {
+    "name": "AI factual claim without a comparison key is rejected",
+    "domain": "EXPLANATION",
+    "claim": "A new mounting hole was added",
+    "change_keys": [],
+    "expected_valid": false,
+    "fallback": "DETERMINISTIC"
+  },
+  {
+    "name": "AI recorded cause with an unauthorized source is rejected",
+    "domain": "EXPLANATION",
+    "recorded": true,
+    "source_ids": ["invented-source"],
+    "expected_valid": false,
+    "fallback": "DETERMINISTIC"
+  }
+]

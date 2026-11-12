@@ -1,0 +1,59 @@
+name: Search reliability
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/search-reliability.yml"
+      - "compose.yaml"
+      - "Dockerfile"
+      - "pyproject.toml"
+      - "src/server/**"
+      - "tests/**"
+      - "docs/ai/search-reliability.md"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/search-reliability.yml"
+      - "compose.yaml"
+      - "Dockerfile"
+      - "pyproject.toml"
+      - "src/server/**"
+      - "tests/**"
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend test image
+        run: docker compose --profile test build test
+      - name: Reset, migrate, and run backend suite
+        run: docker compose --profile test run --rm test
+      - name: Enforce locked interpretation release gate
+        run: >-
+          docker compose --profile test run --rm --no-deps test
+          python -m modelryx.engineering_search.evaluation
+          --corpus tests/search/search_reliability_v1.json
+          --schema tests/search/search_reliability.schema.json
+          --partition locked --release
+      - name: Stop test services
+        if: always()
+        run: docker compose --profile test down
+
+  ai-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build AI contract test image
+        run: docker compose --profile test build test
+      - name: Run AI-enabled, invalid-output, and timeout contracts
+        run: >-
+          docker compose --profile test run --rm --no-deps test pytest -q
+          tests/test_engineering_search_phase21.py::test_invalid_ai_output_falls_back_to_correct_critical_filter
+          tests/test_engineering_search_phase21.py::test_ai_gateway_failure_falls_back_without_raising
+          tests/test_engineering_search_phase21.py::test_valid_ai_and_deterministic_interpretations_have_request_parity

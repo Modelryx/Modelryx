@@ -1,0 +1,253 @@
+{
+  "version": "scenario-catalog/v1",
+  "status": "published",
+  "scenarios": [
+    {
+      "id": "ID", "version": 1, "status": "published", "priority": "P0",
+      "entities": ["item", "part", "assembly"], "operation": "engineering_search",
+      "capabilities": ["identifiers"], "owner": "engineering-search",
+      "canonical_example": "find part PF-1042", "paraphrases": ["item number PF-1042", "show PF-1042", "open part PF-1042", "find item PF-1042", "PF-1042"],
+      "negative_examples": ["description mentions PF style", "PF-1042 training document"],
+      "example_request": {"entity_type": "part", "filters": {"identifiers": ["PF-1042"]}},
+      "configuration": {"pattern": "uppercase-prefix-and-digits"}
+    },
+    {
+      "id": "TXT", "version": 1, "status": "published", "priority": "P0",
+      "entities": ["item", "part", "assembly"], "operation": "engineering_search",
+      "capabilities": ["entity_type"], "owner": "engineering-search",
+      "canonical_example": "motor mounting bracket", "paraphrases": ["find motor mounting bracket", "show mounting brackets", "motor bracket", "parts named motor bracket", "search motor housing"],
+      "negative_examples": ["only structured filters", "empty search text"],
+      "example_request": {"entity_type": "part", "text": {"terms": ["motor", "mounting", "bracket"]}},
+      "configuration": {"maximum_terms": 20}
+    },
+    {
+      "id": "GEO", "version": 1, "status": "published", "priority": "P0",
+      "entities": ["part", "assembly"], "operation": "engineering_search",
+      "capabilities": ["width_mm", "height_mm", "length_mm", "max_dimension_mm", "volume_mm3", "surface_area_mm2"], "owner": "engineering-search",
+      "canonical_example": "parts between 100 and 150 mm wide", "paraphrases": ["width from 100 to 150 mm", "under 20 mm high", "longer than 50 mm", "about 25 mm wide", "maximum dimension below 1 inch"],
+      "negative_examples": ["large parts", "wide product selection"],
+      "example_request": {"entity_type": "part", "filters": {"geometry": {"width_mm": {"gte": 100, "lte": 150}}}},
+      "configuration": {"canonical_unit": "mm", "certainty": "successful_extraction"}
+    },
+    {
+      "id": "MASS", "version": 1, "status": "published", "priority": "P0",
+      "entities": ["part", "assembly"], "operation": "engineering_search",
+      "capabilities": ["mass_kg"], "owner": "engineering-search",
+      "canonical_example": "parts weighing less than 2 kg", "paraphrases": ["under 2 kg", "lighter than 2 kg", "mass below 2 kg", "about 5 lb", "weighs over 500 g"],
+      "negative_examples": ["light colored parts", "mass production parts"],
+      "example_request": {"entity_type": "part", "filters": {"mass_kg": {"lt": 2}}},
+      "configuration": {"canonical_unit": "kg", "certainty": "successful_extraction"}
+    },
+    {
+      "id": "CLASS", "version": 1, "status": "published", "priority": "P0",
+      "entities": ["item", "part", "assembly"], "operation": "engineering_search",
+      "capabilities": ["classification"], "owner": "engineering-search",
+      "canonical_example": "parts classified as housing", "paraphrases": ["housing category parts", "classification housing", "items in housing category", "show housing classification", "category is housing"],
+      "negative_examples": ["housing in description", "classification policy"],
+      "example_request": {"entity_type": "part", "filters": {"classification": "housing"}}, "configuration": {}
+    },
+    {
+      "id": "REV", "version": 1, "status": "published", "priority": "P0",
+      "entities": ["item", "part", "assembly"], "operation": "engineering_search",
+      "capabilities": ["revision"], "owner": "engineering-search",
+      "canonical_example": "find part revision C", "paraphrases": ["revision C parts", "rev C", "items at revision C", "show revision C", "part at rev C"],
+      "negative_examples": ["revision policy C", "description contains revision C"],
+      "example_request": {"entity_type": "part", "filters": {"revision": "C"}}, "configuration": {}
+    },
+    {
+      "id": "REL", "version": 1, "status": "published", "priority": "P0",
+      "entities": ["assembly"], "operation": "engineering_search",
+      "capabilities": ["relationships"], "owner": "bom-analysis",
+      "canonical_example": "where is this part used", "paraphrases": ["assemblies containing this", "parent assemblies", "where-used", "find assemblies using this part", "show recursive parents"],
+      "negative_examples": ["where-used report document", "contains text only"],
+      "example_request": {"entity_type": "assembly", "relationships": [{"type": "where_used", "target_item_id": "00000000-0000-0000-0000-000000000001"}]},
+      "configuration": {"maximum_depth": 20}
+    },
+    {
+      "id": "SIM", "version": 1, "status": "published", "priority": "P0",
+      "entities": ["part"], "operation": "engineering_search",
+      "capabilities": ["similarity"], "owner": "engineering-search",
+      "canonical_example": "find parts similar to this", "paraphrases": ["similar parts", "find like this", "metadata similarity", "parts similar to current", "show related geometry candidates"],
+      "negative_examples": ["similar color", "identical certified replacement"],
+      "example_request": {"entity_type": "part", "similarity": {"source_item_revision_id": "00000000-0000-0000-0000-000000000001"}},
+      "configuration": {"method": "metadata_embedding", "advisory": true}
+    },
+    {
+      "id": "MAT-VALUE",
+      "version": 1,
+      "status": "published",
+      "priority": "P0",
+      "entities": ["item", "part", "assembly"],
+      "operation": "engineering_search",
+      "capabilities": ["material"],
+      "owner": "engineering-search",
+      "canonical_example": "find aluminum parts",
+      "paraphrases": ["show parts made from aluminum", "aluminium components", "aluminum alloy parts", "parts using aluminium", "find stainless steel components"],
+      "negative_examples": ["no material changes", "material is not aluminum"],
+      "example_request": {"entity_type": "part", "filters": {"material": {"family": "aluminum"}}},
+      "configuration": {
+        "terms": ["aluminum", "aluminium", "al", "stainless", "stainless steel", "carbon steel", "steel", "titanium", "brass", "copper"]
+      }
+    },
+    {
+      "id": "MAT-PRES",
+      "version": 1,
+      "status": "published",
+      "priority": "P0",
+      "entities": ["item", "part", "assembly"],
+      "operation": "engineering_search",
+      "capabilities": ["material_presence"],
+      "owner": "engineering-search",
+      "canonical_example": "find parts without material",
+      "paraphrases": ["find part has no material", "material is not entered", "unassigned material", "parts without material", "missing material items"],
+      "negative_examples": ["no material changes", "material is not stainless steel"],
+      "example_request": {"entity_type": "part", "filters": {"material_presence": "missing"}},
+      "configuration": {
+        "missing_terms": ["missing", "blank", "empty", "unspecified", "unassigned", "unknown", "not set", "not specified", "not assigned", "not recorded", "not entered"],
+        "specified_terms": ["specified", "assigned", "recorded"]
+      }
+    },
+    {
+      "id": "FEAT-PRES",
+      "version": 1,
+      "status": "published",
+      "priority": "P0",
+      "entities": ["part"],
+      "operation": "engineering_search",
+      "capabilities": ["feature_filters"],
+      "owner": "engineering-search",
+      "canonical_example": "find parts without holes",
+      "paraphrases": ["find part has no hole", "hole-free parts", "parts that contain threads", "components without pockets", "parts with fillets"],
+      "negative_examples": ["no hole changes", "slot-free parts"],
+      "example_request": {"entity_type": "part", "filters": {"feature_filters": [{"feature": "hole", "presence": "absent"}]}},
+      "configuration": {
+        "supported_aliases": {
+          "hole": "hole", "holes": "hole", "fillet": "fillet", "fillets": "fillet",
+          "chamfer": "chamfer", "chamfers": "chamfer", "extrusion": "extrusion",
+          "extrusions": "extrusion", "revolution": "revolution", "revolutions": "revolution",
+          "pocket": "pocket", "pockets": "pocket", "pattern": "pattern", "patterns": "pattern",
+          "thread": "thread", "threads": "thread"
+        },
+        "unsupported_aliases": {"slot": "slot", "slots": "slot", "boss": "boss", "bosses": "boss", "rib": "rib", "ribs": "rib"},
+        "absent_prefixes": ["no", "without", "has no", "have no", "with no", "does not have", "does not have any", "do not have", "do not have any"],
+        "present_prefixes": ["with", "has", "have", "contain", "contains", "include", "includes"]
+      }
+    },
+    {
+      "id": "ENT", "version": 1, "status": "published", "priority": "P0",
+      "entities": ["item", "part", "assembly"], "operation": "engineering_search",
+      "capabilities": ["entity_type"], "owner": "engineering-search",
+      "canonical_example": "find assemblies", "paraphrases": ["show all items", "find parts", "list components", "all assemblies", "show every item"],
+      "negative_examples": ["parts list document", "assembly instructions"],
+      "example_request": {"entity_type": "assembly"},
+      "configuration": {"aliases": {"item": "item", "items": "item", "part": "part", "parts": "part", "component": "part", "components": "part", "assembly": "assembly", "assemblies": "assembly"}}
+    },
+    {
+      "id": "STATE", "version": 1, "status": "published", "priority": "P0",
+      "entities": ["item", "part", "assembly"], "operation": "engineering_search",
+      "capabilities": ["status", "lifecycle"], "owner": "engineering-search",
+      "canonical_example": "find released parts", "paraphrases": ["working items", "obsolete assemblies", "superseded parts", "ready items", "failed revisions"],
+      "negative_examples": ["release notes", "ready material"],
+      "example_request": {"entity_type": "part", "filters": {"lifecycle": "RELEASED"}},
+      "configuration": {
+        "processing_aliases": {"ready with warnings": "READY_WITH_WARNINGS", "processing": "PROCESSING", "ready": "READY", "failed": "FAILED", "draft": "DRAFT"},
+        "lifecycle_aliases": {"working": "WORKING", "released": "RELEASED", "superseded": "SUPERSEDED", "obsolete": "OBSOLETE"}
+      }
+    },
+    {
+      "id": "CAD-FORMAT", "version": 1, "status": "published", "priority": "P0",
+      "entities": ["item", "part", "assembly"], "operation": "engineering_search",
+      "capabilities": ["cad_system", "artifact_format"], "owner": "engineering-search",
+      "canonical_example": "find STEP parts", "paraphrases": ["parts with STEP files", "models from FreeCAD", "STP components", "IGES models", "items created in SolidWorks"],
+      "negative_examples": ["step through parts", "free CAD training"],
+      "example_request": {"entity_type": "part", "filters": {"artifact_format": "step"}},
+      "configuration": {
+        "cad_systems": ["STEP", "FreeCAD", "AutoCAD", "SolidWorks", "Inventor", "Fusion", "NX", "Creo", "CATIA"],
+        "format_aliases": {"fcstd": "fcstd", "step": "step", "stp": "step", "iges": "iges", "igs": "iges", "stl": "stl", "obj": "obj", "glb": "glb", "pdf": "pdf", "dxf": "dxf", "dwg": "dwg"}
+      }
+    },
+    {
+      "id": "OWNER", "version": 1, "status": "published", "priority": "P0",
+      "entities": ["item", "part", "assembly"], "operation": "engineering_search",
+      "capabilities": ["owner"], "owner": "engineering-search",
+      "canonical_example": "find parts created by me", "paraphrases": ["my parts", "items owned by me", "assemblies I created", "components owned by me", "show my items"],
+      "negative_examples": ["my favorite parts", "parts reviewed by me"],
+      "example_request": {"entity_type": "part", "filters": {"owner": "$me"}},
+      "configuration": {"self_phrases": ["my", "owned by me", "created by me"]}
+    },
+    {
+      "id": "DATE", "version": 1, "status": "published", "priority": "P0",
+      "entities": ["item", "part", "assembly"], "operation": "engineering_search",
+      "capabilities": ["created", "modified"], "owner": "engineering-search",
+      "canonical_example": "parts modified in the last 7 days", "paraphrases": ["created today", "modified yesterday", "items created in the last 30 days", "assemblies modified today", "parts created yesterday"],
+      "negative_examples": ["recent parts", "old design"],
+      "example_request": {"entity_type": "part", "filters": {"modified": {"after": "2026-01-01T00:00:00Z"}}},
+      "configuration": {"relative_units": ["day", "days"]}
+    },
+    {
+      "id": "SORT", "version": 1, "status": "published", "priority": "P0",
+      "entities": ["item", "part", "assembly"], "operation": "engineering_search",
+      "capabilities": ["sort", "limit"], "owner": "engineering-search",
+      "canonical_example": "show the newest 10 parts", "paraphrases": ["oldest items first", "sort by part number", "top 20 components", "parts sorted by name", "first 5 assemblies"],
+      "negative_examples": ["newest revision", "top-level assembly"],
+      "example_request": {"entity_type": "part", "sort": [{"field": "created", "direction": "desc"}], "limit": 10},
+      "configuration": {"field_aliases": {"part number": "item_number", "item number": "item_number", "name": "name", "created": "created", "modified": "modified"}}
+    },
+    {
+      "id": "APR-MINE", "version": 1, "status": "published", "priority": "P1",
+      "entities": ["item", "part", "assembly"], "operation": "engineering_search",
+      "capabilities": ["approval_assigned_to_me", "approval_state"], "owner": "approval-workflow",
+      "canonical_example": "what do I need to review", "paraphrases": ["my reviews", "my review inbox", "reviews assigned to me", "show my pending reviews", "items I need to review"],
+      "negative_examples": ["parts reviewed by me", "my rejected designs"],
+      "example_request": {"filters": {"approval_assigned_to_me": true, "approval_state": "PENDING"}}, "configuration": {}
+    },
+    {
+      "id": "APR-STATE", "version": 1, "status": "published", "priority": "P1",
+      "entities": ["item", "part", "assembly"], "operation": "engineering_search",
+      "capabilities": ["approval_state"], "owner": "approval-workflow",
+      "canonical_example": "parts awaiting approval", "paraphrases": ["pending review items", "rejected changes", "assemblies pending approval", "items awaiting review", "show rejected reviews"],
+      "negative_examples": ["approval instructions", "review document"],
+      "example_request": {"entity_type": "part", "filters": {"approval_state": "PENDING"}}, "configuration": {}
+    },
+    {
+      "id": "APR-DUE", "version": 1, "status": "published", "priority": "P1",
+      "entities": ["item", "part", "assembly"], "operation": "engineering_search",
+      "capabilities": ["approval_state", "approval_due_before"], "owner": "approval-workflow",
+      "canonical_example": "overdue reviews", "paraphrases": ["overdue approvals", "reviews past due", "late review requests", "pending approvals past due", "show overdue review work"],
+      "negative_examples": ["review due-date policy", "old reviews"],
+      "example_request": {"filters": {"approval_state": "PENDING", "approval_due_before": "2026-01-01T00:00:00Z"}}, "configuration": {}
+    },
+    {
+      "id": "REV-WARN", "version": 1, "status": "published", "priority": "P1",
+      "entities": ["item", "part", "assembly"], "operation": "engineering_search",
+      "capabilities": ["has_warnings"], "owner": "processing",
+      "canonical_example": "ready parts with warnings", "paraphrases": ["items with processing warnings", "warning parts", "assemblies ready with warnings", "show warning revisions", "processed items with warnings"],
+      "negative_examples": ["warning policy", "parts named warning"],
+      "example_request": {"entity_type": "part", "filters": {"has_warnings": true}}, "configuration": {}
+    },
+    {
+      "id": "DATA-ARTIFACT", "version": 1, "status": "published", "priority": "P1",
+      "entities": ["item", "part", "assembly"], "operation": "engineering_search",
+      "capabilities": ["artifact_presence", "artifact_missing"], "owner": "artifact-management",
+      "canonical_example": "parts without drawings", "paraphrases": ["items missing previews", "no native CAD", "assemblies without drawings", "parts missing native files", "items with no preview"],
+      "negative_examples": ["drawing named missing", "preview settings"],
+      "example_request": {"entity_type": "part", "filters": {"artifact_presence": "drawing", "artifact_missing": true}}, "configuration": {}
+    },
+    {
+      "id": "DATA-META", "version": 1, "status": "published", "priority": "P1",
+      "entities": ["item", "part", "assembly"], "operation": "engineering_search",
+      "capabilities": ["extraction_status"], "owner": "metadata-extraction",
+      "canonical_example": "parts with failed extraction", "paraphrases": ["invalid metadata extraction", "failed metadata extraction", "items whose extraction failed", "assemblies with invalid metadata", "show extraction failures"],
+      "negative_examples": ["extraction documentation", "metadata named failed"],
+      "example_request": {"entity_type": "part", "filters": {"extraction_status": "failed"}}, "configuration": {}
+    },
+    {
+      "id": "CHECKOUT", "version": 1, "status": "published", "priority": "P1",
+      "entities": ["item", "part", "assembly"], "operation": "engineering_search",
+      "capabilities": ["checkout_owner"], "owner": "checkout-workflow",
+      "canonical_example": "items checked out by me", "paraphrases": ["my checked out items", "parts I checked out", "assemblies checked out by me", "show my active checkouts", "components I have checked out"],
+      "negative_examples": ["checkout instructions", "checked-out file text"],
+      "example_request": {"filters": {"checkout_owner": "$me"}}, "configuration": {}
+    }
+  ]
+}

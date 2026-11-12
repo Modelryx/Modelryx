@@ -1,0 +1,9 @@
+{
+  "identity": {"kind": "assembly"},
+  "geometry": {
+    "bounding_box": {"x_mm": 50.0, "y_mm": 10.0, "z_mm": 5.0},
+    "shape": {"volume_mm3": 2000.0, "surface_area_mm2": 1400.0},
+    "topology": {"solid_count": 2, "face_count": 12}
+  },
+  "assembly": {"is_assembly": true, "instance_count": 2}
+}

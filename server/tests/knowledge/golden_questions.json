@@ -1,0 +1,22 @@
+[
+  {
+    "question": "Why was Revision C created?",
+    "intent": "EXPLAIN_CHANGE",
+    "required_source_types": ["ITEM_REVISION", "REVISION_NOTE"]
+  },
+  {
+    "question": "Which change request authorized this material change?",
+    "intent": "EXPLAIN_CHANGE",
+    "required_source_types": ["CHANGE_REQUEST", "ITEM_REVISION"]
+  },
+  {
+    "question": "Has MISSING_EXTERNAL_REFERENCE happened before?",
+    "intent": "FAILURE_HISTORY",
+    "required_source_types": ["VALIDATION_REPORT", "WORKER_REPORT"]
+  },
+  {
+    "question": "What Modelryx procedure defines revision naming?",
+    "intent": "KNOWLEDGE_SEARCH",
+    "required_source_types": ["PROCEDURE", "MODELRYX_DOCUMENTATION"]
+  }
+]

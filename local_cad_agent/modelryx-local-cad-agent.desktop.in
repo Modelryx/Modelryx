@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Modelryx Local CAD Agent
+Comment=Select and analyze local CAD documents for Modelryx
+Exec=__EXECUTABLE__ %u
+Terminal=false
+Type=Application
+NoDisplay=true
+MimeType=x-scheme-handler/modelryx-cad;
+Categories=Graphics;Engineering;

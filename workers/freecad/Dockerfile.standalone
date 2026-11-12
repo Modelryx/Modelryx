@@ -1,0 +1,30 @@
+FROM condaforge/miniforge3:25.9.1-0@sha256:7ddae459669444129323a431fed8959e8972700dfb43c790d22abaeab85ff9d1
+
+ARG MODELRYX_FREECAD_VERSION=1.1.3
+RUN conda create -n modelryx-worker -y -c conda-forge python=3.11 "freecad=${MODELRYX_FREECAD_VERSION}" numpy trimesh pillow \
+    && conda clean --all -y
+ENV PATH=/opt/conda/envs/modelryx-worker/bin:$PATH \
+    PYTHONPATH=/opt/conda/envs/modelryx-worker/lib:/app/converter \
+    LD_LIBRARY_PATH=/opt/conda/envs/modelryx-worker/lib \
+    PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
+    MODELRYX_CONVERTER_SCRIPT=/app/converter/fcstd_to_modelryx_glb.py \
+    MODELRYX_FREECAD_ANALYZER_SCRIPT=/app/preprocessor/modelryx_freecad_preprocessor.py
+
+WORKDIR /app
+COPY worker-sdk /tmp/worker-sdk
+COPY workers/freecad/standalone/requirements.txt /tmp/requirements.txt
+RUN python -m pip install --no-cache-dir /tmp/worker-sdk -r /tmp/requirements.txt
+COPY workers/freecad/standalone ./standalone
+COPY workers/freecad/converter ./converter
+COPY workers/freecad/preprocessor ./preprocessor
+COPY workers/freecad/shared ./shared
+COPY workers/freecad/modelryx_freecad_adapter.py ./
+RUN python converter/fcstd_to_modelryx_glb.py --help >/dev/null \
+    && groupadd --system --gid 101 modelryx \
+    && useradd --system --uid 100 --gid 101 --create-home modelryx \
+    && mkdir -p /data/jobs \
+    && chown -R modelryx:modelryx /data/jobs
+
+USER modelryx
+EXPOSE 8090
+CMD ["python", "-m", "uvicorn", "standalone.api:app", "--host", "0.0.0.0", "--port", "8090", "--workers", "1"]

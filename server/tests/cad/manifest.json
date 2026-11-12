@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {"name": "simple_box", "expected": "expected/simple_box.json"},
+    {"name": "cylinder", "expected": "expected/cylinder.json"},
+    {"name": "plate_4_holes", "expected": "expected/plate_4_holes.json"},
+    {"name": "no_material", "expected": "expected/no_material.json"},
+    {"name": "small_assembly", "expected": "expected/small_assembly.json"}
+  ]
+}

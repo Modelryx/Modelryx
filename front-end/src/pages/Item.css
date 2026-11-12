@@ -1,0 +1,624 @@
+/* ==========================================================================
+   Item page
+   ========================================================================== */
+
+:where(.item-page) {
+  display: grid;
+  gap: 1.25rem;
+}
+
+
+/* ==========================================================================
+   Breadcrumb
+   ========================================================================== */
+
+:where(.item-page) .item-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+:where(.item-page) .item-breadcrumb a {
+  color: var(--accent);
+}
+
+
+/* ==========================================================================
+   Header
+   ========================================================================== */
+
+:where(.item-page) .item-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+:where(.item-page) .item-heading h1 {
+  margin: 0.15rem 0;
+}
+
+:where(.item-page) .item-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+:where(.item-page) .item-edit-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(0 0 0 / 65%);
+}
+
+:where(.item-page) .item-edit-dialog {
+  width: min(36rem, 100%);
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface-2);
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 45%);
+}
+
+:where(.item-page) .item-edit-dialog form,
+:where(.item-page) .item-edit-dialog label {
+  display: grid;
+  gap: 0.5rem;
+}
+
+:where(.item-page) .item-edit-dialog form {
+  gap: 1rem;
+}
+
+:where(.item-page) .item-edit-dialog h2,
+:where(.item-page) .item-edit-dialog p {
+  margin: 0;
+}
+
+:where(.item-page) .item-edit-dialog input,
+:where(.item-page) .item-edit-dialog select,
+:where(.item-page) .item-edit-dialog textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+:where(.item-page) .revision-create-dialog {
+  display: grid;
+  gap: 1rem;
+}
+
+:where(.item-page) .revision-create-methods {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+:where(.item-page) .revision-create-methods > label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+:where(.item-page) .revision-create-methods > label.selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
+:where(.item-page) .revision-create-methods span {
+  display: grid;
+  gap: 0.25rem;
+}
+
+:where(.item-page) .revision-create-methods small {
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+:where(.item-page) .revision-upload-actions {
+  display: grid;
+  gap: 1rem;
+}
+
+:where(.item-page) .item-edit-dialog textarea {
+  resize: vertical;
+}
+
+:where(.item-page) .item-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+
+/* ==========================================================================
+   Main two-panel layout
+   ========================================================================== */
+
+:where(.item-page) .item-layout {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+
+/* ==========================================================================
+   Left navigation panel
+   ========================================================================== */
+
+:where(.item-page) .item-navigation {
+  display: flex;
+  flex-direction: column;
+
+  min-height: 30rem;
+  padding-right: 1rem;
+
+  border-right: 1px solid var(--border);
+}
+
+:where(.item-page) .item-nav-button {
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+
+  appearance: none;
+  border: 0;
+  border-radius: 0.35rem;
+
+  background: transparent;
+  color: var(--text);
+
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-align: left;
+
+  cursor: pointer;
+}
+
+:where(.item-page) .item-nav-button:hover {
+  background: var(--surface-3);
+}
+
+:where(.item-page) .item-nav-button.active {
+  background: color-mix(
+    in srgb,
+    var(--accent) 12%,
+    var(--surface-3)
+  );
+
+  color: var(--accent);
+  font-weight: 600;
+}
+
+
+/* ==========================================================================
+   Right detail panel
+   ========================================================================== */
+
+:where(.item-page) .item-detail-panel {
+  min-width: 0;
+}
+
+:where(.item-page) .item-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+:where(.item-page) .item-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+:where(.item-page) .item-section-header h2 {
+  margin: 0;
+}
+
+:where(.item-page) .item-section-header p {
+  margin: 0.25rem 0 0;
+}
+
+
+/* ==========================================================================
+   Panels
+   ========================================================================== */
+
+:where(.item-page) .item-panel {
+  padding: 1.25rem;
+
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+:where(.item-page) .item-panel h3 {
+  margin-top: 0;
+}
+
+:where(.item-page) .table-wrap {
+  overflow-x: auto;
+}
+
+:where(.item-page) .table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+:where(.item-page) .table-wrap th,
+:where(.item-page) .table-wrap td {
+  padding: 0.7rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+:where(.item-page) .table-wrap th {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+:where(.item-page) .table-wrap tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+:where(.item-page) .row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+:where(.item-page) .attachment-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+:where(.item-page) .attachment-row-menu {
+  position: fixed;
+  z-index: 1300;
+  display: grid;
+  min-width: 12rem;
+  padding: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  background: var(--surface-2);
+  box-shadow: 0 0.8rem 2rem rgb(0 0 0 / 45%);
+}
+
+:where(.item-page) .attachment-row-menu button {
+  padding: 0.6rem 0.75rem;
+  border: 0;
+  border-radius: 0.3rem;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+:where(.item-page) .attachment-row-menu button:hover:not(:disabled),
+:where(.item-page) .attachment-row-menu button:focus-visible {
+  background: var(--surface-3);
+  color: var(--accent);
+}
+
+:where(.item-page) .attachment-duplicate-options {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+}
+
+:where(.item-page) .attachment-duplicate-options p {
+  margin: 0;
+}
+
+:where(.item-page) .button-like {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--surface-3);
+  color: var(--text);
+  cursor: pointer;
+}
+
+:where(.item-page) .button-like:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+:where(.item-page) .attachment-review {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-color: var(--accent);
+}
+
+:where(.item-page) .attachment-review h3,
+:where(.item-page) .attachment-review p {
+  margin: 0;
+}
+
+:where(.item-page) .attachment-review p {
+  margin-top: 0.35rem;
+}
+
+
+/* ==========================================================================
+   Overview
+   ========================================================================== */
+
+:where(.item-page) .item-overview-grid {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(18rem, 0.7fr);
+
+  gap: 1rem;
+}
+
+:where(.item-page) .item-facts {
+  display: grid;
+  margin: 0;
+}
+
+:where(.item-page) .item-facts > div {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.35fr) 1fr;
+  gap: 1rem;
+
+  padding: 0.6rem 0;
+
+  border-bottom: 1px solid var(--border);
+}
+
+:where(.item-page) .item-facts > div:last-child {
+  border-bottom: 0;
+}
+
+:where(.item-page) .item-facts dt {
+  color: var(--text-muted);
+}
+
+:where(.item-page) .item-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+:where(.item-page) .item-facts.compact > div {
+  padding: 0.45rem 0;
+}
+
+
+/* ==========================================================================
+   Current revision summary
+   ========================================================================== */
+
+:where(.item-page) .current-revision-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+:where(.item-page) .revision-summary-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+:where(.item-page) .revision-code {
+  display: block;
+
+  margin-top: 0.25rem;
+
+  font-size: 1.25rem;
+}
+
+
+/* ==========================================================================
+   Revisions table
+   ========================================================================== */
+
+:where(.item-page) .revision-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+:where(.item-page) .revision-action {
+  text-align: right !important;
+}
+
+:where(.item-page) .revision-row-menu {
+  position: fixed;
+  z-index: 1200;
+  display: grid;
+  min-width: 13rem;
+  padding: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  background: var(--surface-2);
+  box-shadow: 0 0.8rem 2rem rgb(0 0 0 / 45%);
+}
+
+:where(.item-page) .revision-row-menu a,
+:where(.item-page) .revision-row-menu button {
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.3rem;
+  color: var(--text);
+  text-decoration: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+:where(.item-page) .revision-row-menu a:hover,
+:where(.item-page) .revision-row-menu button:hover {
+  background: var(--surface-3);
+  color: var(--accent);
+}
+
+:where(.item-page) .revision-selected-summary {
+  display: grid;
+  gap: 1rem;
+}
+
+:where(.item-page) .revision-summary-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+:where(.item-page) .revision-summary-facts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 2rem;
+}
+
+:where(.item-page) .current-badge {
+  padding: 0.15rem 0.45rem;
+
+  border-radius: 999px;
+
+  background: color-mix(
+    in srgb,
+    var(--accent) 12%,
+    var(--surface-3)
+  );
+
+  color: var(--accent);
+
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+
+/* ========================================================================== 
+   Shared helpers
+   ========================================================================== */
+
+:where(.item-page) .empty-state {
+  padding: 2rem;
+
+  text-align: center;
+}
+
+:where(.item-page) .empty-state p {
+  max-width: 32rem;
+
+  margin: 0.4rem auto 0;
+}
+
+:where(.item-page) .muted {
+  color: var(--text-muted);
+}
+
+:where(.item-page) .mono {
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+
+  font-size: 0.85rem;
+}
+
+:where(.item-page) .primary-button,
+:where(.item-page) .secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 0.5rem 0.8rem;
+
+  border-radius: 0.4rem;
+
+  text-decoration: none;
+}
+
+:where(.item-page) .primary-button {
+  background: var(--accent);
+  color: rgb(0, 0, 0);
+}
+
+:where(.item-page) .secondary-button {
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+
+@media (max-width: 900px) {
+  :where(.item-page) .item-layout {
+    grid-template-columns: 1fr;
+  }
+
+  :where(.item-page) .item-navigation {
+    flex-direction: row;
+
+    min-height: auto;
+    padding-right: 0;
+    padding-bottom: 0.75rem;
+
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+
+    overflow-x: auto;
+  }
+
+  :where(.item-page) .item-nav-button {
+    width: auto;
+    min-width: max-content;
+  }
+
+  :where(.item-page) .item-overview-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  :where(.item-page) .item-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  :where(.item-page) .item-heading-actions {
+    width: 100%;
+  }
+
+  :where(.item-page) .item-facts > div {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
+}

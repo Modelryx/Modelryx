@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "description": "Phase 1 normalized-metadata ground truth; native CAD corpus files can replace synthetic fixtures without changing case IDs.",
+  "cases": [
+    {
+      "id": "same-native-bytes",
+      "group": "exact",
+      "source": "motor_housing.fcstd",
+      "candidate": "motor_housing_copy.fcstd",
+      "expected": "exact_file_duplicate"
+    },
+    {
+      "id": "housing-cross-format",
+      "group": "cross_format",
+      "source": "motor_housing.fcstd",
+      "candidate": "motor_housing.step",
+      "expected": "engineering_duplicate"
+    },
+    {
+      "id": "bracket-length-change",
+      "group": "variants",
+      "source": "bracket_100.fcstd",
+      "candidate": "bracket_125.fcstd",
+      "expected": "variant"
+    },
+    {
+      "id": "housing-design-family",
+      "group": "similar",
+      "source": "motor_housing_small.fcstd",
+      "candidate": "motor_housing_large.fcstd",
+      "expected": "similar"
+    },
+    {
+      "id": "shaft-versus-housing",
+      "group": "different",
+      "source": "shaft.fcstd",
+      "candidate": "motor_housing.fcstd",
+      "expected": "different"
+    }
+  ]
+}

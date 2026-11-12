@@ -1,0 +1,92 @@
+groups:
+  - name: modelryx-lifecycle
+    rules:
+      - alert: ModelryxStructureCleanupDegraded
+        expr: modelryx_structure_cleanup_health == 2
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: Modelryx structure-staging cleanup is degraded
+          description: Cleanup reached its consecutive-failure threshold. Follow the structure cleanup runbook.
+
+      - alert: ModelryxStructureCleanupWarning
+        expr: modelryx_structure_cleanup_health == 1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Modelryx structure-staging cleanup needs attention
+          description: Cleanup has overdue staging or a recent failure.
+
+      - alert: ModelryxStructureStagingOverdue
+        expr: modelryx_structure_cleanup_overdue_sessions > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Modelryx has overdue structure-staging sessions
+          description: Temporary structure uploads have passed their expiry but remain unreclaimed.
+
+      - alert: ModelryxStructureCheckinCommitStuck
+        expr: modelryx_structure_checkin_sessions{state="COMMITTING"} > 0
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: A Modelryx structure check-in is stuck committing
+          description: Atomic structure commits should finish quickly; inspect the API and database before intervening.
+
+      - alert: ModelryxExpiredCheckoutLocks
+        expr: sum(modelryx_checkout_locks{expired="true"}) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Modelryx has expired checkout locks
+          description: Expired checkout rows remain and may require reconciliation or investigation.
+
+      - alert: ModelryxCheckoutNotificationGenerationFailures
+        expr: modelryx_checkout_notification_consecutive_failures >= 3
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: Modelryx checkout-expiry notification generation is failing
+          description: Three or more consecutive notification runs failed. Checkout owners may not receive lease-expiry warnings; inspect worker logs and the Operations page.
+
+      - alert: ModelryxApprovalRequestsOverdue
+        expr: modelryx_approval_requests_overdue > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Modelryx has overdue approval requests
+          description: One or more pending approval requests passed their snapshotted due date. Review routing and reviewer availability.
+
+      - alert: ModelryxEngineeringSearchFallbackRateHigh
+        expr: modelryx_engineering_search_fallbacks / clamp_min(sum(modelryx_engineering_search_queries), 1) > 0.5 and sum(modelryx_engineering_search_queries) >= 20
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Engineering search deterministic fallback rate is high
+          description: More than half of retained search executions used deterministic fallback. Check AI gateway health and schema-validation failures.
+
+      - alert: ModelryxEngineeringSearchZeroResultRateHigh
+        expr: modelryx_engineering_search_zero_results / clamp_min(sum(modelryx_engineering_search_queries), 1) > 0.5 and sum(modelryx_engineering_search_queries) >= 20
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Engineering search zero-result rate is high
+          description: More than half of retained search executions returned no records. Review recent corrections and the locked result corpus before changing interpretation rules.
+
+      - alert: ModelryxEngineeringSearchLatencyHigh
+        expr: histogram_quantile(0.95, sum by (le) (modelryx_engineering_search_duration_milliseconds_bucket{parser="deterministic"})) > 500
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Deterministic engineering search p95 latency is high
+          description: Retained deterministic search p95 exceeds the 500 ms release target. Check database load, query plans, and reference-workload results.

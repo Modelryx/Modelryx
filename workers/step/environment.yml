@@ -1,0 +1,12 @@
+name: step-worker
+channels: [conda-forge]
+dependencies:
+  - python=3.11
+  - pythonocc-core>=7.7
+  - numpy>=1.20
+  - scipy>=1.7
+  - trimesh>=4
+  - fastapi>=0.115
+  - uvicorn>=0.34
+  - python-multipart>=0.0.18
+  - pytest>=8.3

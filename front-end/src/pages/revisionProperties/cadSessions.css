@@ -1,0 +1,94 @@
+.cad-sessions-section {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.cad-sessions-section .item-revision-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 0;
+}
+
+.cad-sessions-section .item-revision-section-header h2 { margin: 0 0 4px; font-size: 23px; }
+.cad-sessions-section .item-revision-section-header p { margin: 0; }
+.cad-session-create-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.cad-session-create-actions select,
+.cad-sessions-section .cad-operation-panel select,
+.cad-sessions-section .cad-operation-panel input {
+  min-height: 38px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+.cad-session-create-actions button,
+.cad-sessions-section .cad-operation-panel button,
+.cad-session-readiness button {
+  min-height: 38px;
+  padding: 8px 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+}
+.cad-session-create-actions button:not(:disabled) {
+  border-color: #315efb;
+  background: #315efb;
+  color: #fff;
+}
+.cad-session-create-actions button:not(:disabled):hover { background: #244bd1; }
+.cad-session-readiness {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--soft);
+  font-size: 13px;
+}
+.cad-session-readiness strong { color: var(--text); }
+.cad-session-readiness span { color: var(--muted); }
+.cad-session-readiness[data-state="ready"] { border-color: color-mix(in srgb, #168453 40%, var(--border)); background: color-mix(in srgb, #168453 7%, var(--surface)); }
+.cad-session-diagnostics { padding: 10px 14px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); font-size: 13px; }
+.cad-session-diagnostics summary { cursor: pointer; color: var(--muted); font-weight: 650; }
+.cad-session-diagnostics ul { margin: 10px 0 0; padding-left: 19px; color: var(--muted); }
+.cad-session-diagnostics li { padding: 4px 0; overflow-wrap: anywhere; }
+.cad-warning-count { color: var(--text); font-weight: 750; }
+.cad-session-list { min-width: 0; padding: 18px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.cad-session-list-heading { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.cad-session-list-heading h3 { margin: 0; font-size: 16px; }
+.cad-session-list-heading span { min-width: 24px; padding: 2px 7px; border-radius: 999px; background: var(--soft); color: var(--muted); text-align: center; font-size: 12px; }
+.cad-session-rows { display: grid; }
+.cad-session-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px 18px; padding: 14px 0; border-top: 1px solid var(--border); }
+.cad-session-row:first-child { border-top: 0; }
+.cad-session-row p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+.cad-session-row .cad-session-row-error { color: #b42318; overflow-wrap: anywhere; }
+.cad-session-row-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.cad-session-state { display: inline-block; padding: 4px 9px; border-radius: 999px; background: var(--soft); color: var(--text); text-transform: capitalize; font-size: 12px; }
+.cad-session-state--ready-to-review { background: color-mix(in srgb, #168453 12%, var(--surface)); color: #168453; }
+.cad-session-state--failed,
+.cad-session-state--expired { background: color-mix(in srgb, #b42318 10%, var(--surface)); color: #b42318; }
+.cad-session-empty { margin: 0; padding: 14px 0 3px; color: var(--muted); font-size: 13px; }
+.cad-sessions-section .cad-operation-panel { margin: 0; }
+.cad-sessions-section .cad-session-title { display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 12px; }
+.cad-sessions-section .cad-session-title h3 { margin: 0 0 4px; }
+.cad-sessions-section .cad-session-title p { margin: 0; }
+.cad-sessions-section .cad-operation-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 18px; margin-top: 18px; }
+.cad-sessions-section .cad-operation-grid > div { display: grid; align-content: start; gap: 8px; }
+.cad-sessions-section .cad-operation-grid label { font-size: 13px; font-weight: 650; }
+.cad-sessions-section .cad-plan-review { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border); }
+.cad-sessions-section .cad-plan-review h3 { margin: 0 0 12px; }
+.cad-sessions-section .cad-plan-review .revision-properties { display: grid; gap: 8px; }
+.cad-sessions-section .cad-plan-review .revision-properties > div { display: grid; grid-template-columns: minmax(100px, 180px) minmax(0, 1fr); gap: 8px; }
+.cad-sessions-section .cad-plan-review dt { color: var(--muted); }
+.cad-sessions-section .cad-plan-review dd { margin: 0; overflow-wrap: anywhere; }
