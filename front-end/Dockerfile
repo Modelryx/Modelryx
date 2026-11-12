@@ -5,9 +5,10 @@ WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
+COPY scripts/check-native-lock.mjs ./scripts/
 
 # Install dependencies
-RUN npm ci
+RUN npm run check:lock && npm ci
 
 # Copy source code
 COPY . .

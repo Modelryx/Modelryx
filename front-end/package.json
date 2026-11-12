@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "check:lock": "node scripts/check-native-lock.mjs",
     "dev": "vite --host 0.0.0.0",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit && vite build",

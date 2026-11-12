@@ -23,12 +23,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run migrated database test suite
+        id: backend-tests
         run: >-
-          docker compose --profile test run --name modelryx-backend-tests test
+          docker compose --profile test run --build --env COVERAGE_FILE=/tmp/.coverage
+          --name modelryx-backend-tests test
           pytest -q --cov=modelryx --cov-report=xml:/tmp/coverage.xml
       - name: Collect backend coverage
         if: always()
-        run: docker cp modelryx-backend-tests:/tmp/coverage.xml coverage.xml
+        run: |
+          if docker cp modelryx-backend-tests:/tmp/coverage.xml coverage.xml; then
+            echo "Backend coverage collected."
+          elif [ "${{ steps.backend-tests.outcome }}" = "success" ]; then
+            echo "::error::Backend tests passed but did not produce coverage.xml."
+            exit 1
+          else
+            echo "::warning::No coverage report was produced; inspect the original backend test failure and container logs."
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -37,7 +47,9 @@ jobs:
           if-no-files-found: warn
       - name: Show database and migration logs
         if: failure()
-        run: docker compose --profile test logs --no-color db-test reset-test-db migrate-test storage-test-init
+        run: |
+          docker logs modelryx-backend-tests 2>&1 || true
+          docker compose --profile test logs --no-color db-test reset-test-db migrate-test storage-test-init
       - name: Clean up test services
         if: always()
         run: docker compose --profile test down --volumes
@@ -49,6 +61,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: {node-version: 22, cache: npm, cache-dependency-path: front-end/package-lock.json}
+      - run: npm run check:lock
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
@@ -81,17 +94,14 @@ jobs:
         run: python -m pytest -q workers/freecad/tests
       - run: python -m compileall -q converter preprocessor shared
         working-directory: workers/freecad
-      - uses: docker/setup-buildx-action@v3
+      - name: Free disk space for native CAD runtime
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /usr/local/.ghcup /opt/ghc
+          df -h /
+      # The native builder avoids a second full image export/import via buildx load.
       - name: Build native FreeCAD worker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: workers/freecad/Dockerfile
-          load: true
-          push: false
-          tags: modelryx-freecad-ci
-          cache-from: type=gha,scope=freecad-worker
-          cache-to: type=gha,mode=max,scope=freecad-worker
+        run: docker build --file workers/freecad/Dockerfile --tag modelryx-freecad-ci .
       - name: Run native FreeCAD release gates
         run: |
           docker run --rm modelryx-freecad-ci python /opt/modelryx-converter/golden_integration_test.py
@@ -158,10 +168,31 @@ jobs:
           scan-type: fs
           scan-ref: .
           format: sarif
+          limit-severities-for-sarif: true
           output: trivy-results.sarif
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: '1'
+      - name: Summarize security findings
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report = Path("trivy-results.sarif")
+          if not report.is_file():
+              print("No SARIF report was produced; inspect the scanner error above.")
+          else:
+              runs = json.loads(report.read_text()).get("runs", [])
+              results = [result for run in runs for result in run.get("results", [])]
+              print(f"High/critical security findings: {len(results)}")
+              for result in results:
+                  for location in result.get("locations", []):
+                      physical = location.get("physicalLocation", {})
+                      path = physical.get("artifactLocation", {}).get("uri", "unknown")
+                      line = physical.get("region", {}).get("startLine", 1)
+                      print(f"{result.get('ruleId', 'unknown')}: {path}:{line}")
+          PY
       # Retain results for all repositories and fork PRs without requiring Code Security.
       - name: Upload security report
         uses: actions/upload-artifact@v4
