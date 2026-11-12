@@ -1,4 +1,4 @@
-import type { Item } from "../../api";
+import type { Item } from '../../api';
 
 export type User = {
   id: string;
@@ -38,7 +38,7 @@ export type Status = {
   storage_free_bytes: number;
   processing_jobs: Record<string, number>;
   revisions: Record<string, number>;
-  checkout_notification_health: "HEALTHY" | "WARNING" | "DEGRADED";
+  checkout_notification_health: 'HEALTHY' | 'WARNING' | 'DEGRADED';
   checkout_notification_consecutive_failures: number;
   checkout_notification_last_attempt_at: string | null;
   checkout_notification_last_success_at: string | null;
@@ -48,15 +48,15 @@ export type Status = {
 };
 
 export type WorkerStatus = {
-  worker_type: "FREECAD" | "STEP";
-  availability: "ONLINE" | "OFFLINE";
+  worker_type: 'FREECAD' | 'STEP';
+  availability: 'ONLINE' | 'OFFLINE';
   machine_name: string | null;
   worker_version: string | null;
   application_version: string | null;
   adapter_version: string | null;
-  compatibility_state: "COMPATIBLE" | "INCOMPATIBLE" | "UNKNOWN";
+  compatibility_state: 'COMPATIBLE' | 'INCOMPATIBLE' | 'UNKNOWN';
   capabilities: Record<string, boolean | string | number | null>;
-  status: "IDLE" | "BUSY" | "DEGRADED" | null;
+  status: 'IDLE' | 'BUSY' | 'DEGRADED' | null;
   current_job: boolean;
   detail: string | null;
   last_heartbeat_at: string | null;
@@ -72,20 +72,21 @@ export type CadWorkerSettings = {
 };
 
 export type CadWorkerConnectionStatus = {
-  cad_system: "autocad" | "inventor" | "siemens_nx" | "freecad" | "freecad_analyzer";
+  cad_system: 'autocad' | 'inventor' | 'siemens_nx' | 'freecad' | 'freecad_analyzer';
   url: string | null;
-  availability: "ONLINE" | "OFFLINE" | "NOT_CONFIGURED";
-  configuration_source: "ADMIN_OVERRIDE" | "ENVIRONMENT_DEFAULT" | "ADMIN_DISABLED" | "NOT_CONFIGURED";
+  availability: 'ONLINE' | 'OFFLINE' | 'NOT_CONFIGURED';
+  configuration_source:
+    'ADMIN_OVERRIDE' | 'ENVIRONMENT_DEFAULT' | 'ADMIN_DISABLED' | 'NOT_CONFIGURED';
   checked_at: string;
   detail: string | null;
   capabilities: Record<string, unknown>;
-  processing_readiness: "READY" | "NOT_READY" | "UNKNOWN" | "NOT_APPLICABLE";
+  processing_readiness: 'READY' | 'NOT_READY' | 'UNKNOWN' | 'NOT_APPLICABLE';
   readiness_code: string | null;
   readiness_detail: string | null;
 };
 
 export type CadLicenseInfo = {
-  status: "VERIFIED" | "ERROR" | "UNVERIFIED";
+  status: 'VERIFIED' | 'ERROR' | 'UNVERIFIED';
   detail: string;
   lastVerifiedAt: string | null;
 };
@@ -171,4 +172,3 @@ export type ItemNumberTemplate = {
   part_example: string;
   assembly_example: string;
 };
-

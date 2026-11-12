@@ -28,7 +28,9 @@ def test_incomplete_geometry_is_invalid() -> None:
 
 def test_drawing_metadata_does_not_require_solid_geometry() -> None:
     metadata = deepcopy(valid_metadata())
-    metadata["quality"].update({"geometry": "not_applicable", "physical": "not_applicable", "features": "not_applicable"})
+    metadata["quality"].update(
+        {"geometry": "not_applicable", "physical": "not_applicable", "features": "not_applicable"}
+    )
     metadata["drawings"] = [{"page_count": 2}]
     assert MetadataService.status_for(metadata) == "READY"
     metadata["drawings"] = []
@@ -38,7 +40,9 @@ def test_drawing_metadata_does_not_require_solid_geometry() -> None:
 def test_assembly_occurrence_evidence_survives_unavailable_aggregate_geometry() -> None:
     metadata = deepcopy(valid_metadata())
     metadata["identity"]["kind"] = "assembly"
-    metadata["assembly"].update({"is_assembly": True, "components": [{"occurrence_id": "placement"}]})
+    metadata["assembly"].update(
+        {"is_assembly": True, "components": [{"occurrence_id": "placement"}]}
+    )
     metadata["quality"]["geometry"] = "unavailable"
     assert MetadataService.status_for(metadata) == "PARTIAL"
     metadata["assembly"]["components"] = []

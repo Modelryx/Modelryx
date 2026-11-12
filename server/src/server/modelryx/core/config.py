@@ -126,7 +126,11 @@ class Settings(BaseSettings):
             return self
         if len(self.jwt_secret) < 32 or self.jwt_secret == "change-this-development-secret":
             raise ValueError("production requires a unique JWT secret of at least 32 characters")
-        if self.bootstrap_admin_password in {"admin", "change-this-admin-password", "replace-this-password"}:
+        if self.bootstrap_admin_password in {
+            "admin",
+            "change-this-admin-password",
+            "replace-this-password",
+        }:
             raise ValueError("production requires a strong bootstrap administrator password")
         return self
 

@@ -1,5 +1,7 @@
 """Exercise the controlled Phase 9 executor inside the real FreeCAD runtime."""
 
+# FreeCAD must initialize before standard-library imports.
+# ruff: noqa: I001
 import FreeCAD  # type: ignore
 import Part  # type: ignore
 

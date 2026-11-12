@@ -1,24 +1,128 @@
-.lifecycle-action-page { min-width: 0; display: grid; gap: 17px; }
-.lifecycle-action-page > header span { color: var(--muted); font-size: 11px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
-.lifecycle-action-page > header h2 { margin: 5px 0 5px; font-size: clamp(23px, 2vw, 28px); letter-spacing: -.02em; }
-.lifecycle-action-page > header p { margin: 0; color: var(--muted); font-size: 13px; }
-.lifecycle-action-form, .lifecycle-action-result { width: min(100%, 760px); padding: 22px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
-.lifecycle-action-form > p { margin: 16px 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
-.lifecycle-action-context { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding-bottom: 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
-.lifecycle-action-context span { color: var(--muted); }
-.lifecycle-action-form .dialog-field { font-size: 13px; }
-.lifecycle-action-form .dialog-field input, .lifecycle-action-form .dialog-field textarea, .lifecycle-action-form .dialog-field select { width: 100%; min-height: 40px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-weight: 400; }
-.lifecycle-action-form .dialog-field textarea { resize: vertical; }
-.lifecycle-action-form .dialog-actions { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border); }
-.lifecycle-action-form .lifecycle-action-unavailable { padding: 11px 13px; border-radius: 8px; background: var(--soft); color: var(--text); }
-.lifecycle-action-result strong { font-size: 16px; }
-.lifecycle-action-result p { color: var(--muted); font-size: 13px; }
-.lifecycle-action-result a { color: var(--accent); font-size: 13px; font-weight: 650; }
-.revision-impact-panel { display: grid; gap: 9px; margin: 16px 0; padding: 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--soft); font-size: 13px; }
-.revision-impact-panel h3, .revision-impact-panel p { margin: 0; }
-.revision-impact-panel > div:not(.section-error) { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: baseline; }
-.revision-impact-panel > div:not(.section-error) strong { min-width: 86px; }
-.revision-impact-panel > div:not(.section-error) span { flex: 1; }
-.revision-impact-panel a { color: var(--accent); }
-.revision-impact-warning { color: var(--danger, #b42318); }
-@media (max-width: 560px) { .lifecycle-action-form, .lifecycle-action-result { padding: 17px; } }
+.lifecycle-action-page {
+  min-width: 0;
+  display: grid;
+  gap: 17px;
+}
+.lifecycle-action-page > header span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.lifecycle-action-page > header h2 {
+  margin: 5px 0 5px;
+  font-size: clamp(23px, 2vw, 28px);
+  letter-spacing: -0.02em;
+}
+.lifecycle-action-page > header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.lifecycle-action-form,
+.lifecycle-action-result {
+  width: min(100%, 760px);
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.lifecycle-action-form > p {
+  margin: 16px 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.lifecycle-action-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.lifecycle-action-context span {
+  color: var(--muted);
+}
+.lifecycle-action-form .dialog-field {
+  font-size: 13px;
+}
+.lifecycle-action-form .dialog-field input,
+.lifecycle-action-form .dialog-field textarea,
+.lifecycle-action-form .dialog-field select {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 400;
+}
+.lifecycle-action-form .dialog-field textarea {
+  resize: vertical;
+}
+.lifecycle-action-form .dialog-actions {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.lifecycle-action-form .lifecycle-action-unavailable {
+  padding: 11px 13px;
+  border-radius: 8px;
+  background: var(--soft);
+  color: var(--text);
+}
+.lifecycle-action-result strong {
+  font-size: 16px;
+}
+.lifecycle-action-result p {
+  color: var(--muted);
+  font-size: 13px;
+}
+.lifecycle-action-result a {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 650;
+}
+.revision-impact-panel {
+  display: grid;
+  gap: 9px;
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--soft);
+  font-size: 13px;
+}
+.revision-impact-panel h3,
+.revision-impact-panel p {
+  margin: 0;
+}
+.revision-impact-panel > div:not(.section-error) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: baseline;
+}
+.revision-impact-panel > div:not(.section-error) strong {
+  min-width: 86px;
+}
+.revision-impact-panel > div:not(.section-error) span {
+  flex: 1;
+}
+.revision-impact-panel a {
+  color: var(--accent);
+}
+.revision-impact-warning {
+  color: var(--danger, #b42318);
+}
+@media (max-width: 560px) {
+  .lifecycle-action-form,
+  .lifecycle-action-result {
+    padding: 17px;
+  }
+}

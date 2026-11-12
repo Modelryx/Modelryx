@@ -1,4 +1,4 @@
-import type { DisplayProfileName } from "./types";
+import type { DisplayProfileName } from './types';
 
 export interface DisplayProfile {
   backgroundTop: number;
@@ -20,7 +20,7 @@ export const displayProfiles: Record<DisplayProfileName, DisplayProfile> = {
     rimIntensity: 0.8,
     headlightIntensity: 0.18,
   },
-  "nx-like": {
+  'nx-like': {
     backgroundTop: 0xdce3eb,
     backgroundBottom: 0x8798aa,
     environmentIntensity: 0.8,

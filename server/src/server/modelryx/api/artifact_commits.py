@@ -85,11 +85,13 @@ def _content_blob_for_staged_file(
         text("SELECT pg_advisory_xact_lock(hashtextextended(:identity, 0))"),
         {"identity": f"{source.sha256}:{source.byte_size}"},
     )
-    blob = db.scalar(select(ContentBlob).where(
-        ContentBlob.sha256 == source.sha256,
-        ContentBlob.byte_size == source.byte_size,
-        ContentBlob.state == "VERIFIED",
-    ))
+    blob = db.scalar(
+        select(ContentBlob).where(
+            ContentBlob.sha256 == source.sha256,
+            ContentBlob.byte_size == source.byte_size,
+            ContentBlob.state == "VERIFIED",
+        )
+    )
     if blob is not None:
         if not storage.exists(blob.storage_key):
             raise HTTPException(status_code=409, detail="Reusable attachment content is missing")
@@ -162,7 +164,9 @@ def _require_current_assembly_analysis(
         )
     reconciliation = list(analysis.get("reconciliation") or [])
     if any(entry.get("status") in {"MISSING", "CONFLICT"} for entry in reconciliation):
-        raise HTTPException(status_code=422, detail="Assembly analysis contains blocking references")
+        raise HTTPException(
+            status_code=422, detail="Assembly analysis contains blocking references"
+        )
     decisions = dict(analysis.get("identity_decisions") or {})
     unresolved = [
         entry
@@ -171,7 +175,8 @@ def _require_current_assembly_analysis(
         and (
             f"{str(entry.get('parent_logical_path') or '').casefold()}::"
             f"{str(entry.get('occurrence_key') or '').casefold()}"
-        ) not in decisions
+        )
+        not in decisions
     ]
     if unresolved:
         raise HTTPException(status_code=422, detail="Assembly analysis has unresolved identities")
@@ -183,7 +188,9 @@ def _require_current_assembly_analysis(
         and str(entry.get("parent_logical_path") or "").casefold() == root_path.casefold()
         and entry.get("status") != "REMOVED"
     }
-    root_revision_id = proposal.destination.revision_id if proposal.destination is not None else None
+    root_revision_id = (
+        proposal.destination.revision_id if proposal.destination is not None else None
+    )
     proposed_occurrences = {
         line.instance_name.casefold()
         for line in proposal.bom
@@ -285,10 +292,12 @@ def _commit_edit(
                 Attachment.item_id == item.id,
             )
         )
-        verified_file = db.scalar(select(ArtifactFile.id).where(
-            ArtifactFile.artifact_id == linked_id,
-            ArtifactFile.state == "VERIFIED",
-        ))
+        verified_file = db.scalar(
+            select(ArtifactFile.id).where(
+                ArtifactFile.artifact_id == linked_id,
+                ArtifactFile.state == "VERIFIED",
+            )
+        )
         if linked is None or verified_file is None:
             raise HTTPException(status_code=409, detail="A linked Additional File version changed")
     primary_keys = [
@@ -331,17 +340,28 @@ def _commit_edit(
                     ArtifactFile.state == "VERIFIED",
                 )
             )
-            if existing is None or existing.state not in {"READY", "READY_WITH_WARNINGS"} or matching is None:
+            if (
+                existing is None
+                or existing.state not in {"READY", "READY_WITH_WARNINGS"}
+                or matching is None
+            ):
                 raise HTTPException(status_code=409, detail="A selected duplicate changed")
             revision_by_file[source.id] = existing
             reused_revision_ids.add(existing.id)
             continue
         if decision.item is None or decision.revision is None:
             raise HTTPException(status_code=422, detail="A new component identity is incomplete")
-        if db.scalar(select(Item.id).where(
-            func.lower(Item.part_number) == decision.item.item_number.strip().casefold()
-        )) is not None:
-            raise HTTPException(status_code=409, detail="A proposed component Item number already exists")
+        if (
+            db.scalar(
+                select(Item.id).where(
+                    func.lower(Item.part_number) == decision.item.item_number.strip().casefold()
+                )
+            )
+            is not None
+        ):
+            raise HTTPException(
+                status_code=409, detail="A proposed component Item number already exists"
+            )
         new_item = Item(
             part_number=decision.item.item_number.strip(),
             name=decision.item.name.strip(),
@@ -384,19 +404,23 @@ def _commit_edit(
     for proposed in proposal.artifacts:
         if proposed.existing_relation_id is not None:
             continue
-        owner_revision = revision if proposed.owner_staged_file_id is None else revision_by_file.get(
-            proposed.owner_staged_file_id
+        owner_revision = (
+            revision
+            if proposed.owner_staged_file_id is None
+            else revision_by_file.get(proposed.owner_staged_file_id)
         )
         if owner_revision is None or (
             owner_revision.id != revision.id and owner_revision.id not in child_relations
         ):
             raise HTTPException(status_code=422, detail="Artifact owner is unresolved")
         if proposed.existing_artifact_id is not None:
-            relation = db.scalar(select(RevisionArtifactRelation).where(
-                RevisionArtifactRelation.revision_id == owner_revision.id,
-                RevisionArtifactRelation.artifact_id == proposed.existing_artifact_id,
-                RevisionArtifactRelation.relation_type == "ATTACHMENT",
-            ))
+            relation = db.scalar(
+                select(RevisionArtifactRelation).where(
+                    RevisionArtifactRelation.revision_id == owner_revision.id,
+                    RevisionArtifactRelation.artifact_id == proposed.existing_artifact_id,
+                    RevisionArtifactRelation.relation_type == "ATTACHMENT",
+                )
+            )
             if relation is None:
                 relation = RevisionArtifactRelation(
                     revision_id=owner_revision.id,
@@ -424,11 +448,15 @@ def _commit_edit(
                 "IMAGE": "IMAGE",
             }.get(proposed.artifact_type, "OTHER")
             if proposed.attachment_id is not None:
-                attachment = db.scalar(select(Attachment).where(
-                    Attachment.id == proposed.attachment_id,
-                    Attachment.item_id == item.id,
-                    Attachment.lifecycle_state == "ACTIVE",
-                ).with_for_update())
+                attachment = db.scalar(
+                    select(Attachment)
+                    .where(
+                        Attachment.id == proposed.attachment_id,
+                        Attachment.item_id == item.id,
+                        Attachment.lifecycle_state == "ACTIVE",
+                    )
+                    .with_for_update()
+                )
                 if attachment is None:
                     raise HTTPException(status_code=409, detail="Additional File changed")
             else:
@@ -441,11 +469,15 @@ def _commit_edit(
                 )
                 db.add(attachment)
                 db.flush()
-        previous_attachment_version = None if attachment is None else db.scalar(
-            select(Artifact)
-            .where(Artifact.attachment_id == attachment.id)
-            .order_by(Artifact.generation.desc(), Artifact.id.desc())
-            .limit(1)
+        previous_attachment_version = (
+            None
+            if attachment is None
+            else db.scalar(
+                select(Artifact)
+                .where(Artifact.attachment_id == attachment.id)
+                .order_by(Artifact.generation.desc(), Artifact.id.desc())
+                .limit(1)
+            )
         )
         artifact = Artifact(
             artifact_key=(
@@ -557,11 +589,13 @@ def _commit_edit(
         db.flush()
         child_snapshots[child_revision.id] = child_snapshot
         for index, relation in enumerate(child_relations[child_revision.id]):
-            db.add(RevisionContentSnapshotArtifact(
-                snapshot_id=child_snapshot.id,
-                relation_id=relation.id,
-                sequence=index,
-            ))
+            db.add(
+                RevisionContentSnapshotArtifact(
+                    snapshot_id=child_snapshot.id,
+                    relation_id=relation.id,
+                    sequence=index,
+                )
+            )
     bom_view_id: uuid.UUID | None = None
     lines_by_parent: dict[uuid.UUID, list] = {}
     for line in proposal.bom:
@@ -579,18 +613,27 @@ def _commit_edit(
         if db.get(Item, child.part_id).part_type == "ASSEMBLY"
     }
     for parent_revision_id in assembly_revision_ids:
-        parent_revision = revision if parent_revision_id == revision.id else next(
-            child for child in created_revisions if child.id == parent_revision_id
+        parent_revision = (
+            revision
+            if parent_revision_id == revision.id
+            else next(child for child in created_revisions if child.id == parent_revision_id)
         )
-        parent_item = item if parent_revision_id == revision.id else db.get(Item, parent_revision.part_id)
+        parent_item = (
+            item if parent_revision_id == revision.id else db.get(Item, parent_revision.part_id)
+        )
         if parent_item is None or parent_item.part_type != "ASSEMBLY":
             continue
-        parent_snapshot = snapshot if parent_revision_id == revision.id else child_snapshots[parent_revision_id]
-        previous_bom_sequence = db.scalar(
-            select(func.max(BomViewRevision.sequence)).where(
-                BomViewRevision.revision_id == parent_revision_id
+        parent_snapshot = (
+            snapshot if parent_revision_id == revision.id else child_snapshots[parent_revision_id]
+        )
+        previous_bom_sequence = (
+            db.scalar(
+                select(func.max(BomViewRevision.sequence)).where(
+                    BomViewRevision.revision_id == parent_revision_id
+                )
             )
-        ) or 0
+            or 0
+        )
         bom_view = BomViewRevision(
             revision_id=parent_revision_id,
             snapshot_id=parent_snapshot.id,
@@ -658,23 +701,27 @@ def _commit_edit(
     for child_revision in created_revisions:
         primary_file = child_primary_files.get(child_revision.id)
         if primary_file is None:
-            raise HTTPException(status_code=422, detail="A new component requires a primary CAD file")
+            raise HTTPException(
+                status_code=422, detail="A new component requires a primary CAD file"
+            )
         child_processing_type = _native_processing_type(
             primary_file.original_filename, child_revision.cad_system
         )
         if child_processing_type is not None:
             child_revision.state = "PROCESSING"
-            db.add(ProcessingJob(
-                revision_id=child_revision.id,
-                snapshot_id=child_snapshots[child_revision.id].id,
-                type=child_processing_type,
-                state="PENDING",
-                attempt_count=0,
-                idempotency_key=(
-                    f"{child_processing_type.lower()}:{child_snapshots[child_revision.id].id}"
-                ),
-                available_at=now,
-            ))
+            db.add(
+                ProcessingJob(
+                    revision_id=child_revision.id,
+                    snapshot_id=child_snapshots[child_revision.id].id,
+                    type=child_processing_type,
+                    state="PENDING",
+                    attempt_count=0,
+                    idempotency_key=(
+                        f"{child_processing_type.lower()}:{child_snapshots[child_revision.id].id}"
+                    ),
+                    available_at=now,
+                )
+            )
     db.delete(checkout)
     return StagingCommitResponse(
         staging_id=staging.id,
@@ -896,12 +943,8 @@ def commit_staging_upload(
         for item in proposal.identity_decisions
         if item.decision == "USE_EXISTING"
     }
-    if (
-        selected_ids | reused_ids != set(staged_files)
-        or any(
-            staged_files[file_id].state != "VERIFIED"
-            for file_id in selected_ids - reused_ids
-        )
+    if selected_ids | reused_ids != set(staged_files) or any(
+        staged_files[file_id].state != "VERIFIED" for file_id in selected_ids - reused_ids
     ):
         raise HTTPException(
             status_code=409,
@@ -1091,9 +1134,7 @@ def commit_staging_upload(
                 )
                 destination = storage.create_upload(storage_key)
                 copy_source = (
-                    reused_source.storage_key
-                    if reused_source is not None
-                    else source.storage_key
+                    reused_source.storage_key if reused_source is not None else source.storage_key
                 )
                 shutil.copy2(storage.path_for(copy_source), destination)
                 storage.complete_upload(storage_key)
@@ -1190,10 +1231,7 @@ def commit_staging_upload(
                     if line.child_revision_id is not None
                     else revision_by_file.get(line.child_staged_file_id)
                 )
-                if (
-                    child_revision is None
-                    or child_revision.id == parent_revision.id
-                ):
+                if child_revision is None or child_revision.id == parent_revision.id:
                     raise HTTPException(
                         status_code=409,
                         detail=f"BOM child for {line.instance_name} is unavailable or invalid",
@@ -1224,11 +1262,15 @@ def commit_staging_upload(
                 raw_artifact=primary_file,
                 metadata=revision_metadata,
             )
-        if primary_file is not None and (
-            processing_type := _native_processing_type(
-                primary_file.original_filename, created_revision.cad_system
+        if (
+            primary_file is not None
+            and (
+                processing_type := _native_processing_type(
+                    primary_file.original_filename, created_revision.cad_system
+                )
             )
-        ) is not None:
+            is not None
+        ):
             created_revision.state = "PROCESSING"
             db.add(
                 ProcessingJob(

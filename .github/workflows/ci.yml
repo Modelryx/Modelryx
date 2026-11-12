@@ -2,47 +2,64 @@ name: Platform CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, develop]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
   backend:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      MODELRYX_INTERNAL_WORKER_KEY: ci-only-worker-key
+      MODELRYX_JWT_SECRET: ci-only-test-secret-1234567890123456
+      MODELRYX_ENVIRONMENT: test
+      MODELRYX_BOOTSTRAP_ADMIN_PASSWORD: change-this-admin-password
+      POSTGRES_PASSWORD: modelryx-test-password
+      MINIO_ROOT_USER: ci-only-minio
+      MINIO_ROOT_PASSWORD: ci-only-minio-password
     steps:
       - uses: actions/checkout@v4
       - name: Run migrated database test suite
-        env:
-          MODELRYX_INTERNAL_WORKER_KEY: ci-only-worker-key
-          MODELRYX_JWT_SECRET: ci-only-test-secret-1234567890123456
-          MODELRYX_ENVIRONMENT: test
-          MODELRYX_BOOTSTRAP_ADMIN_PASSWORD: change-this-admin-password
-          POSTGRES_PASSWORD: modelryx-test-password
-          MINIO_ROOT_USER: ci-only-minio
-          MINIO_ROOT_PASSWORD: ci-only-minio-password
-        run: docker compose --profile test run --rm test
+        run: >-
+          docker compose --profile test run --name modelryx-backend-tests test
+          pytest -q --cov=modelryx --cov-report=xml:/tmp/coverage.xml
+      - name: Collect backend coverage
+        if: always()
+        run: docker cp modelryx-backend-tests:/tmp/coverage.xml coverage.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: coverage.xml
+          if-no-files-found: warn
+      - name: Show database and migration logs
+        if: failure()
+        run: docker compose --profile test logs --no-color db-test reset-test-db migrate-test storage-test-init
+      - name: Clean up test services
+        if: always()
+        run: docker compose --profile test down --volumes
   frontend:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     defaults: {run: {working-directory: front-end}}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: {node-version: 22, cache: npm, cache-dependency-path: front-end/package-lock.json}
       - run: npm ci
-      - run: npm install --no-save @rollup/rollup-linux-x64-gnu esbuild
       - run: npm run typecheck
       - run: npm run build
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
-      - name: Run browser workflow tests
-        run: |
-          if npm run | grep -q "test:e2e"; then
-            npm run test:e2e
-          else
-            echo "No test:e2e script; skipping browser workflow tests."
-          fi
+      - name: Lint frontend
+        run: npm run lint
+      - name: Check frontend formatting
+        run: npm run format:check
   worker-sdk:
     name: Worker SDK
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -52,15 +69,29 @@ jobs:
   freecad-worker:
     name: FreeCAD worker
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version: "3.12"}
+        with: {python-version: "3.11"}
       - run: pip install "pytest>=8.3,<9" "httpx>=0.28,<1" ./worker-sdk -r workers/freecad/standalone/requirements.txt
+      - name: Run FreeCAD unit tests
+        env:
+          PYTHONPATH: workers/freecad:worker-sdk/src:server/src/server
+        run: python -m pytest -q workers/freecad/tests
       - run: python -m compileall -q converter preprocessor shared
         working-directory: workers/freecad
+      - uses: docker/setup-buildx-action@v3
       - name: Build native FreeCAD worker image
-        run: docker build --file workers/freecad/Dockerfile --tag modelryx-freecad-ci .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: workers/freecad/Dockerfile
+          load: true
+          push: false
+          tags: modelryx-freecad-ci
+          cache-from: type=gha,scope=freecad-worker
+          cache-to: type=gha,mode=max,scope=freecad-worker
       - name: Run native FreeCAD release gates
         run: |
           docker run --rm modelryx-freecad-ci python /opt/modelryx-converter/golden_integration_test.py
@@ -70,10 +101,11 @@ jobs:
   step-worker:
     name: STEP worker
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version: "3.12"}
+        with: {python-version: "3.11"}
       - name: Install STEP worker contract-test dependencies
         run: pip install "pytest>=8.3,<9" "fastapi>=0.115,<1" "httpx>=0.27,<1" "python-multipart>=0.0.18" "numpy>=1.20" "trimesh>=4,<5"
       - name: Check converter syntax
@@ -84,6 +116,7 @@ jobs:
         working-directory: workers/step
   repository-safety:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Reject common committed secrets
@@ -104,3 +137,36 @@ jobs:
           MINIO_ROOT_USER: ci-only-minio
           MINIO_ROOT_PASSWORD: ci-only-minio-password
         run: docker compose config --quiet
+  python-quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install "ruff>=0.9,<1"
+      - name: Lint Python
+        run: python -m ruff check server/src server/tests
+  security-scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan dependencies and configuration
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-results.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+      # Retain results for all repositories and fork PRs without requiring Code Security.
+      - name: Upload security report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-results
+          path: trivy-results.sarif
+          if-no-files-found: error

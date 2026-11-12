@@ -3,7 +3,6 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
-
 from modelryx.api.artifact_commits import _require_current_assembly_analysis
 from modelryx.api.staging import StagingProposalUpdate
 

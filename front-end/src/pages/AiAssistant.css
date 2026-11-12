@@ -2,14 +2,25 @@
   max-width: 900px;
   margin: 0 auto;
 }
-.ai-assistant h1 { margin-bottom: 8px; }
+.ai-assistant h1 {
+  margin-bottom: 8px;
+}
 
 .ai-intro {
   color: var(--muted);
   max-width: 720px;
   line-height: 1.5;
 }
-.ai-index-status { display: inline-block; margin: 8px 0; padding: 7px 11px; border: 1px solid var(--border); border-radius: 8px; background: var(--soft); color: var(--muted); font-size: 12px; }
+.ai-index-status {
+  display: inline-block;
+  margin: 8px 0;
+  padding: 7px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 12px;
+}
 
 .ai-assistant form {
   display: grid;

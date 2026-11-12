@@ -53,7 +53,6 @@ from modelryx.cad.sessions import (
 )
 from modelryx.core.audit import record_audit, user_for_principal
 from modelryx.core.auth import Principal, current_principal
-from modelryx.services.freecad_settings import FREECAD_ANALYZER_KEY, configured_url
 from modelryx.core.config import Settings, get_settings
 from modelryx.core.db import get_db
 from modelryx.models import (
@@ -71,6 +70,7 @@ from modelryx.models import (
     WorkerHeartbeat,
 )
 from modelryx.services.artifact_content import current_artifact_files, latest_content_snapshot_id
+from modelryx.services.freecad_settings import FREECAD_ANALYZER_KEY, configured_url
 from modelryx.services.storage import LocalStorageProvider
 
 router = APIRouter(prefix="/api/v1", tags=["cad-workers"])

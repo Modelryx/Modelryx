@@ -44,7 +44,9 @@ def upgrade() -> None:
         sa.Column("created_by", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.CheckConstraint("action IN ('CREATE', 'NEW_VERSION')", name="ck_additional_file_stage_action"),
+        sa.CheckConstraint(
+            "action IN ('CREATE', 'NEW_VERSION')", name="ck_additional_file_stage_action"
+        ),
         sa.CheckConstraint(
             "duplicate_action IN ('UPLOAD', 'REUSE_EXISTING')",
             name="ck_additional_file_stage_duplicate_action",
@@ -65,7 +67,9 @@ def upgrade() -> None:
         sa.UniqueConstraint("storage_key"),
     )
     op.create_index("ix_additional_file_stages_item_id", "additional_file_stages", ["item_id"])
-    op.create_index("ix_additional_file_stages_attachment_id", "additional_file_stages", ["attachment_id"])
+    op.create_index(
+        "ix_additional_file_stages_attachment_id", "additional_file_stages", ["attachment_id"]
+    )
     op.create_index("ix_additional_file_stages_status", "additional_file_stages", ["status"])
     op.create_index("ix_additional_file_stages_sha256", "additional_file_stages", ["sha256"])
 

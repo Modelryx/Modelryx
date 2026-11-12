@@ -35,9 +35,9 @@ from modelryx.models.schemas import (
     AdditionalFileDuplicateCandidate,
     AdditionalFilePreflightRequest,
     AdditionalFilePreflightResponse,
+    AdditionalFileRemoveStageCreate,
     AdditionalFileStageCommit,
     AdditionalFileStageCreate,
-    AdditionalFileRemoveStageCreate,
     AdditionalFileStageResponse,
     AttachmentCheckoutResponse,
     AttachmentCreate,
@@ -162,30 +162,38 @@ def complete_attachment_edit_task(
     checkout, task = active_attachment_edit_task(db, item_id, revision_id, user_id)
     if checkout is None or task is None:
         raise HTTPException(status_code=409, detail="No active attachment edit task")
-    pending = db.scalar(select(AdditionalFileStage.id).where(
-        AdditionalFileStage.item_id == item_id,
-        AdditionalFileStage.revision_id == revision_id,
-        AdditionalFileStage.created_by == user_id,
-        AdditionalFileStage.status.in_(["DRAFT", "READY"]),
-    ))
+    pending = db.scalar(
+        select(AdditionalFileStage.id).where(
+            AdditionalFileStage.item_id == item_id,
+            AdditionalFileStage.revision_id == revision_id,
+            AdditionalFileStage.created_by == user_id,
+            AdditionalFileStage.status.in_(["DRAFT", "READY"]),
+        )
+    )
     if pending is not None:
         raise HTTPException(status_code=409, detail="Commit or cancel staged attachments first")
     # Stages created by older clients may predate the explicit task association.
     # Bind only completed changes made during this task's lifetime and scope.
-    for completed_stage in db.scalars(select(AdditionalFileStage).where(
-        AdditionalFileStage.item_id == item_id,
-        AdditionalFileStage.revision_id == revision_id,
-        AdditionalFileStage.created_by == user_id,
-        AdditionalFileStage.task_id.is_(None),
-        AdditionalFileStage.status == "COMPLETED",
-        AdditionalFileStage.created_at >= task.created_at,
-    )):
+    for completed_stage in db.scalars(
+        select(AdditionalFileStage).where(
+            AdditionalFileStage.item_id == item_id,
+            AdditionalFileStage.revision_id == revision_id,
+            AdditionalFileStage.created_by == user_id,
+            AdditionalFileStage.task_id.is_(None),
+            AdditionalFileStage.status == "COMPLETED",
+            AdditionalFileStage.created_at >= task.created_at,
+        )
+    ):
         completed_stage.task_id = task.id
-    for owned in list(db.scalars(select(AttachmentCheckout).where(
-        AttachmentCheckout.item_id == item_id,
-        AttachmentCheckout.owner_id == user_id,
-        AttachmentCheckout.revision_id == revision_id,
-    ))):
+    for owned in list(
+        db.scalars(
+            select(AttachmentCheckout).where(
+                AttachmentCheckout.item_id == item_id,
+                AttachmentCheckout.owner_id == user_id,
+                AttachmentCheckout.revision_id == revision_id,
+            )
+        )
+    ):
         db.delete(owned)
     task.status = "CANCELLED" if cancelled else "COMPLETED"
     result = dict(task.result_json or {})
@@ -194,7 +202,9 @@ def complete_attachment_edit_task(
         result["workflow"] = {"state": "CANCELLED", "stage": "CANCELLED"}
     else:
         result["workflow"] = {
-            "state": "COMPLETED", "stage": "COMPLETED", "progress_percent": 100,
+            "state": "COMPLETED",
+            "stage": "COMPLETED",
+            "progress_percent": 100,
         }
     task.result_json = result
     return task
@@ -209,9 +219,7 @@ def require_owned_attachment_checkout(
     return checkout
 
 
-def version_response(
-    version: Artifact, artifact: ArtifactFile
-) -> AttachmentVersionResponse:
+def version_response(version: Artifact, artifact: ArtifactFile) -> AttachmentVersionResponse:
     return AttachmentVersionResponse(
         id=version.id,
         attachment_id=version.attachment_id,
@@ -254,23 +262,21 @@ def attachment_response(
     if artifact_ids is not None:
         statement = statement.where(Artifact.id.in_(artifact_ids))
     elif revision_id is not None:
-        statement = (
-            statement
-            .join(
-                RevisionArtifactRelation,
-                RevisionArtifactRelation.artifact_id == Artifact.id,
-            )
-            .where(
-                RevisionArtifactRelation.revision_id == revision_id,
-                RevisionArtifactRelation.relation_type == "ATTACHMENT",
-            )
+        statement = statement.join(
+            RevisionArtifactRelation,
+            RevisionArtifactRelation.artifact_id == Artifact.id,
+        ).where(
+            RevisionArtifactRelation.revision_id == revision_id,
+            RevisionArtifactRelation.relation_type == "ATTACHMENT",
         )
     rows = db.execute(statement).all()
     versions = [version_response(version, artifact) for version, artifact in rows]
     checkout = active_attachment_checkout(db, attachment.item_id, attachment.id)
     checkout_status = (
-        "AVAILABLE" if checkout is None
-        else "CHECKED_OUT_BY_ME" if checkout.owner_id == user_id
+        "AVAILABLE"
+        if checkout is None
+        else "CHECKED_OUT_BY_ME"
+        if checkout.owner_id == user_id
         else "CHECKED_OUT_BY_OTHER"
     )
     return AttachmentResponse(
@@ -347,15 +353,11 @@ def add_version(
         raise HTTPException(status_code=409, detail="Archived Additional Files cannot be changed")
     item = db.get(Item, attachment.item_id)
     revision = db.get(Revision, payload.revision_id) if payload.revision_id else None
-    if payload.scope == "REVISION" and (
-        revision is None or revision.part_id != attachment.item_id
-    ):
+    if payload.scope == "REVISION" and (revision is None or revision.part_id != attachment.item_id):
         raise HTTPException(status_code=404, detail="Target Item Revision not found")
     if payload.client_version_id is not None:
         existing = db.scalar(
-            select(Artifact).where(
-                Artifact.client_version_id == payload.client_version_id
-            )
+            select(Artifact).where(Artifact.client_version_id == payload.client_version_id)
         )
         if existing is not None:
             if existing.attachment_id != attachment.id:
@@ -394,9 +396,7 @@ def add_version(
         return unchanged
     number = (
         db.scalar(
-            select(func.max(Artifact.generation)).where(
-                Artifact.attachment_id == attachment.id
-            )
+            select(func.max(Artifact.generation)).where(Artifact.attachment_id == attachment.id)
         )
         or 0
     ) + 1
@@ -566,11 +566,13 @@ def promote_stage_blob(
         text("SELECT pg_advisory_xact_lock(hashtextextended(:identity, 0))"),
         {"identity": f"{stage.sha256}:{stage.byte_size}"},
     )
-    blob = db.scalar(select(ContentBlob).where(
-        ContentBlob.sha256 == stage.sha256,
-        ContentBlob.byte_size == stage.byte_size,
-        ContentBlob.state == "VERIFIED",
-    ))
+    blob = db.scalar(
+        select(ContentBlob).where(
+            ContentBlob.sha256 == stage.sha256,
+            ContentBlob.byte_size == stage.byte_size,
+            ContentBlob.state == "VERIFIED",
+        )
+    )
     if blob is not None:
         if not storage.exists(blob.storage_key):
             raise HTTPException(status_code=409, detail="Reusable content is missing from storage")
@@ -602,16 +604,23 @@ def ensure_revision_attachment_relation(
     target_revision_id = revision_id or artifact.revision_id
     if target_revision_id is None:
         return None
-    existing = db.scalar(select(RevisionArtifactRelation).where(
-        RevisionArtifactRelation.revision_id == target_revision_id,
-        RevisionArtifactRelation.artifact_id == version.id,
-        RevisionArtifactRelation.relation_type == "ATTACHMENT",
-    ))
+    existing = db.scalar(
+        select(RevisionArtifactRelation).where(
+            RevisionArtifactRelation.revision_id == target_revision_id,
+            RevisionArtifactRelation.artifact_id == version.id,
+            RevisionArtifactRelation.relation_type == "ATTACHMENT",
+        )
+    )
     if existing is not None:
         return existing
-    sequence = db.scalar(select(func.max(RevisionArtifactRelation.sequence)).where(
-        RevisionArtifactRelation.revision_id == target_revision_id,
-    )) or 0
+    sequence = (
+        db.scalar(
+            select(func.max(RevisionArtifactRelation.sequence)).where(
+                RevisionArtifactRelation.revision_id == target_revision_id,
+            )
+        )
+        or 0
+    )
     relation = RevisionArtifactRelation(
         revision_id=target_revision_id,
         artifact_id=version.id,
@@ -645,20 +654,24 @@ def publish_revision_attachment_snapshot(
             status_code=409,
             detail="Target Item Revision has no committed content snapshot",
         )
-    already_published = db.scalar(select(RevisionContentSnapshotArtifact.snapshot_id).where(
-        RevisionContentSnapshotArtifact.snapshot_id == latest.id,
-        RevisionContentSnapshotArtifact.relation_id == relation.id,
-    ))
+    already_published = db.scalar(
+        select(RevisionContentSnapshotArtifact.snapshot_id).where(
+            RevisionContentSnapshotArtifact.snapshot_id == latest.id,
+            RevisionContentSnapshotArtifact.relation_id == relation.id,
+        )
+    )
     if already_published is not None:
         return latest
-    previous_links = list(db.scalars(
-        select(RevisionContentSnapshotArtifact)
-        .where(RevisionContentSnapshotArtifact.snapshot_id == latest.id)
-        .order_by(
-            RevisionContentSnapshotArtifact.sequence,
-            RevisionContentSnapshotArtifact.relation_id,
+    previous_links = list(
+        db.scalars(
+            select(RevisionContentSnapshotArtifact)
+            .where(RevisionContentSnapshotArtifact.snapshot_id == latest.id)
+            .order_by(
+                RevisionContentSnapshotArtifact.sequence,
+                RevisionContentSnapshotArtifact.relation_id,
+            )
         )
-    ))
+    )
     snapshot = RevisionContentSnapshot(
         revision_id=relation.revision_id,
         sequence=latest.sequence + 1,
@@ -669,22 +682,29 @@ def publish_revision_attachment_snapshot(
     db.add(snapshot)
     db.flush()
     for sequence, link in enumerate(previous_links):
-        db.add(RevisionContentSnapshotArtifact(
+        db.add(
+            RevisionContentSnapshotArtifact(
+                snapshot_id=snapshot.id,
+                relation_id=link.relation_id,
+                sequence=sequence,
+            )
+        )
+    db.add(
+        RevisionContentSnapshotArtifact(
             snapshot_id=snapshot.id,
-            relation_id=link.relation_id,
-            sequence=sequence,
-        ))
-    db.add(RevisionContentSnapshotArtifact(
-        snapshot_id=snapshot.id,
-        relation_id=relation.id,
-        sequence=len(previous_links),
-    ))
+            relation_id=relation.id,
+            sequence=len(previous_links),
+        )
+    )
     db.flush()
     return snapshot
 
 
 def publish_revision_attachment_removal(
-    db: Session, revision_id: uuid.UUID, attachment_id: uuid.UUID, user_id: uuid.UUID,
+    db: Session,
+    revision_id: uuid.UUID,
+    attachment_id: uuid.UUID,
+    user_id: uuid.UUID,
 ) -> RevisionContentSnapshot:
     latest = db.scalar(
         select(RevisionContentSnapshot)
@@ -694,34 +714,49 @@ def publish_revision_attachment_removal(
         .with_for_update()
     )
     if latest is None:
-        raise HTTPException(status_code=409, detail="Target Item Revision has no committed content snapshot")
-    links = list(db.scalars(
-        select(RevisionContentSnapshotArtifact)
-        .where(RevisionContentSnapshotArtifact.snapshot_id == latest.id)
-        .order_by(RevisionContentSnapshotArtifact.sequence)
-    ))
+        raise HTTPException(
+            status_code=409, detail="Target Item Revision has no committed content snapshot"
+        )
+    links = list(
+        db.scalars(
+            select(RevisionContentSnapshotArtifact)
+            .where(RevisionContentSnapshotArtifact.snapshot_id == latest.id)
+            .order_by(RevisionContentSnapshotArtifact.sequence)
+        )
+    )
     retained = []
     removed = False
     for link in links:
         relation = db.get(RevisionArtifactRelation, link.relation_id)
         artifact = db.get(Artifact, relation.artifact_id) if relation else None
-        if relation and relation.relation_type == "ATTACHMENT" and artifact \
-                and artifact.attachment_id == attachment_id:
+        if (
+            relation
+            and relation.relation_type == "ATTACHMENT"
+            and artifact
+            and artifact.attachment_id == attachment_id
+        ):
             removed = True
         else:
             retained.append(link)
     if not removed:
         raise HTTPException(status_code=409, detail="Attachment is not present in this revision")
     snapshot = RevisionContentSnapshot(
-        revision_id=revision_id, sequence=latest.sequence + 1, commit_id=uuid.uuid4(),
-        comment="Attachment removed from revision", created_by=user_id,
+        revision_id=revision_id,
+        sequence=latest.sequence + 1,
+        commit_id=uuid.uuid4(),
+        comment="Attachment removed from revision",
+        created_by=user_id,
     )
     db.add(snapshot)
     db.flush()
     for sequence, link in enumerate(retained):
-        db.add(RevisionContentSnapshotArtifact(
-            snapshot_id=snapshot.id, relation_id=link.relation_id, sequence=sequence,
-        ))
+        db.add(
+            RevisionContentSnapshotArtifact(
+                snapshot_id=snapshot.id,
+                relation_id=link.relation_id,
+                sequence=sequence,
+            )
+        )
     db.flush()
     return snapshot
 
@@ -732,8 +767,12 @@ def publish_revision_attachment_removal(
     status_code=status.HTTP_201_CREATED,
 )
 def stage_attachment_removal(
-    attachment_id: uuid.UUID, payload: AdditionalFileRemoveStageCreate,
-    request: Request, db: Db, principal: Actor, settings: Config,
+    attachment_id: uuid.UUID,
+    payload: AdditionalFileRemoveStageCreate,
+    request: Request,
+    db: Db,
+    principal: Actor,
+    settings: Config,
 ) -> AdditionalFileStageResponse:
     attachment = db.get(Attachment, attachment_id)
     if attachment is None or attachment.lifecycle_state != "ACTIVE":
@@ -745,41 +784,66 @@ def stage_attachment_removal(
         revision = readable_item_revision(db, item.id, payload.revision_id, principal)
         if revision.lifecycle_state != "WORKING":
             raise HTTPException(status_code=409, detail="Released revisions are immutable")
-    existing = db.scalar(select(AdditionalFileStage).where(
-        AdditionalFileStage.attachment_id == attachment.id,
-        AdditionalFileStage.revision_id == (revision.id if revision else None),
-        AdditionalFileStage.status.in_(["DRAFT", "READY"]),
-    ))
+    existing = db.scalar(
+        select(AdditionalFileStage).where(
+            AdditionalFileStage.attachment_id == attachment.id,
+            AdditionalFileStage.revision_id == (revision.id if revision else None),
+            AdditionalFileStage.status.in_(["DRAFT", "READY"]),
+        )
+    )
     if existing is not None:
         raise HTTPException(status_code=409, detail="Attachment already has a staged change")
     version = latest_attachment_version(db, attachment.id)
-    file = db.scalar(select(ArtifactFile).where(ArtifactFile.artifact_id == version.id)) if version else None
+    file = (
+        db.scalar(select(ArtifactFile).where(ArtifactFile.artifact_id == version.id))
+        if version
+        else None
+    )
     if version is None or file is None or version.state != "READY":
         raise HTTPException(status_code=409, detail="Attachment has no ready version")
     checkout = ensure_attachment_checkout(
-        db, item, attachment, principal, user.id, settings,
+        db,
+        item,
+        attachment,
+        principal,
+        user.id,
+        settings,
         revision_id=revision.id if revision else None,
     )
     _task_checkout, task = active_attachment_edit_task(
         db, item.id, revision.id if revision else None, user.id
     )
     stage = AdditionalFileStage(
-        client_staging_id=uuid.uuid4(), item_id=item.id,
-        revision_id=revision.id if revision else None, attachment_id=attachment.id,
+        client_staging_id=uuid.uuid4(),
+        item_id=item.id,
+        revision_id=revision.id if revision else None,
+        attachment_id=attachment.id,
         task_id=task.id if task else None,
-        base_version_id=checkout.base_version_id, content_blob_id=file.content_blob_id,
-        action="REMOVE", duplicate_action="REUSE_EXISTING", status="READY",
-        name=attachment.name, attachment_type=attachment.attachment_type,
-        description=attachment.description, filename=file.original_filename,
-        mime_type=file.mime_type, byte_size=file.byte_size, sha256=file.sha256,
+        base_version_id=checkout.base_version_id,
+        content_blob_id=file.content_blob_id,
+        action="REMOVE",
+        duplicate_action="REUSE_EXISTING",
+        status="READY",
+        name=attachment.name,
+        attachment_type=attachment.attachment_type,
+        description=attachment.description,
+        filename=file.original_filename,
+        mime_type=file.mime_type,
+        byte_size=file.byte_size,
+        sha256=file.sha256,
         storage_key=f"staging/additional-files/{uuid.uuid4()}/remove-{file.original_filename}",
         created_by=user.id,
     )
     db.add(stage)
-    record_audit(db, actor_id=user.id, action="additional_file.removal_staged",
-                 entity_type="additional_file_stage", entity_id=stage.id,
-                 request_id=request.state.request_id,
-                 details={"item_id": str(item.id), "scope": payload.scope})
+    record_audit(
+        db,
+        actor_id=user.id,
+        action="additional_file.removal_staged",
+        entity_type="additional_file_stage",
+        entity_id=stage.id,
+        request_id=request.state.request_id,
+        details={"item_id": str(item.id), "scope": payload.scope},
+    )
     db.commit()
     db.refresh(stage)
     return additional_file_stage_response(stage)
@@ -803,8 +867,12 @@ def acquire_new_attachment_checkout(
     user = user_for_principal(db, principal)
     checkout = ensure_attachment_checkout(db, item, None, principal, user.id, settings)
     record_audit(
-        db, actor_id=user.id, action="attachment.create_checked_out",
-        entity_type="item", entity_id=item.id, request_id=request.state.request_id,
+        db,
+        actor_id=user.id,
+        action="attachment.create_checked_out",
+        entity_type="item",
+        entity_id=item.id,
+        request_id=request.state.request_id,
     )
     db.commit()
     db.refresh(checkout)
@@ -850,14 +918,18 @@ def begin_item_attachment_edit(
     task = db.get(StagingSession, checkout.task_id) if checkout and checkout.task_id else None
     if task is None:
         task = StagingSession(
-            client_staging_id=uuid.uuid4(), status="PREPARING",
-            operation="EDIT_ITEM_ATTACHMENT", base_revision_id=None,
-            package_sha256="0" * 64, metadata_json=None,
+            client_staging_id=uuid.uuid4(),
+            status="PREPARING",
+            operation="EDIT_ITEM_ATTACHMENT",
+            base_revision_id=None,
+            package_sha256="0" * 64,
+            metadata_json=None,
             proposal_json={
                 "item": {"item_number": item.part_number, "name": item.name},
                 "destination": {"item_id": str(item.id)},
             },
-            result_json={"item_id": str(item.id)}, created_by=user.id,
+            result_json={"item_id": str(item.id)},
+            created_by=user.id,
         )
         db.add(task)
         db.flush()
@@ -865,8 +937,12 @@ def begin_item_attachment_edit(
         db, item, None, principal, user.id, settings, task_id=task.id
     )
     record_audit(
-        db, actor_id=user.id, action="item_attachment.edit_started",
-        entity_type="item", entity_id=item.id, request_id=request.state.request_id,
+        db,
+        actor_id=user.id,
+        action="item_attachment.edit_started",
+        entity_type="item",
+        entity_id=item.id,
+        request_id=request.state.request_id,
         details={"task_id": str(task.id)},
     )
     db.commit()
@@ -887,9 +963,12 @@ def finish_item_attachment_edit(
     user = user_for_principal(db, principal)
     task = complete_attachment_edit_task(db, item_id, None, user.id, cancelled=cancel)
     record_audit(
-        db, actor_id=user.id,
+        db,
+        actor_id=user.id,
         action="item_attachment.edit_cancelled" if cancel else "item_attachment.edit_completed",
-        entity_type="item", entity_id=item_id, request_id=request.state.request_id,
+        entity_type="item",
+        entity_id=item_id,
+        request_id=request.state.request_id,
         details={"task_id": str(task.id)},
     )
     db.commit()
@@ -957,12 +1036,22 @@ def begin_revision_attachment_edit(
         db.add(task)
         db.flush()
     checkout = ensure_attachment_checkout(
-        db, item, None, principal, user.id, settings,
-        revision_id=revision.id, task_id=task.id,
+        db,
+        item,
+        None,
+        principal,
+        user.id,
+        settings,
+        revision_id=revision.id,
+        task_id=task.id,
     )
     record_audit(
-        db, actor_id=user.id, action="attachment.edit_started",
-        entity_type="revision", entity_id=revision.id, request_id=request.state.request_id,
+        db,
+        actor_id=user.id,
+        action="attachment.edit_started",
+        entity_type="revision",
+        entity_id=revision.id,
+        request_id=request.state.request_id,
         details={"task_id": str(task.id)},
     )
     db.commit()
@@ -984,13 +1073,14 @@ def finish_revision_attachment_edit(
 ) -> Response:
     readable_item_revision(db, item_id, revision_id, principal)
     user = user_for_principal(db, principal)
-    task = complete_attachment_edit_task(
-        db, item_id, revision_id, user.id, cancelled=cancel
-    )
+    task = complete_attachment_edit_task(db, item_id, revision_id, user.id, cancelled=cancel)
     record_audit(
-        db, actor_id=user.id,
+        db,
+        actor_id=user.id,
         action="attachment.edit_cancelled" if cancel else "attachment.edit_completed",
-        entity_type="revision", entity_id=revision_id, request_id=request.state.request_id,
+        entity_type="revision",
+        entity_id=revision_id,
+        request_id=request.state.request_id,
         details={"task_id": str(task.id)},
     )
     db.commit()
@@ -1016,8 +1106,11 @@ def acquire_attachment_checkout(
     user = user_for_principal(db, principal)
     checkout = ensure_attachment_checkout(db, item, attachment, principal, user.id, settings)
     record_audit(
-        db, actor_id=user.id, action="attachment.checked_out",
-        entity_type="attachment", entity_id=attachment.id,
+        db,
+        actor_id=user.id,
+        action="attachment.checked_out",
+        entity_type="attachment",
+        entity_id=attachment.id,
         request_id=request.state.request_id,
         details={"base_version_id": str(checkout.base_version_id)},
     )
@@ -1043,8 +1136,12 @@ def release_new_attachment_checkout(
             raise HTTPException(status_code=403, detail="Only the owner can release this checkout")
         db.delete(checkout)
         record_audit(
-            db, actor_id=user.id, action="attachment.create_checkout_released",
-            entity_type="item", entity_id=item_id, request_id=request.state.request_id,
+            db,
+            actor_id=user.id,
+            action="attachment.create_checkout_released",
+            entity_type="item",
+            entity_id=item_id,
+            request_id=request.state.request_id,
         )
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -1067,8 +1164,11 @@ def release_attachment_checkout(
             raise HTTPException(status_code=403, detail="Only the owner can release this checkout")
         db.delete(checkout)
         record_audit(
-            db, actor_id=user.id, action="attachment.checkout_released",
-            entity_type="attachment", entity_id=attachment.id,
+            db,
+            actor_id=user.id,
+            action="attachment.checkout_released",
+            entity_type="attachment",
+            entity_id=attachment.id,
             request_id=request.state.request_id,
         )
     db.commit()
@@ -1098,17 +1198,19 @@ def preflight_additional_file(
         if target_attachment is None or target_attachment.item_id != item_id:
             raise HTTPException(status_code=404, detail="Additional File not found on this Item")
 
-    exact_rows = list(db.execute(
-        select(Attachment, Artifact, ArtifactFile)
-        .join(Artifact, Artifact.attachment_id == Attachment.id)
-        .join(ArtifactFile, ArtifactFile.artifact_id == Artifact.id)
-        .where(
-            Artifact.state == "READY",
-            ArtifactFile.state == "VERIFIED",
-            ArtifactFile.sha256 == payload.sha256,
+    exact_rows = list(
+        db.execute(
+            select(Attachment, Artifact, ArtifactFile)
+            .join(Artifact, Artifact.attachment_id == Attachment.id)
+            .join(ArtifactFile, ArtifactFile.artifact_id == Artifact.id)
+            .where(
+                Artifact.state == "READY",
+                ArtifactFile.state == "VERIFIED",
+                ArtifactFile.sha256 == payload.sha256,
+            )
+            .order_by(Artifact.generation.desc(), Artifact.id)
         )
-        .order_by(Artifact.generation.desc(), Artifact.id)
-    ))
+    )
     item_matches = [row for row in exact_rows if row[0].item_id == item_id]
     candidates = [
         AdditionalFileDuplicateCandidate(
@@ -1186,9 +1288,11 @@ def create_additional_file_stage(
         revision = readable_item_revision(db, item_id, payload.revision_id, principal)
         if revision.lifecycle_state != "WORKING":
             raise HTTPException(status_code=409, detail="Released revisions are immutable")
-    existing = db.scalar(select(AdditionalFileStage).where(
-        AdditionalFileStage.client_staging_id == payload.client_staging_id
-    ))
+    existing = db.scalar(
+        select(AdditionalFileStage).where(
+            AdditionalFileStage.client_staging_id == payload.client_staging_id
+        )
+    )
     if existing is not None:
         if existing.item_id != item_id:
             raise HTTPException(status_code=409, detail="Staging key belongs to another Item")
@@ -1209,14 +1313,18 @@ def create_additional_file_stage(
             ArtifactFile.state == "VERIFIED",
             ArtifactFile.sha256 == payload.sha256,
             Artifact.attachment_id != payload.attachment_id
-            if payload.attachment_id is not None else True,
+            if payload.attachment_id is not None
+            else True,
         )
         .limit(1)
     )
     if duplicate is not None and not payload.duplicate_confirmed:
         raise HTTPException(
             status_code=409,
-            detail="Duplicate attachment content exists on this Item; confirm the duplicate before staging",
+            detail=(
+                "Duplicate attachment content exists on this Item; "
+                "confirm the duplicate before staging"
+            ),
         )
     if attachment is not None:
         pending_stage = db.scalar(
@@ -1229,7 +1337,12 @@ def create_additional_file_stage(
         if pending_stage is not None:
             raise HTTPException(status_code=409, detail="Attachment already has a staged change")
     checkout = ensure_attachment_checkout(
-        db, item, attachment, principal, user.id, settings,
+        db,
+        item,
+        attachment,
+        principal,
+        user.id,
+        settings,
         revision_id=revision.id if revision else None,
     )
     _task_checkout, task = active_attachment_edit_task(
@@ -1238,19 +1351,29 @@ def create_additional_file_stage(
     if attachment is not None:
         # Revalidate extension/MIME policy against the stored logical file type.
         AttachmentCreate(
-            **payload.model_dump(exclude={
-                "client_staging_id", "attachment_id", "name",
-                "attachment_type", "description", "duplicate_confirmed",
-            }),
+            **payload.model_dump(
+                exclude={
+                    "client_staging_id",
+                    "attachment_id",
+                    "name",
+                    "attachment_type",
+                    "description",
+                    "duplicate_confirmed",
+                }
+            ),
             name=attachment.name,
             attachment_type=attachment.attachment_type,
             description=attachment.description,
         )
-    latest = None if attachment is None else db.scalar(
-        select(Artifact)
-        .where(Artifact.attachment_id == attachment.id)
-        .order_by(Artifact.generation.desc(), Artifact.id.desc())
-        .limit(1)
+    latest = (
+        None
+        if attachment is None
+        else db.scalar(
+            select(Artifact)
+            .where(Artifact.attachment_id == attachment.id)
+            .order_by(Artifact.generation.desc(), Artifact.id.desc())
+            .limit(1)
+        )
     )
     if latest is not None and latest.state != "READY":
         raise HTTPException(
@@ -1258,11 +1381,13 @@ def create_additional_file_stage(
         )
     blob = None
     if payload.duplicate_action == "REUSE_EXISTING":
-        blob = db.scalar(select(ContentBlob).where(
-            ContentBlob.sha256 == payload.sha256,
-            ContentBlob.byte_size == payload.byte_size,
-            ContentBlob.state == "VERIFIED",
-        ))
+        blob = db.scalar(
+            select(ContentBlob).where(
+                ContentBlob.sha256 == payload.sha256,
+                ContentBlob.byte_size == payload.byte_size,
+                ContentBlob.state == "VERIFIED",
+            )
+        )
         if blob is None or not LocalStorageProvider(settings.storage_root).exists(blob.storage_key):
             raise HTTPException(status_code=409, detail="No verified reusable content matches")
     stage_id = uuid.uuid4()
@@ -1319,10 +1444,10 @@ def list_additional_file_stages(
         raise HTTPException(status_code=404, detail="Item not found")
     user = user_for_principal(db, principal)
     statement = select(AdditionalFileStage).where(
-            AdditionalFileStage.item_id == item_id,
-            AdditionalFileStage.created_by == user.id,
-            AdditionalFileStage.status.in_(["DRAFT", "READY"]),
-        )
+        AdditionalFileStage.item_id == item_id,
+        AdditionalFileStage.created_by == user.id,
+        AdditionalFileStage.status.in_(["DRAFT", "READY"]),
+    )
     if scope == "REVISION":
         if revision_id is None:
             raise HTTPException(status_code=422, detail="revision_id is required")
@@ -1349,14 +1474,16 @@ def list_attachment_task_changes(
         or (task.created_by != user.id and principal.role != "administrator")
     ):
         raise HTTPException(status_code=404, detail="Attachment edit task not found")
-    stages = list(db.scalars(
-        select(AdditionalFileStage)
-        .where(
-            AdditionalFileStage.task_id == task.id,
-            AdditionalFileStage.status == "COMPLETED",
+    stages = list(
+        db.scalars(
+            select(AdditionalFileStage)
+            .where(
+                AdditionalFileStage.task_id == task.id,
+                AdditionalFileStage.status == "COMPLETED",
+            )
+            .order_by(AdditionalFileStage.created_at, AdditionalFileStage.id)
         )
-        .order_by(AdditionalFileStage.created_at, AdditionalFileStage.id)
-    ))
+    )
     if not stages:
         # Compatibility for tasks completed before task_id was introduced. Bound
         # the fallback by the next task for the same Item and attachment scope.
@@ -1378,16 +1505,17 @@ def list_attachment_task_changes(
             candidate_destination = (candidate.proposal_json or {}).get("destination") or {}
             if (candidate_result.get("item_id") or candidate_destination.get("item_id")) != item_id:
                 continue
-            if (candidate_result.get("revision_id") or candidate_destination.get("revision_id")) != revision_id:
+            if (
+                candidate_result.get("revision_id") or candidate_destination.get("revision_id")
+            ) != revision_id:
                 continue
             next_started_at = candidate.created_at
             break
         if item_id:
             legacy_statement = select(AdditionalFileStage).where(
                 AdditionalFileStage.item_id == uuid.UUID(str(item_id)),
-                AdditionalFileStage.revision_id == (
-                    uuid.UUID(str(revision_id)) if revision_id else None
-                ),
+                AdditionalFileStage.revision_id
+                == (uuid.UUID(str(revision_id)) if revision_id else None),
                 AdditionalFileStage.created_by == task.created_by,
                 AdditionalFileStage.task_id.is_(None),
                 AdditionalFileStage.status == "COMPLETED",
@@ -1397,15 +1525,17 @@ def list_attachment_task_changes(
                 legacy_statement = legacy_statement.where(
                     AdditionalFileStage.created_at < next_started_at
                 )
-            stages = list(db.scalars(legacy_statement.order_by(
-                AdditionalFileStage.created_at, AdditionalFileStage.id
-            )))
+            stages = list(
+                db.scalars(
+                    legacy_statement.order_by(
+                        AdditionalFileStage.created_at, AdditionalFileStage.id
+                    )
+                )
+            )
     return [additional_file_stage_response(stage) for stage in stages]
 
 
-@router.get(
-    "/additional-files/staging/{stage_id}", response_model=AdditionalFileStageResponse
-)
+@router.get("/additional-files/staging/{stage_id}", response_model=AdditionalFileStageResponse)
 def read_additional_file_stage(
     stage_id: uuid.UUID, db: Db, principal: Actor
 ) -> AdditionalFileStageResponse:
@@ -1472,9 +1602,10 @@ def inspect_additional_file_stage_upload(
         raise HTTPException(status_code=404, detail="Uploading staging session not found")
     partial = LocalStorageProvider(settings.storage_root).partial_path(stage.storage_key)
     offset = partial.stat().st_size if partial.is_file() else 0
-    return Response(status_code=204, headers={
-        "Upload-Offset": str(offset), "Upload-Length": str(stage.byte_size)
-    })
+    return Response(
+        status_code=204,
+        headers={"Upload-Offset": str(offset), "Upload-Length": str(stage.byte_size)},
+    )
 
 
 @router.patch(
@@ -1500,9 +1631,11 @@ async def resume_additional_file_stage_upload(
     partial.parent.mkdir(parents=True, exist_ok=True)
     actual_offset = partial.stat().st_size if partial.is_file() else 0
     if requested_offset != actual_offset:
-        raise HTTPException(status_code=409, detail="Upload offset does not match", headers={
-            "Upload-Offset": str(actual_offset)
-        })
+        raise HTTPException(
+            status_code=409,
+            detail="Upload offset does not match",
+            headers={"Upload-Offset": str(actual_offset)},
+        )
     with partial.open("ab") as stream:
         async for chunk in request.stream():
             actual_offset += len(chunk)
@@ -1540,9 +1673,9 @@ def commit_additional_file_stage(
     settings: Config,
 ) -> AdditionalFileStageResponse:
     stage, user = owned_additional_file_stage(db, stage_id, principal)
-    stage = db.scalar(select(AdditionalFileStage).where(
-        AdditionalFileStage.id == stage.id
-    ).with_for_update())
+    stage = db.scalar(
+        select(AdditionalFileStage).where(AdditionalFileStage.id == stage.id).with_for_update()
+    )
     if stage.status == "COMPLETED":
         if stage.commit_id != payload.commit_id:
             raise HTTPException(status_code=409, detail="Stage was committed with another key")
@@ -1564,16 +1697,19 @@ def commit_additional_file_stage(
     creating_attachment = stage.attachment_id is None
     attachment = None
     if stage.attachment_id is not None:
-        attachment = db.scalar(select(Attachment).where(
-            Attachment.id == stage.attachment_id
-        ).with_for_update())
+        attachment = db.scalar(
+            select(Attachment).where(Attachment.id == stage.attachment_id).with_for_update()
+        )
         if attachment is None or attachment.item_id != stage.item_id:
             raise HTTPException(status_code=409, detail="Target Additional File no longer exists")
         if attachment.lifecycle_state != "ACTIVE":
             raise HTTPException(status_code=409, detail="Target Additional File is archived")
-        current = db.scalar(select(Artifact).where(
-            Artifact.attachment_id == attachment.id
-        ).order_by(Artifact.generation.desc(), Artifact.id.desc()).limit(1))
+        current = db.scalar(
+            select(Artifact)
+            .where(Artifact.attachment_id == attachment.id)
+            .order_by(Artifact.generation.desc(), Artifact.id.desc())
+            .limit(1)
+        )
         if current is None or current.id != stage.base_version_id:
             raise HTTPException(
                 status_code=409, detail="Additional File changed after review; refresh"
@@ -1587,16 +1723,21 @@ def commit_additional_file_stage(
                     db, stage.revision_id, attachment.id, user.id
                 )
                 result = {
-                    "attachment_id": str(attachment.id), "scope": "REVISION",
+                    "attachment_id": str(attachment.id),
+                    "scope": "REVISION",
                     "content_snapshot_id": str(snapshot.id),
                 }
             stage.status = "COMPLETED"
             stage.commit_id = payload.commit_id
             stage.result_json = result
             record_audit(
-                db, actor_id=user.id, action="additional_file.removal_committed",
-                entity_type="additional_file_stage", entity_id=stage.id,
-                request_id=request.state.request_id, details=result,
+                db,
+                actor_id=user.id,
+                action="additional_file.removal_committed",
+                entity_type="additional_file_stage",
+                entity_id=stage.id,
+                request_id=request.state.request_id,
+                details=result,
             )
             db.delete(checkout)
             db.commit()
@@ -1613,9 +1754,12 @@ def commit_additional_file_stage(
         )
         db.add(attachment)
         db.flush()
-    previous = db.scalar(select(Artifact).where(
-        Artifact.attachment_id == attachment.id
-    ).order_by(Artifact.generation.desc(), Artifact.id.desc()).limit(1))
+    previous = db.scalar(
+        select(Artifact)
+        .where(Artifact.attachment_id == attachment.id)
+        .order_by(Artifact.generation.desc(), Artifact.id.desc())
+        .limit(1)
+    )
     generation = 1 if previous is None else previous.generation + 1
     version = Artifact(
         artifact_key=previous.artifact_key if previous else uuid.uuid4(),
@@ -1681,9 +1825,7 @@ def commit_additional_file_stage(
     return additional_file_stage_response(stage)
 
 
-@router.delete(
-    "/additional-files/staging/{stage_id}", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.delete("/additional-files/staging/{stage_id}", status_code=status.HTTP_204_NO_CONTENT)
 def cancel_additional_file_stage(
     stage_id: uuid.UUID,
     request: Request,
@@ -1694,7 +1836,9 @@ def cancel_additional_file_stage(
     stage, user = owned_additional_file_stage(db, stage_id, principal)
     if stage.status == "COMPLETED":
         raise HTTPException(status_code=409, detail="Committed staging cannot be cancelled")
-    LocalStorageProvider(settings.storage_root).partial_path(stage.storage_key).unlink(missing_ok=True)
+    LocalStorageProvider(settings.storage_root).partial_path(stage.storage_key).unlink(
+        missing_ok=True
+    )
     stage.status = "CANCELLED"
     checkout = active_attachment_checkout(db, stage.item_id, stage.attachment_id)
     if checkout is not None and checkout.owner_id == user.id:
@@ -1735,9 +1879,7 @@ def create_attachment(
     require_attachment_editor(db, item, principal, user.id)
     if payload.client_version_id is not None:
         existing = db.scalar(
-            select(Artifact).where(
-                Artifact.client_version_id == payload.client_version_id
-            )
+            select(Artifact).where(Artifact.client_version_id == payload.client_version_id)
         )
         if existing is not None:
             existing_attachment = db.get(Attachment, existing.attachment_id)
@@ -1813,9 +1955,7 @@ def create_attachment_version(
     require_attachment_editor(db, item, principal, user.id)
     if payload.client_version_id is not None:
         existing = db.scalar(
-            select(Artifact).where(
-                Artifact.client_version_id == payload.client_version_id
-            )
+            select(Artifact).where(Artifact.client_version_id == payload.client_version_id)
         )
         if existing is not None:
             if existing.attachment_id != attachment.id:
@@ -1913,17 +2053,19 @@ def list_revision_attachments(
     )
     if latest_snapshot is None:
         return []
-    artifact_ids = set(db.scalars(
-        select(RevisionArtifactRelation.artifact_id)
-        .join(
-            RevisionContentSnapshotArtifact,
-            RevisionContentSnapshotArtifact.relation_id == RevisionArtifactRelation.id,
+    artifact_ids = set(
+        db.scalars(
+            select(RevisionArtifactRelation.artifact_id)
+            .join(
+                RevisionContentSnapshotArtifact,
+                RevisionContentSnapshotArtifact.relation_id == RevisionArtifactRelation.id,
+            )
+            .where(
+                RevisionContentSnapshotArtifact.snapshot_id == latest_snapshot.id,
+                RevisionArtifactRelation.relation_type == "ATTACHMENT",
+            )
         )
-        .where(
-            RevisionContentSnapshotArtifact.snapshot_id == latest_snapshot.id,
-            RevisionArtifactRelation.relation_type == "ATTACHMENT",
-        )
-    ))
+    )
     if not artifact_ids:
         return []
     attachments = list(

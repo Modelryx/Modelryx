@@ -402,7 +402,11 @@ class AssemblyIdentityDecisionRequest(BaseModel):
     @model_validator(mode="after")
     def valid_identity_choice(self) -> "AssemblyIdentityDecisionRequest":
         if self.decision == "USE_EXISTING":
-            if self.existing_revision_id is None or self.item is not None or self.revision is not None:
+            if (
+                self.existing_revision_id is None
+                or self.item is not None
+                or self.revision is not None
+            ):
                 raise ValueError("USE_EXISTING requires only an existing revision")
         elif self.existing_revision_id is not None or self.item is None or self.revision is None:
             raise ValueError("CREATE_NEW requires an Item and Revision proposal")
@@ -474,8 +478,9 @@ class ProposedArtifact(BaseModel):
             and not self.files
         ):
             raise ValueError("a new Artifact requires at least one staged file")
-        if (self.existing_relation_id is not None or self.existing_artifact_id is not None) \
-                and self.files:
+        if (
+            self.existing_relation_id is not None or self.existing_artifact_id is not None
+        ) and self.files:
             raise ValueError("an existing Artifact cannot contain staged files")
         if self.attachment_id is not None and self.relation_type != "ATTACHMENT":
             raise ValueError("attachment_id is only valid for ATTACHMENT relations")
@@ -522,10 +527,22 @@ class StagingBomLineProposal(BaseModel):
     reference_designator: str | None = Field(default=None, max_length=255)
     transform: list[float] = Field(
         default_factory=lambda: [
-            1.0, 0.0, 0.0, 0.0,
-            0.0, 1.0, 0.0, 0.0,
-            0.0, 0.0, 1.0, 0.0,
-            0.0, 0.0, 0.0, 1.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
         ],
         min_length=16,
         max_length=16,
@@ -676,9 +693,7 @@ def _staging_response(db: Session, staging: StagingSession) -> StagingResponse:
                         byte_size=item.byte_size,
                         sha256=item.sha256,
                         mime_type=item.mime_type,
-                        download_url=(
-                            f"/api/v1/artifacts/{artifact_id}/files/{item.id}/download"
-                        ),
+                        download_url=(f"/api/v1/artifacts/{artifact_id}/files/{item.id}/download"),
                     )
                     for item in artifact_files
                 ],
@@ -715,8 +730,13 @@ def _staging_response(db: Session, staging: StagingSession) -> StagingResponse:
 
 
 ONGOING_STAGING_STATUSES = {
-    "HASHED", "METADATA_READY", "REVIEW_REQUIRED", "APPROVED", "PREPARING",
-    "READY_TO_COMMIT", "COMMITTING",
+    "HASHED",
+    "METADATA_READY",
+    "REVIEW_REQUIRED",
+    "APPROVED",
+    "PREPARING",
+    "READY_TO_COMMIT",
+    "COMMITTING",
 }
 RESUMABLE_STAGING_STATUSES = ONGOING_STAGING_STATUSES - {"COMMITTING"}
 
@@ -742,33 +762,40 @@ def list_staging_sessions(
     elif state == "finished":
         conditions.append(~StagingSession.status.in_(ONGOING_STAGING_STATUSES))
     if revision_id is not None:
-        conditions.append(or_(
-            StagingSession.base_revision_id == revision_id,
-            StagingSession.result_json["revision_id"].astext == str(revision_id),
-        ))
-    total = db.scalar(
-        select(func.count()).select_from(StagingSession).where(*conditions)
-    ) or 0
+        conditions.append(
+            or_(
+                StagingSession.base_revision_id == revision_id,
+                StagingSession.result_json["revision_id"].astext == str(revision_id),
+            )
+        )
+    total = db.scalar(select(func.count()).select_from(StagingSession).where(*conditions)) or 0
     rows = db.execute(
         select(StagingSession, User.display_name)
         .join(User, User.id == StagingSession.created_by)
         .where(*conditions)
         .order_by(StagingSession.updated_at.desc(), StagingSession.id.desc())
-        .offset(offset).limit(limit)
+        .offset(offset)
+        .limit(limit)
     ).all()
     ids = [row[0].id for row in rows]
-    file_counts = {
-        row.staging_id: (int(row.file_count), int(row.verified_file_count))
-        for row in db.execute(
-        select(
-            StagingFile.staging_id,
-            func.count().label("file_count"),
-            func.count().filter(StagingFile.state == "VERIFIED").label("verified_file_count"),
-        )
-        .where(StagingFile.staging_id.in_(ids))
-        .group_by(StagingFile.staging_id)
+    file_counts = (
+        {
+            row.staging_id: (int(row.file_count), int(row.verified_file_count))
+            for row in db.execute(
+                select(
+                    StagingFile.staging_id,
+                    func.count().label("file_count"),
+                    func.count()
+                    .filter(StagingFile.state == "VERIFIED")
+                    .label("verified_file_count"),
+                )
+                .where(StagingFile.staging_id.in_(ids))
+                .group_by(StagingFile.staging_id)
+            )
+        }
+        if ids
+        else {}
     )
-    } if ids else {}
     items = []
     for staging, owner_name in rows:
         proposal = staging.proposal_json or {}
@@ -776,25 +803,31 @@ def list_staging_sessions(
         workflow = result.get("workflow") or {}
         destination = proposal.get("destination") or {}
         item = proposal.get("item") or {}
-        items.append(StagingSummary(
-            id=staging.id, status=staging.status, operation=staging.operation,
-            snapshot_version=staging.snapshot_version,
-            base_revision_id=staging.base_revision_id, owner_id=staging.created_by,
-            owner_name=owner_name,
-            file_count=file_counts.get(staging.id, (0, 0))[0],
-            verified_file_count=file_counts.get(staging.id, (0, 0))[1],
-            item_id=result.get("item_id") or destination.get("item_id"),
-            item_number=item.get("item_number"),
-            revision_id=result.get("revision_id") or destination.get("revision_id"),
-            created_revision_ids=result.get("created_revision_ids") or [],
-            created_at=staging.created_at, updated_at=staging.updated_at,
-            can_cancel=staging.status in RESUMABLE_STAGING_STATUSES,
-            can_resume=staging.status in RESUMABLE_STAGING_STATUSES,
-            workflow_state=workflow.get("state"),
-            workflow_stage=workflow.get("stage"),
-            workflow_progress_percent=workflow.get("progress_percent"),
-            workflow_error_detail=workflow.get("error_detail"),
-        ))
+        items.append(
+            StagingSummary(
+                id=staging.id,
+                status=staging.status,
+                operation=staging.operation,
+                snapshot_version=staging.snapshot_version,
+                base_revision_id=staging.base_revision_id,
+                owner_id=staging.created_by,
+                owner_name=owner_name,
+                file_count=file_counts.get(staging.id, (0, 0))[0],
+                verified_file_count=file_counts.get(staging.id, (0, 0))[1],
+                item_id=result.get("item_id") or destination.get("item_id"),
+                item_number=item.get("item_number"),
+                revision_id=result.get("revision_id") or destination.get("revision_id"),
+                created_revision_ids=result.get("created_revision_ids") or [],
+                created_at=staging.created_at,
+                updated_at=staging.updated_at,
+                can_cancel=staging.status in RESUMABLE_STAGING_STATUSES,
+                can_resume=staging.status in RESUMABLE_STAGING_STATUSES,
+                workflow_state=workflow.get("state"),
+                workflow_stage=workflow.get("stage"),
+                workflow_progress_percent=workflow.get("progress_percent"),
+                workflow_error_detail=workflow.get("error_detail"),
+            )
+        )
     return StagingListResponse(items=items, total=total)
 
 
@@ -1249,9 +1282,7 @@ def update_staging_proposal(
     staged_files = list(db.scalars(select(StagingFile).where(StagingFile.staging_id == staging.id)))
     staged_ids = {item.id for item in staged_files}
     staged_by_id = {item.id: item for item in staged_files}
-    inventor_proposal = bool(
-        proposed_cad_system and proposed_cad_system.casefold() == "inventor"
-    )
+    inventor_proposal = bool(proposed_cad_system and proposed_cad_system.casefold() == "inventor")
     project_files = [
         item.logical_path for item in staged_files if item.logical_path.casefold().endswith(".ipj")
     ]
@@ -1297,10 +1328,7 @@ def update_staging_proposal(
                 names = sorted(item.logical_path for item in drawing_files)
                 raise HTTPException(
                     status_code=422,
-                    detail=(
-                        "Related Inventor drawing files must use a DRAWING Artifact: "
-                        f"{names}"
-                    ),
+                    detail=(f"Related Inventor drawing files must use a DRAWING Artifact: {names}"),
                 )
     proposed_ids = [
         item.staged_file_id for artifact in payload.artifacts for item in artifact.files
@@ -1549,20 +1577,23 @@ def mark_staging_ready(
         analysis = (staging.result_json or {}).get("assembly_analysis")
         if analysis:
             if analysis.get("snapshot_version") != staging.snapshot_version:
-                raise HTTPException(status_code=422, detail="Assembly analysis is stale; analyze again")
+                raise HTTPException(
+                    status_code=422, detail="Assembly analysis is stale; analyze again"
+                )
             reconciliation = analysis.get("reconciliation") or []
             blocked = [
-                entry for entry in reconciliation
-                if entry.get("status") in {"MISSING", "CONFLICT"}
+                entry for entry in reconciliation if entry.get("status") in {"MISSING", "CONFLICT"}
             ]
             decisions = analysis.get("identity_decisions") or {}
             unresolved = [
-                entry for entry in reconciliation
+                entry
+                for entry in reconciliation
                 if entry.get("status") in {"ADDED", "RELINKED"}
                 and (
                     f"{str(entry.get('parent_logical_path') or '').casefold()}::"
                     f"{str(entry.get('occurrence_key') or '').casefold()}"
-                ) not in decisions
+                )
+                not in decisions
             ]
             if blocked or unresolved:
                 raise HTTPException(
@@ -1631,13 +1662,17 @@ def mark_staging_ready(
                     if line.child_staged_file_id is not None
                     else None
                 )
-                source = staged_file.logical_path if staged_file is not None else str(
-                    line.child_revision_id or "unknown child"
+                source = (
+                    staged_file.logical_path
+                    if staged_file is not None
+                    else str(line.child_revision_id or "unknown child")
                 )
                 suffix = (
                     "Assembly"
                     if source.casefold().endswith(".iam")
-                    else "Part" if source.casefold().endswith(".ipt") else "Component"
+                    else "Part"
+                    if source.casefold().endswith(".ipt")
+                    else "Component"
                 )
                 base = line.instance_name[: max(1, 255 - len(suffix) - 3)]
                 candidate = f"{base} [{suffix}]"
@@ -1649,9 +1684,7 @@ def mark_staging_ready(
                     sequence += 1
                 used_names.add((*parent_key, candidate.casefold()))
                 suggestions.append({"source": source, "suggested_name": candidate})
-            conflicts.append(
-                {"instance_name": group[0].instance_name, "entries": suggestions}
-            )
+            conflicts.append({"instance_name": group[0].instance_name, "entries": suggestions})
             rendered = "; ".join(
                 f"{item['source']} → {item['suggested_name']}" for item in suggestions
             )
@@ -1812,23 +1845,22 @@ def save_assembly_analysis(
         logical_path = normalized_path(entry.logical_path)
         folded = logical_path.casefold()
         if folded in manifest_paths:
-            raise HTTPException(
-                status_code=422, detail=f"Duplicate analysis path: {logical_path}"
-            )
+            raise HTTPException(status_code=422, detail=f"Duplicate analysis path: {logical_path}")
         manifest_paths.add(folded)
-        manifest.append({
-            "logical_path": logical_path,
-            "filename": entry.filename,
-            "byte_size": entry.byte_size,
-            "sha256": entry.sha256.lower(),
-        })
+        manifest.append(
+            {
+                "logical_path": logical_path,
+                "filename": entry.filename,
+                "byte_size": entry.byte_size,
+                "sha256": entry.sha256.lower(),
+            }
+        )
 
     report = dict(payload.report)
     if report.get("document_type") != "ASSEMBLY":
         raise HTTPException(status_code=422, detail="The dependency report is not an assembly")
     reported_missing = [
-        dict(entry) for entry in report.get("missing_references") or []
-        if isinstance(entry, dict)
+        dict(entry) for entry in report.get("missing_references") or [] if isinstance(entry, dict)
     ]
     cad_document_extensions = {".prt", ".iam", ".ipt", ".idw", ".ipn", ".dwg", ".dxf", ".fcstd"}
 
@@ -1848,7 +1880,9 @@ def save_assembly_analysis(
     ]
     root_path = normalized_path(str(report.get("root_logical_path") or ""))
     if root_path.casefold() not in manifest_paths:
-        raise HTTPException(status_code=422, detail="The analyzed root file is absent from the manifest")
+        raise HTTPException(
+            status_code=422, detail="The analyzed root file is absent from the manifest"
+        )
     report_paths = {
         normalized_path(str(entry.get("logical_path") or "")).casefold()
         for entry in report.get("files", [])
@@ -1861,17 +1895,19 @@ def save_assembly_analysis(
             detail=f"Analyzed files are absent from the manifest: {missing_manifest_files}",
         )
 
-    manifest_by_path = {
-        str(entry["logical_path"]).casefold(): entry for entry in manifest
-    }
+    manifest_by_path = {str(entry["logical_path"]).casefold(): entry for entry in manifest}
     base_snapshot = db.get(RevisionContentSnapshot, staging.base_snapshot_id)
     if base_snapshot is None or staging.base_revision_id is None:
         raise HTTPException(status_code=409, detail="The edit base snapshot is unavailable")
     root_manifest = manifest_by_path[root_path.casefold()]
-    base_root_file = next((
-        file for file in current_artifact_files(db, staging.base_revision_id)
-        if file.kind == "NATIVE" and file.role == "PRIMARY"
-    ), None)
+    base_root_file = next(
+        (
+            file
+            for file in current_artifact_files(db, staging.base_revision_id)
+            if file.kind == "NATIVE" and file.role == "PRIMARY"
+        ),
+        None,
+    )
     root_content_matches = bool(
         base_root_file is not None
         and base_root_file.sha256 == root_manifest["sha256"]
@@ -1882,7 +1918,9 @@ def save_assembly_analysis(
         "depth": 0,
         "occurrence_key": root_path,
         "status": "UNCHANGED" if root_content_matches else "MODIFIED",
-        "old": None if base_root_file is None else {
+        "old": None
+        if base_root_file is None
+        else {
             "revision_id": str(staging.base_revision_id),
             "filename": base_root_file.original_filename,
             "sha256": base_root_file.sha256,
@@ -1891,8 +1929,8 @@ def save_assembly_analysis(
         "new": root_manifest,
         "reason": (
             "The selected root assembly matches the checked-out revision."
-            if root_content_matches else
-            "The selected root assembly differs from the checked-out revision."
+            if root_content_matches
+            else "The selected root assembly differs from the checked-out revision."
         ),
     }
     old_lines = _bom_proposal_at_snapshot(db, staging.base_revision_id, base_snapshot)
@@ -1910,13 +1948,15 @@ def save_assembly_analysis(
             .where(Revision.id.in_(child_revision_ids))
         )
     }
-    checked_out_child_revision_ids = set(db.scalars(
-        select(Checkout.revision_id).where(
-            Checkout.revision_id.in_(child_revision_ids),
-            Checkout.owner_id == staging.created_by,
-            Checkout.expires_at > datetime.now(UTC),
+    checked_out_child_revision_ids = set(
+        db.scalars(
+            select(Checkout.revision_id).where(
+                Checkout.revision_id.in_(child_revision_ids),
+                Checkout.owner_id == staging.created_by,
+                Checkout.expires_at > datetime.now(UTC),
+            )
         )
-    ))
+    )
 
     def identity_token(value: object) -> str:
         text = PurePosixPath(str(value or "").replace("\\", "/")).name
@@ -1980,8 +2020,7 @@ def save_assembly_analysis(
         dict(entry)
         for entry in report.get("references", [])
         if isinstance(entry, dict)
-        and normalized_path(str(entry.get("parent_logical_path") or "")).casefold()
-        == root_folded
+        and normalized_path(str(entry.get("parent_logical_path") or "")).casefold() == root_folded
     ]
     old_by_key = {
         str(line.get("instance_name") or "").strip().casefold(): line
@@ -2016,26 +2055,28 @@ def save_assembly_analysis(
             new_manifest = manifest_by_path.get(new_source.casefold())
             same_content = False
             if child_revision_id and new_manifest:
-                same_content = db.scalar(
-                    select(ArtifactFile.id).where(
-                        ArtifactFile.revision_id == uuid.UUID(str(child_revision_id)),
-                        ArtifactFile.sha256 == new_manifest["sha256"],
-                        ArtifactFile.state == "VERIFIED",
+                same_content = (
+                    db.scalar(
+                        select(ArtifactFile.id).where(
+                            ArtifactFile.revision_id == uuid.UUID(str(child_revision_id)),
+                            ArtifactFile.sha256 == new_manifest["sha256"],
+                            ArtifactFile.state == "VERIFIED",
+                        )
                     )
-                ) is not None
-            same_reference = (
-                not old_source
-                or old_source.casefold() == new_source.casefold()
-            )
+                    is not None
+                )
+            same_reference = not old_source or old_source.casefold() == new_source.casefold()
             child_checked_out = (
                 uuid.UUID(str(child_revision_id)) in checked_out_child_revision_ids
-                if child_revision_id else False
+                if child_revision_id
+                else False
             )
             if same_reference and not same_content and not child_checked_out:
                 state = "UNCHANGED"
                 reason = (
                     "The occurrence still references the existing child revision. Its local "
-                    "file differs, but that child is not checked out, so the local bytes are ignored."
+                    "file differs, but that child is not checked out, "
+                            "so the local bytes are ignored."
                 )
             elif same_reference:
                 state = "UNCHANGED" if same_content else "MODIFIED"
@@ -2050,39 +2091,45 @@ def save_assembly_analysis(
             else:
                 state = "RELINKED"
                 reason = "The occurrence now resolves to different content or a different path."
-        reconciliation.append({
-            "parent_logical_path": root_path,
-            "depth": 0,
-            "occurrence_key": key_value,
-            "status": state,
-            "old": old,
-            "new": reference,
-            "reason": reason,
-        })
+        reconciliation.append(
+            {
+                "parent_logical_path": root_path,
+                "depth": 0,
+                "occurrence_key": key_value,
+                "status": state,
+                "old": old,
+                "new": reference,
+                "reason": reason,
+            }
+        )
 
     for key, old in old_by_key.items():
         if key not in matched_old_keys:
-            reconciliation.append({
-                "parent_logical_path": root_path,
-                "depth": 0,
-                "occurrence_key": old.get("instance_name"),
-                "status": "REMOVED",
-                "old": old,
-                "new": None,
-                "reason": "The current BOM occurrence is absent from the analyzed assembly.",
-            })
+            reconciliation.append(
+                {
+                    "parent_logical_path": root_path,
+                    "depth": 0,
+                    "occurrence_key": old.get("instance_name"),
+                    "status": "REMOVED",
+                    "old": old,
+                    "new": None,
+                    "reason": "The current BOM occurrence is absent from the analyzed assembly.",
+                }
+            )
     for missing in report.get("missing_references") or []:
         if not isinstance(missing, dict):
             continue
-        reconciliation.append({
-            "parent_logical_path": str(missing.get("referenced_by") or root_path),
-            "depth": 0,
-            "occurrence_key": missing.get("reference"),
-            "status": "MISSING",
-            "old": None,
-            "new": missing,
-            "reason": "A referenced CAD document was not available to the analyzer.",
-        })
+        reconciliation.append(
+            {
+                "parent_logical_path": str(missing.get("referenced_by") or root_path),
+                "depth": 0,
+                "occurrence_key": missing.get("reference"),
+                "status": "MISSING",
+                "old": None,
+                "new": missing,
+                "reason": "A referenced CAD document was not available to the analyzer.",
+            }
+        )
 
     # Reconcile nested assemblies when their root occurrence can be tied to an
     # existing child revision. Added/relinked children remain identity work for Phase 4.
@@ -2095,9 +2142,9 @@ def save_assembly_analysis(
         child_revision_id = old.get("child_revision_id")
         child_path = new.get("child_logical_path")
         if child_revision_id and child_path:
-            pending_parents.append((
-                normalized_path(str(child_path)), uuid.UUID(str(child_revision_id)), 1
-            ))
+            pending_parents.append(
+                (normalized_path(str(child_path)), uuid.UUID(str(child_revision_id)), 1)
+            )
     visited_nested: set[tuple[str, uuid.UUID]] = set()
     while pending_parents:
         parent_path, parent_revision_id, depth = pending_parents.pop(0)
@@ -2119,24 +2166,28 @@ def save_assembly_analysis(
             .where(BomViewRevision.revision_id == parent_revision_id)
             .order_by(BomViewRevision.sequence.desc(), BomViewRevision.id.desc())
         )
-        nested_lines = [] if nested_view is None else [
-            {
-                "parent_revision_id": str(line.parent_revision_id),
-                "child_revision_id": str(line.child_revision_id),
-                "instance_name": line.occurrence_key,
-                "source_reference": line.source_reference,
-                "reference_designator": line.reference_designator,
-                "transform": line.transform,
-                "is_suppressed": line.is_suppressed,
-                "is_visible": line.is_visible,
-                "properties": line.properties_json,
-            }
-            for line in db.scalars(
-                select(BomLine)
-                .where(BomLine.bom_view_revision_id == nested_view.id)
-                .order_by(BomLine.sequence, BomLine.id)
-            )
-        ]
+        nested_lines = (
+            []
+            if nested_view is None
+            else [
+                {
+                    "parent_revision_id": str(line.parent_revision_id),
+                    "child_revision_id": str(line.child_revision_id),
+                    "instance_name": line.occurrence_key,
+                    "source_reference": line.source_reference,
+                    "reference_designator": line.reference_designator,
+                    "transform": line.transform,
+                    "is_suppressed": line.is_suppressed,
+                    "is_visible": line.is_visible,
+                    "properties": line.properties_json,
+                }
+                for line in db.scalars(
+                    select(BomLine)
+                    .where(BomLine.bom_view_revision_id == nested_view.id)
+                    .order_by(BomLine.sequence, BomLine.id)
+                )
+            ]
+        )
         nested_old_by_key = {
             str(line.get("instance_name") or "").strip().casefold(): line
             for line in nested_lines
@@ -2160,62 +2211,87 @@ def save_assembly_analysis(
                     "The analyzed occurrence cannot be uniquely matched to the current BOM.",
                 )
             elif old is None:
-                state, reason = "ADDED", "The analyzed occurrence is not present in the current BOM."
+                state, reason = (
+                    "ADDED",
+                    "The analyzed occurrence is not present in the current BOM.",
+                )
             else:
                 nested_matched.add(str(old.get("instance_name") or "").strip().casefold())
                 old_source = str(old.get("source_reference") or "").replace("\\", "/").strip("/")
                 child_revision_id = old.get("child_revision_id")
                 new_manifest = manifest_by_path.get(new_source.casefold())
-                same_content = bool(child_revision_id and new_manifest and db.scalar(
-                    select(ArtifactFile.id).where(
-                        ArtifactFile.revision_id == uuid.UUID(str(child_revision_id)),
-                        ArtifactFile.sha256 == new_manifest["sha256"],
-                        ArtifactFile.state == "VERIFIED",
+                same_content = bool(
+                    child_revision_id
+                    and new_manifest
+                    and db.scalar(
+                        select(ArtifactFile.id).where(
+                            ArtifactFile.revision_id == uuid.UUID(str(child_revision_id)),
+                            ArtifactFile.sha256 == new_manifest["sha256"],
+                            ArtifactFile.state == "VERIFIED",
+                        )
                     )
-                ))
-                same_reference = (
-                    not old_source
-                    or old_source.casefold() == new_source.casefold()
                 )
+                same_reference = not old_source or old_source.casefold() == new_source.casefold()
                 child_checked_out = (
                     uuid.UUID(str(child_revision_id)) in checked_out_child_revision_ids
-                    if child_revision_id else False
+                    if child_revision_id
+                    else False
                 )
                 if same_reference and not same_content and not child_checked_out:
                     state = "UNCHANGED"
                     reason = (
                         "The occurrence still references the existing child revision. Its local "
-                        "file differs, but that child is not checked out, so the local bytes are ignored."
+                        "file differs, but that child is not checked out, "
+                            "so the local bytes are ignored."
                     )
                 elif same_reference:
                     state = "UNCHANGED" if same_content else "MODIFIED"
-                    reason = "The occurrence content matches." if same_content else "The referenced content differs."
+                    reason = (
+                        "The occurrence content matches."
+                        if same_content
+                        else "The referenced content differs."
+                    )
                 elif same_content:
-                    state, reason = "MOVED_RENAMED", "The content is unchanged but its path changed."
+                    state, reason = (
+                        "MOVED_RENAMED",
+                        "The content is unchanged but its path changed.",
+                    )
                 else:
-                    state, reason = "RELINKED", "The occurrence resolves to different content or a different path."
+                    state, reason = (
+                        "RELINKED",
+                        "The occurrence resolves to different content or a different path.",
+                    )
                 if state in {"UNCHANGED", "MODIFIED", "MOVED_RENAMED"} and child_revision_id:
-                    pending_parents.append((new_source, uuid.UUID(str(child_revision_id)), depth + 1))
-            reconciliation.append({
-                "parent_logical_path": parent_path,
-                "depth": depth,
-                "occurrence_key": key_value,
-                "status": state,
-                "old": old,
-                "new": reference,
-                "reason": reason,
-            })
-        for key, old in nested_old_by_key.items():
-            if key not in nested_matched:
-                reconciliation.append({
+                    pending_parents.append(
+                        (new_source, uuid.UUID(str(child_revision_id)), depth + 1)
+                    )
+            reconciliation.append(
+                {
                     "parent_logical_path": parent_path,
                     "depth": depth,
-                    "occurrence_key": old.get("instance_name"),
-                    "status": "REMOVED",
+                    "occurrence_key": key_value,
+                    "status": state,
                     "old": old,
-                    "new": None,
-                    "reason": "The current nested BOM occurrence is absent from the analyzed assembly.",
-                })
+                    "new": reference,
+                    "reason": reason,
+                }
+            )
+        for key, old in nested_old_by_key.items():
+            if key not in nested_matched:
+                reconciliation.append(
+                    {
+                        "parent_logical_path": parent_path,
+                        "depth": depth,
+                        "occurrence_key": old.get("instance_name"),
+                        "status": "REMOVED",
+                        "old": old,
+                        "new": None,
+                        "reason": (
+                            "The current nested BOM occurrence is absent "
+                            "from the analyzed assembly."
+                        ),
+                    }
+                )
 
     current_rows = db.execute(
         select(Item, Revision)
@@ -2236,19 +2312,23 @@ def save_assembly_analysis(
         reference = entry.get("new") or {}
         child_path = str(reference.get("child_logical_path") or "").casefold()
         candidate_file = manifest_by_path.get(child_path)
-        matches = [] if candidate_file is None else [
-            {
-                "item_id": str(item.id),
-                "item_number": item.part_number,
-                "item_name": item.name,
-                "item_type": item.part_type,
-                "revision_id": str(revision.id),
-                "revision_code": revision.revision_code,
-            }
-            for item, revision in current_rows
-            if (candidate_file["sha256"], candidate_file["byte_size"])
-            in primary_hashes[revision.id]
-        ]
+        matches = (
+            []
+            if candidate_file is None
+            else [
+                {
+                    "item_id": str(item.id),
+                    "item_number": item.part_number,
+                    "item_name": item.name,
+                    "item_type": item.part_type,
+                    "revision_id": str(revision.id),
+                    "revision_code": revision.revision_code,
+                }
+                for item, revision in current_rows
+                if (candidate_file["sha256"], candidate_file["byte_size"])
+                in primary_hashes[revision.id]
+            ]
+        )
         entry["duplicate_candidates"] = matches
 
     result = dict(staging.result_json or {})
@@ -2276,8 +2356,14 @@ def save_assembly_analysis(
             "reconciliation": {
                 state: sum(1 for entry in reconciliation if entry["status"] == state)
                 for state in {
-                    "UNCHANGED", "MODIFIED", "ADDED", "REMOVED", "MOVED_RENAMED",
-                    "RELINKED", "MISSING", "CONFLICT",
+                    "UNCHANGED",
+                    "MODIFIED",
+                    "ADDED",
+                    "REMOVED",
+                    "MOVED_RENAMED",
+                    "RELINKED",
+                    "MISSING",
+                    "CONFLICT",
                 }
             },
         },
@@ -2308,10 +2394,7 @@ def apply_safe_assembly_reconciliation(
     report = analysis.get("report") or {}
     root_path = str(report.get("root_logical_path") or "")
     reconciliation = list(analysis.get("reconciliation") or [])
-    blocking = [
-        entry for entry in reconciliation
-        if entry.get("status") in {"MISSING", "CONFLICT"}
-    ]
+    blocking = [entry for entry in reconciliation if entry.get("status") in {"MISSING", "CONFLICT"}]
     if blocking:
         raise HTTPException(
             status_code=422,
@@ -2341,22 +2424,24 @@ def apply_safe_assembly_reconciliation(
             updated_bom.append(line)
             continue
         reference = entry.get("new") or {}
-        line.update({
-            "instance_name": (
-                reference.get("occurrence_key")
-                or reference.get("occurrence_path")
-                or reference.get("occurrence_id")
-                or line.get("instance_name")
-            ),
-            "source_reference": reference.get("source_reference")
-            or reference.get("child_logical_path"),
-            "reference_designator": reference.get("reference_designator")
-            or reference.get("instance_name"),
-            "transform": reference.get("transform"),
-            "is_suppressed": reference.get("is_suppressed", False),
-            "is_visible": reference.get("is_visible", True),
-            "properties": reference.get("properties") or {},
-        })
+        line.update(
+            {
+                "instance_name": (
+                    reference.get("occurrence_key")
+                    or reference.get("occurrence_path")
+                    or reference.get("occurrence_id")
+                    or line.get("instance_name")
+                ),
+                "source_reference": reference.get("source_reference")
+                or reference.get("child_logical_path"),
+                "reference_designator": reference.get("reference_designator")
+                or reference.get("instance_name"),
+                "transform": reference.get("transform"),
+                "is_suppressed": reference.get("is_suppressed", False),
+                "is_visible": reference.get("is_visible", True),
+                "properties": reference.get("properties") or {},
+            }
+        )
         updated_bom.append(line)
         updated += 1
     proposal["bom"] = updated_bom
@@ -2390,29 +2475,39 @@ def save_assembly_identity_decision(
     require_engineer(principal)
     staging = _owned_staging(db, staging_id, principal)
     if staging.operation != "EDIT_ITEM_REVISION" or staging.status != "PREPARING":
-        raise HTTPException(status_code=409, detail="This staging session cannot accept identity decisions")
+        raise HTTPException(
+            status_code=409, detail="This staging session cannot accept identity decisions"
+        )
     if staging.snapshot_version != payload.expected_snapshot_version:
         raise HTTPException(status_code=409, detail="Staging changed; analyze the assembly again")
     result = dict(staging.result_json or {})
     analysis = dict(result.get("assembly_analysis") or {})
     if analysis.get("snapshot_version") != staging.snapshot_version:
         raise HTTPException(status_code=409, detail="Assembly analysis is stale; analyze again")
-    target = next((
-        entry for entry in analysis.get("reconciliation") or []
-        if str(entry.get("parent_logical_path") or "").casefold()
-        == payload.parent_logical_path.casefold()
-        and str(entry.get("occurrence_key") or "").casefold()
-        == payload.occurrence_key.casefold()
-        and entry.get("status") in {"ADDED", "RELINKED"}
-    ), None)
+    target = next(
+        (
+            entry
+            for entry in analysis.get("reconciliation") or []
+            if str(entry.get("parent_logical_path") or "").casefold()
+            == payload.parent_logical_path.casefold()
+            and str(entry.get("occurrence_key") or "").casefold()
+            == payload.occurrence_key.casefold()
+            and entry.get("status") in {"ADDED", "RELINKED"}
+        ),
+        None,
+    )
     if target is None:
         raise HTTPException(status_code=404, detail="Unresolved assembly occurrence not found")
     if payload.decision == "USE_EXISTING":
         candidates = target.get("duplicate_candidates") or []
-        selected = next((
-            candidate for candidate in candidates
-            if candidate.get("revision_id") == str(payload.existing_revision_id)
-        ), None)
+        selected = next(
+            (
+                candidate
+                for candidate in candidates
+                if candidate.get("revision_id") == str(payload.existing_revision_id)
+            ),
+            None,
+        )
         if selected is None:
             raise HTTPException(status_code=422, detail="Select a verified duplicate revision")
         saved = {
@@ -2484,12 +2579,14 @@ def stage_reconciled_assembly(
     if any(entry.get("status") in {"MISSING", "CONFLICT"} for entry in reconciliation):
         raise HTTPException(status_code=422, detail="Resolve assembly conflicts before staging")
     unresolved = [
-        entry for entry in reconciliation
+        entry
+        for entry in reconciliation
         if entry.get("status") in {"ADDED", "RELINKED"}
         and (
             f"{str(entry.get('parent_logical_path') or '').casefold()}::"
             f"{str(entry.get('occurrence_key') or '').casefold()}"
-        ) not in decisions
+        )
+        not in decisions
     ]
     if unresolved:
         raise HTTPException(status_code=422, detail="Resolve every added or relinked reference")
@@ -2519,33 +2616,40 @@ def stage_reconciled_assembly(
     if not root_revision_id:
         raise HTTPException(status_code=422, detail="The edited root revision is unavailable")
 
-    retained = [artifact for artifact in proposal.get("artifacts") or [] if not artifact.get("is_primary")]
+    retained = [
+        artifact for artifact in proposal.get("artifacts") or [] if not artifact.get("is_primary")
+    ]
     package_files = [
         {
             "staged_file_id": str(staged_by_path[str(entry["logical_path"]).casefold()].id),
             "reference_name": str(entry["logical_path"]),
-            "role": "PRIMARY" if str(entry["logical_path"]).casefold() == root_path.casefold()
+            "role": "PRIMARY"
+            if str(entry["logical_path"]).casefold() == root_path.casefold()
             else "SECONDARY",
         }
         for entry in manifest
     ]
-    artifacts: list[dict[str, Any]] = [*retained, {
-        "client_artifact_id": str(uuid.uuid4()),
-        "existing_relation_id": None,
-        "owner_staged_file_id": None,
-        "artifact_type": "CAD_ASSEMBLY",
-        "name": PurePosixPath(root_path).stem,
-        "description": None,
-        "classification": "AUTHORITATIVE",
-        "relation_type": "SPECIFICATION",
-        "sequence": len(retained),
-        "is_primary": True,
-        "files": package_files,
-    }]
+    artifacts: list[dict[str, Any]] = [
+        *retained,
+        {
+            "client_artifact_id": str(uuid.uuid4()),
+            "existing_relation_id": None,
+            "owner_staged_file_id": None,
+            "artifact_type": "CAD_ASSEMBLY",
+            "name": PurePosixPath(root_path).stem,
+            "description": None,
+            "classification": "AUTHORITATIVE",
+            "relation_type": "SPECIFICATION",
+            "sequence": len(retained),
+            "is_primary": True,
+            "files": package_files,
+        },
+    ]
     identity_decisions: list[dict[str, Any]] = []
     bom: list[dict[str, Any]] = []
     root_entries = [
-        entry for entry in reconciliation
+        entry
+        for entry in reconciliation
         if entry.get("depth") == 0
         and str(entry.get("parent_logical_path") or "").casefold() == root_path.casefold()
         and entry.get("status") != "REMOVED"
@@ -2564,63 +2668,96 @@ def stage_reconciled_assembly(
             )
             decision = decisions[key]
             if child_file is None:
-                raise HTTPException(status_code=422, detail=f"Referenced file is not staged: {child_path}")
+                raise HTTPException(
+                    status_code=422, detail=f"Referenced file is not staged: {child_path}"
+                )
             if decision["decision"] == "USE_EXISTING":
                 child_revision_id = decision["existing_revision_id"]
-                identity_decisions.append({
-                    "staged_file_id": str(child_file.id),
-                    "decision": "USE_EXISTING",
-                    "existing_revision_id": child_revision_id,
-                    "item": None,
-                    "revision": None,
-                })
+                identity_decisions.append(
+                    {
+                        "staged_file_id": str(child_file.id),
+                        "decision": "USE_EXISTING",
+                        "existing_revision_id": child_revision_id,
+                        "item": None,
+                        "revision": None,
+                    }
+                )
             else:
                 child_revision_id = None
                 child_staged_file_id = str(child_file.id)
-                identity_decisions.append({
-                    "staged_file_id": str(child_file.id),
-                    "decision": "CREATE_NEW",
-                    "existing_revision_id": None,
-                    "item": decision["item"],
-                    "revision": decision["revision"],
-                })
-                child_type = (decision.get("item") or {}).get("item_type")
-                artifacts.append({
-                    "client_artifact_id": str(uuid.uuid4()),
-                    "existing_relation_id": None,
-                    "owner_staged_file_id": str(child_file.id),
-                    "artifact_type": "CAD_ASSEMBLY" if child_type == "ASSEMBLY" else "CAD_MODEL",
-                    "name": (decision.get("item") or {}).get("name") or child_file.filename,
-                    "description": None,
-                    "classification": "AUTHORITATIVE",
-                    "relation_type": "SPECIFICATION",
-                    "sequence": len(artifacts),
-                    "is_primary": True,
-                    "files": [{
+                identity_decisions.append(
+                    {
                         "staged_file_id": str(child_file.id),
-                        "reference_name": "MODEL",
-                        "role": "PRIMARY",
-                    }],
-                })
+                        "decision": "CREATE_NEW",
+                        "existing_revision_id": None,
+                        "item": decision["item"],
+                        "revision": decision["revision"],
+                    }
+                )
+                child_type = (decision.get("item") or {}).get("item_type")
+                artifacts.append(
+                    {
+                        "client_artifact_id": str(uuid.uuid4()),
+                        "existing_relation_id": None,
+                        "owner_staged_file_id": str(child_file.id),
+                        "artifact_type": "CAD_ASSEMBLY"
+                        if child_type == "ASSEMBLY"
+                        else "CAD_MODEL",
+                        "name": (decision.get("item") or {}).get("name") or child_file.filename,
+                        "description": None,
+                        "classification": "AUTHORITATIVE",
+                        "relation_type": "SPECIFICATION",
+                        "sequence": len(artifacts),
+                        "is_primary": True,
+                        "files": [
+                            {
+                                "staged_file_id": str(child_file.id),
+                                "reference_name": "MODEL",
+                                "role": "PRIMARY",
+                            }
+                        ],
+                    }
+                )
         if child_revision_id is None and child_staged_file_id is None:
-            raise HTTPException(status_code=422, detail=f"Occurrence has no resolved child: {entry.get('occurrence_key')}")
-        bom.append({
-            "parent_staged_file_id": None,
-            "parent_revision_id": root_revision_id,
-            "child_staged_file_id": child_staged_file_id,
-            "child_revision_id": child_revision_id,
-            "instance_name": entry.get("occurrence_key"),
-            "quantity": 1,
-            "source_reference": reference.get("source_reference") or child_path,
-            "reference_designator": reference.get("reference_designator") or reference.get("instance_name"),
-            "transform": reference.get("transform") or [
-                1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0,
-                0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
-            ],
-            "is_suppressed": reference.get("is_suppressed", False),
-            "is_visible": reference.get("is_visible", True),
-            "properties": reference.get("properties") or {},
-        })
+            raise HTTPException(
+                status_code=422,
+                detail=f"Occurrence has no resolved child: {entry.get('occurrence_key')}",
+            )
+        bom.append(
+            {
+                "parent_staged_file_id": None,
+                "parent_revision_id": root_revision_id,
+                "child_staged_file_id": child_staged_file_id,
+                "child_revision_id": child_revision_id,
+                "instance_name": entry.get("occurrence_key"),
+                "quantity": 1,
+                "source_reference": reference.get("source_reference") or child_path,
+                "reference_designator": reference.get("reference_designator")
+                or reference.get("instance_name"),
+                "transform": reference.get("transform")
+                or [
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                ],
+                "is_suppressed": reference.get("is_suppressed", False),
+                "is_visible": reference.get("is_visible", True),
+                "properties": reference.get("properties") or {},
+            }
+        )
     proposal["artifacts"] = artifacts
     proposal["identity_decisions"] = identity_decisions
     proposal["bom"] = bom
@@ -2675,7 +2812,9 @@ def adopt_coordinated_assembly_analysis(
     if staging.operation != "EDIT_ITEM_REVISION" or staging.status != "PREPARING":
         raise HTTPException(status_code=409, detail="This child edit cannot adopt analysis")
     if staging.snapshot_version != payload.expected_snapshot_version:
-        raise HTTPException(status_code=409, detail="Child staging changed; reload before continuing")
+        raise HTTPException(
+            status_code=409, detail="Child staging changed; reload before continuing"
+        )
     source_analysis = dict((source.result_json or {}).get("assembly_analysis") or {})
     if (
         not source_analysis
@@ -2690,7 +2829,9 @@ def adopt_coordinated_assembly_analysis(
         str(entry.get("logical_path") or "").casefold() == root_path.casefold()
         for entry in manifest
     ):
-        raise HTTPException(status_code=422, detail="The child assembly is absent from the analysis")
+        raise HTTPException(
+            status_code=422, detail="The child assembly is absent from the analysis"
+        )
     direct_reconciliation = [
         {**entry, "depth": 0}
         for entry in source_analysis.get("reconciliation") or []
@@ -2708,10 +2849,8 @@ def adopt_coordinated_assembly_analysis(
         entry
         for entry in direct_reconciliation
         if entry.get("status") in {"ADDED", "RELINKED"}
-        and (
-            f"{root_path.casefold()}::"
-            f"{str(entry.get('occurrence_key') or '').casefold()}"
-        ) not in decisions
+        and (f"{root_path.casefold()}::{str(entry.get('occurrence_key') or '').casefold()}")
+        not in decisions
     ]
     if unresolved:
         raise HTTPException(status_code=422, detail="Resolve every child assembly identity")
@@ -2721,11 +2860,13 @@ def adopt_coordinated_assembly_analysis(
         "report": {
             "root_logical_path": root_path,
             "files": [
-                entry for entry in report.get("files") or []
+                entry
+                for entry in report.get("files") or []
                 if str(entry.get("logical_path") or "").casefold() == root_path.casefold()
             ],
             "references": [
-                entry for entry in report.get("references") or []
+                entry
+                for entry in report.get("references") or []
                 if str(entry.get("parent_logical_path") or "").casefold() == root_path.casefold()
             ],
             "missing_references": [],
@@ -2841,10 +2982,16 @@ def cancel_staging(staging_id: uuid.UUID, request: Request, db: Db, principal: A
             active_cad = db.scalar(
                 select(CADSession.id).where(
                     CADSession.revision_id == staging.base_revision_id,
-                    CADSession.status.in_({
-                        "CREATED", "OPENING", "READY", "EXECUTING", "VERIFYING",
-                        "READY_TO_REVIEW",
-                    }),
+                    CADSession.status.in_(
+                        {
+                            "CREATED",
+                            "OPENING",
+                            "READY",
+                            "EXECUTING",
+                            "VERIFYING",
+                            "READY_TO_REVIEW",
+                        }
+                    ),
                 )
             )
             if active_cad is None:

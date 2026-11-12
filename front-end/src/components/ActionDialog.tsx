@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from 'react';
 
 type ActionDialogProps = {
   title: string;
@@ -21,9 +21,18 @@ export function ActionDialog({ title, onClose, children }: ActionDialogProps) {
     };
   }, []);
 
-  return <dialog ref={ref} className="action-dialog" aria-label={title}
-    onCancel={(event) => { event.preventDefault(); onClose(); }}>
-    <h2>{title}</h2>
-    {children}
-  </dialog>;
+  return (
+    <dialog
+      ref={ref}
+      className="action-dialog"
+      aria-label={title}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+    >
+      <h2>{title}</h2>
+      {children}
+    </dialog>
+  );
 }

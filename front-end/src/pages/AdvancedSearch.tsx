@@ -1,6 +1,6 @@
-import { type ColumnDef } from "@tanstack/react-table";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { type ColumnDef } from '@tanstack/react-table';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 
 import {
   api,
@@ -8,13 +8,13 @@ import {
   type EngineeringSearchResponse,
   type EngineeringSearchResult,
   type NumericPredicate,
-} from "../workflow-api";
-import { DataTable } from "../components/DataTable";
+} from '../workflow-api';
+import { DataTable } from '../components/DataTable';
 
 type Chip = { key: string; label: string };
 type LibraryUser = { id: string; username: string; display_name: string };
 type LibraryFilterSelection = {
-  itemType: "item" | "part" | "assembly";
+  itemType: 'item' | 'part' | 'assembly';
   itemNumberPattern: string;
   namePattern: string;
   cadSystem: string;
@@ -23,35 +23,46 @@ type LibraryFilterSelection = {
 };
 
 const libraryFilterDefaults: LibraryFilterSelection = {
-  itemType: "item",
-  itemNumberPattern: "",
-  namePattern: "",
-  cadSystem: "",
-  createdBy: "",
-  checkedOutBy: "",
+  itemType: 'item',
+  itemNumberPattern: '',
+  namePattern: '',
+  cadSystem: '',
+  createdBy: '',
+  checkedOutBy: '',
 };
 const libraryCadSystems = [
-  "STEP", "FreeCAD", "AutoCAD", "Inventor", "SOLIDWORKS", "Fusion", "Creo", "CATIA", "NX",
+  'STEP',
+  'FreeCAD',
+  'AutoCAD',
+  'Inventor',
+  'SOLIDWORKS',
+  'Fusion',
+  'Creo',
+  'CATIA',
+  'NX',
 ];
 
 function libraryFilterStorageKey(): string {
-  const username = localStorage.getItem("modelryx-username")?.trim() || "anonymous";
+  const username = localStorage.getItem('modelryx-username')?.trim() || 'anonymous';
   return `modelryx-library-filters:${username}`;
 }
 
 function loadLibraryFilters(): LibraryFilterSelection {
   try {
-    const stored = JSON.parse(localStorage.getItem(libraryFilterStorageKey()) ?? "null") as Partial<LibraryFilterSelection> | null;
-    if (!stored || typeof stored !== "object") return libraryFilterDefaults;
+    const stored = JSON.parse(
+      localStorage.getItem(libraryFilterStorageKey()) ?? 'null'
+    ) as Partial<LibraryFilterSelection> | null;
+    if (!stored || typeof stored !== 'object') return libraryFilterDefaults;
     return {
-      itemType: ["item", "part", "assembly"].includes(stored.itemType ?? "")
-        ? stored.itemType as LibraryFilterSelection["itemType"]
-        : "item",
-      itemNumberPattern: typeof stored.itemNumberPattern === "string" ? stored.itemNumberPattern : "",
-      namePattern: typeof stored.namePattern === "string" ? stored.namePattern : "",
-      cadSystem: libraryCadSystems.includes(stored.cadSystem ?? "") ? stored.cadSystem! : "",
-      createdBy: typeof stored.createdBy === "string" ? stored.createdBy : "",
-      checkedOutBy: typeof stored.checkedOutBy === "string" ? stored.checkedOutBy : "",
+      itemType: ['item', 'part', 'assembly'].includes(stored.itemType ?? '')
+        ? (stored.itemType as LibraryFilterSelection['itemType'])
+        : 'item',
+      itemNumberPattern:
+        typeof stored.itemNumberPattern === 'string' ? stored.itemNumberPattern : '',
+      namePattern: typeof stored.namePattern === 'string' ? stored.namePattern : '',
+      cadSystem: libraryCadSystems.includes(stored.cadSystem ?? '') ? stored.cadSystem! : '',
+      createdBy: typeof stored.createdBy === 'string' ? stored.createdBy : '',
+      checkedOutBy: typeof stored.checkedOutBy === 'string' ? stored.checkedOutBy : '',
     };
   } catch {
     return libraryFilterDefaults;
@@ -73,55 +84,61 @@ function libraryFilterRequest(selection: LibraryFilterSelection) {
 }
 
 function cadSystemLabel(value?: string | null): string {
-  const normalized = value?.trim().toLowerCase() ?? "";
-  if (!normalized) return "—";
-  if (normalized === "step") return "STEP";
-  if (normalized.includes("freecad")) return "FreeCAD";
-  if (normalized.includes("autocad")) return "AutoCAD";
-  if (normalized.includes("inventor")) return "Inventor";
-  if (normalized.includes("solidworks")) return "SOLIDWORKS";
-  if (normalized.includes("fusion")) return "Fusion";
-  if (normalized.includes("creo")) return "Creo";
-  if (normalized.includes("catia")) return "CATIA";
-  if (normalized.includes("nx")) return "NX";
-  return value?.trim() || "—";
+  const normalized = value?.trim().toLowerCase() ?? '';
+  if (!normalized) return '—';
+  if (normalized === 'step') return 'STEP';
+  if (normalized.includes('freecad')) return 'FreeCAD';
+  if (normalized.includes('autocad')) return 'AutoCAD';
+  if (normalized.includes('inventor')) return 'Inventor';
+  if (normalized.includes('solidworks')) return 'SOLIDWORKS';
+  if (normalized.includes('fusion')) return 'Fusion';
+  if (normalized.includes('creo')) return 'Creo';
+  if (normalized.includes('catia')) return 'CATIA';
+  if (normalized.includes('nx')) return 'NX';
+  return value?.trim() || '—';
 }
 
-function numericValue(value: unknown, unit = "", digits = 2): string {
-  if (typeof value !== "number") return "—";
-  const formatted = new Intl.NumberFormat(undefined, { maximumFractionDigits: digits }).format(value);
+function numericValue(value: unknown, unit = '', digits = 2): string {
+  if (typeof value !== 'number') return '—';
+  const formatted = new Intl.NumberFormat(undefined, { maximumFractionDigits: digits }).format(
+    value
+  );
   return unit ? `${formatted} ${unit}` : formatted;
 }
 
 function predicateLabel(value: NumericPredicate, unit: string): string {
   const labels: Record<string, string> = {
-    eq: "=", lt: "<", lte: "≤", gt: ">", gte: "≥", target: "≈",
+    eq: '=',
+    lt: '<',
+    lte: '≤',
+    gt: '>',
+    gte: '≥',
+    target: '≈',
   };
   return Object.entries(labels)
     .filter(([key]) => value[key as keyof NumericPredicate] != null)
     .map(([key, operator]) => `${operator} ${value[key as keyof NumericPredicate]} ${unit}`)
-    .join(" ");
+    .join(' ');
 }
 
 function interpretationChips(request?: EngineeringSearchRequest): Chip[] {
   if (!request) return [];
-  const chips: Chip[] = [{ key: "entity_type", label: request.entity_type }];
-  request.text.terms.forEach((term, index) =>
-    chips.push({ key: `term:${index}`, label: term }),
-  );
+  const chips: Chip[] = [{ key: 'entity_type', label: request.entity_type }];
+  request.text.terms.forEach((term, index) => chips.push({ key: `term:${index}`, label: term }));
   request.filters.identifiers.forEach((value, index) =>
-    chips.push({ key: `identifier:${index}`, label: value }),
+    chips.push({ key: `identifier:${index}`, label: value })
   );
   const filters = request.filters;
   if (filters.material) {
     chips.push({
-      key: "material",
+      key: 'material',
       label: [filters.material.family, filters.material.grade, filters.material.temper]
-        .filter(Boolean).join(" "),
+        .filter(Boolean)
+        .join(' '),
     });
   }
   if (filters.material_presence) {
-    chips.push({ key: "material_presence", label: `material: ${filters.material_presence}` });
+    chips.push({ key: 'material_presence', label: `material: ${filters.material_presence}` });
   }
   filters.feature_filters.forEach((value, index) => {
     chips.push({
@@ -131,54 +148,89 @@ function interpretationChips(request?: EngineeringSearchRequest): Chip[] {
   });
   Object.entries(filters.geometry ?? {}).forEach(([field, predicate]) => {
     if (!predicate) return;
-    const unit = field.includes("volume") ? "mm³" : field.includes("area") ? "mm²" : "mm";
+    const unit = field.includes('volume') ? 'mm³' : field.includes('area') ? 'mm²' : 'mm';
     chips.push({
       key: `geometry:${field}`,
-      label: `${field.replaceAll("_", " ")} ${predicateLabel(predicate, unit)}`,
+      label: `${field.replaceAll('_', ' ')} ${predicateLabel(predicate, unit)}`,
     });
   });
   if (filters.mass_kg) {
-    chips.push({ key: "mass_kg", label: `mass ${predicateLabel(filters.mass_kg, "kg")}` });
+    chips.push({ key: 'mass_kg', label: `mass ${predicateLabel(filters.mass_kg, 'kg')}` });
   }
-  (["item_number_regex", "name_regex", "classification", "cad_system", "artifact_format", "revision", "status", "lifecycle",
-    "owner", "approval_state", "checkout_owner", "artifact_presence", "extraction_status"] as const).forEach(
-    (field) => {
-      if (filters[field]) {
-        chips.push({ key: field, label: `${field.replace("_", " ")}: ${filters[field]}` });
-      }
-    },
+  (
+    [
+      'item_number_regex',
+      'name_regex',
+      'classification',
+      'cad_system',
+      'artifact_format',
+      'revision',
+      'status',
+      'lifecycle',
+      'owner',
+      'approval_state',
+      'checkout_owner',
+      'artifact_presence',
+      'extraction_status',
+    ] as const
+  ).forEach((field) => {
+    if (filters[field]) {
+      chips.push({ key: field, label: `${field.replace('_', ' ')}: ${filters[field]}` });
+    }
+  });
+  if (filters.approval_assigned_to_me)
+    chips.push({ key: 'approval_assigned_to_me', label: 'assigned to me' });
+  if (filters.approval_due_before)
+    chips.push({ key: 'approval_due_before', label: 'approval overdue' });
+  if (filters.artifact_missing) chips.push({ key: 'artifact_missing', label: 'artifact: missing' });
+  if (filters.has_warnings) chips.push({ key: 'has_warnings', label: 'has warnings' });
+  request.relationships.forEach((value, index) =>
+    chips.push({
+      key: `relationship:${index}`,
+      label: `${value.type.replaceAll('_', ' ')}: ${value.depth}`,
+    })
   );
-  if (filters.approval_assigned_to_me) chips.push({ key: "approval_assigned_to_me", label: "assigned to me" });
-  if (filters.approval_due_before) chips.push({ key: "approval_due_before", label: "approval overdue" });
-  if (filters.artifact_missing) chips.push({ key: "artifact_missing", label: "artifact: missing" });
-  if (filters.has_warnings) chips.push({ key: "has_warnings", label: "has warnings" });
-  request.relationships.forEach((value, index) => chips.push({
-    key: `relationship:${index}`,
-    label: `${value.type.replaceAll("_", " ")}: ${value.depth}`,
-  }));
-  if (request.similarity) chips.push({ key: "similarity", label: "metadata similarity" });
+  if (request.similarity) chips.push({ key: 'similarity', label: 'metadata similarity' });
   return chips;
 }
 
 function withoutChip(request: EngineeringSearchRequest, key: string): EngineeringSearchRequest {
   const next = structuredClone(request);
-  if (key === "entity_type") next.entity_type = "item";
-  else if (key.startsWith("term:")) next.text.terms.splice(Number(key.split(":")[1]), 1);
-  else if (key.startsWith("identifier:")) {
-    next.filters.identifiers.splice(Number(key.split(":")[1]), 1);
-  } else if (key.startsWith("geometry:")) {
-    if (next.filters.geometry) delete next.filters.geometry[key.split(":")[1]];
-  } else if (key.startsWith("feature:")) {
-    next.filters.feature_filters.splice(Number(key.split(":")[1]), 1);
-  } else if (key.startsWith("relationship:")) {
-    next.relationships.splice(Number(key.split(":")[1]), 1);
-  } else if (key === "similarity") {
+  if (key === 'entity_type') next.entity_type = 'item';
+  else if (key.startsWith('term:')) next.text.terms.splice(Number(key.split(':')[1]), 1);
+  else if (key.startsWith('identifier:')) {
+    next.filters.identifiers.splice(Number(key.split(':')[1]), 1);
+  } else if (key.startsWith('geometry:')) {
+    if (next.filters.geometry) delete next.filters.geometry[key.split(':')[1]];
+  } else if (key.startsWith('feature:')) {
+    next.filters.feature_filters.splice(Number(key.split(':')[1]), 1);
+  } else if (key.startsWith('relationship:')) {
+    next.relationships.splice(Number(key.split(':')[1]), 1);
+  } else if (key === 'similarity') {
     next.similarity = null;
-  } else if (key === "material" || key === "mass_kg") next.filters[key] = null;
-  else if (key === "material_presence") next.filters.material_presence = null;
-  else if (["item_number_regex", "name_regex", "classification", "cad_system", "artifact_format", "revision", "status", "lifecycle",
-    "owner", "approval_state", "approval_assigned_to_me", "approval_due_before", "checkout_owner",
-    "artifact_presence", "artifact_missing", "extraction_status", "has_warnings"].includes(key)) {
+  } else if (key === 'material' || key === 'mass_kg') next.filters[key] = null;
+  else if (key === 'material_presence') next.filters.material_presence = null;
+  else if (
+    [
+      'item_number_regex',
+      'name_regex',
+      'classification',
+      'cad_system',
+      'artifact_format',
+      'revision',
+      'status',
+      'lifecycle',
+      'owner',
+      'approval_state',
+      'approval_assigned_to_me',
+      'approval_due_before',
+      'checkout_owner',
+      'artifact_presence',
+      'artifact_missing',
+      'extraction_status',
+      'has_warnings',
+    ].includes(key)
+  ) {
     (next.filters as Record<string, unknown>)[key] = null;
   }
   return next;
@@ -186,8 +238,8 @@ function withoutChip(request: EngineeringSearchRequest, key: string): Engineerin
 
 export function AdvancedSearch() {
   const [initialFilters] = useState(loadLibraryFilters);
-  const [query, setQuery] = useState("");
-  const [itemType, setItemType] = useState<"item" | "part" | "assembly">(initialFilters.itemType);
+  const [query, setQuery] = useState('');
+  const [itemType, setItemType] = useState<'item' | 'part' | 'assembly'>(initialFilters.itemType);
   const [itemNumberPattern, setItemNumberPattern] = useState(initialFilters.itemNumberPattern);
   const [namePattern, setNamePattern] = useState(initialFilters.namePattern);
   const [cadSystem, setCadSystem] = useState(initialFilters.cadSystem);
@@ -196,40 +248,41 @@ export function AdvancedSearch() {
   const [users, setUsers] = useState<LibraryUser[]>([]);
   const [response, setResponse] = useState<EngineeringSearchResponse>();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [feedbackState, setFeedbackState] = useState<"idle" | "sending" | "sent">("idle");
-  const [pageInput, setPageInput] = useState("1");
+  const [error, setError] = useState('');
+  const [feedbackState, setFeedbackState] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const [pageInput, setPageInput] = useState('1');
   const [rowMenu, setRowMenu] = useState<{
     result: EngineeringSearchResult;
     x: number;
     y: number;
   }>();
   const navigate = useNavigate();
-  const currentUsername = localStorage.getItem("modelryx-username")?.trim().toLocaleLowerCase();
+  const currentUsername = localStorage.getItem('modelryx-username')?.trim().toLocaleLowerCase();
   const selectableUsers = users.filter(
-    (user) => user.username.toLocaleLowerCase() !== currentUsername,
+    (user) => user.username.toLocaleLowerCase() !== currentUsername
   );
 
-  const matchingRevisionTarget = (result: EngineeringSearchResult) => result.revision_id
-    ? `/items/${result.item_id}/revisions/${result.revision_id}`
-    : `/items/${result.item_id}`;
+  const matchingRevisionTarget = (result: EngineeringSearchResult) =>
+    result.revision_id
+      ? `/items/${result.item_id}/revisions/${result.revision_id}`
+      : `/items/${result.item_id}`;
 
   useEffect(() => {
     if (!rowMenu) return;
     const close = () => setRowMenu(undefined);
-    window.addEventListener("click", close);
-    window.addEventListener("blur", close);
+    window.addEventListener('click', close);
+    window.addEventListener('blur', close);
     return () => {
-      window.removeEventListener("click", close);
-      window.removeEventListener("blur", close);
+      window.removeEventListener('click', close);
+      window.removeEventListener('blur', close);
     };
   }, [rowMenu]);
 
-  const execute = (path: "/ai/search" | "/search", body: unknown) => {
+  const execute = (path: '/ai/search' | '/search', body: unknown) => {
     setLoading(true);
-    setError("");
-    setFeedbackState("idle");
-    api<EngineeringSearchResponse>(path, "POST", body)
+    setError('');
+    setFeedbackState('idle');
+    api<EngineeringSearchResponse>(path, 'POST', body)
       .then(setResponse)
       .catch((reason: Error) => {
         setResponse(undefined);
@@ -239,14 +292,14 @@ export function AdvancedSearch() {
   };
 
   useEffect(() => {
-    api<LibraryUser[]>("/me/library-users")
+    api<LibraryUser[]>('/me/library-users')
       .then((availableUsers) => {
         setUsers(availableUsers);
         const restoreUserFilter = (value: string) => {
-          if (!value || value === "$me") return value;
+          if (!value || value === '$me') return value;
           if (availableUsers.some((user) => user.username === value)) return value;
           const displayMatches = availableUsers.filter((user) => user.display_name === value);
-          return displayMatches.length === 1 ? displayMatches[0].username : "";
+          return displayMatches.length === 1 ? displayMatches[0].username : '';
         };
         const restored = {
           ...initialFilters,
@@ -255,33 +308,45 @@ export function AdvancedSearch() {
         };
         setCreatedBy(restored.createdBy);
         setCheckedOutBy(restored.checkedOutBy);
-        execute("/search", libraryFilterRequest(restored));
+        execute('/search', libraryFilterRequest(restored));
       })
       .catch(() => {
         setUsers([]);
-        execute("/search", libraryFilterRequest(initialFilters));
+        execute('/search', libraryFilterRequest(initialFilters));
       });
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(libraryFilterStorageKey(), JSON.stringify({
-      itemType,
-      itemNumberPattern,
-      namePattern,
-      cadSystem,
-      createdBy,
-      checkedOutBy,
-    } satisfies LibraryFilterSelection));
+    localStorage.setItem(
+      libraryFilterStorageKey(),
+      JSON.stringify({
+        itemType,
+        itemNumberPattern,
+        namePattern,
+        cadSystem,
+        createdBy,
+        checkedOutBy,
+      } satisfies LibraryFilterSelection)
+    );
   }, [cadSystem, checkedOutBy, createdBy, itemNumberPattern, itemType, namePattern]);
   const chips = useMemo(() => interpretationChips(response?.interpretation), [response]);
 
-  const applyLibraryFilters = () => execute("/search", libraryFilterRequest({
-    itemType, itemNumberPattern, namePattern, cadSystem, createdBy, checkedOutBy,
-  }));
+  const applyLibraryFilters = () =>
+    execute(
+      '/search',
+      libraryFilterRequest({
+        itemType,
+        itemNumberPattern,
+        namePattern,
+        cadSystem,
+        createdBy,
+        checkedOutBy,
+      })
+    );
 
   const changePage = (offset: number) => {
     if (!response) return;
-    execute("/search", {
+    execute('/search', {
       ...response.interpretation,
       offset: Math.max(0, offset),
     });
@@ -306,110 +371,192 @@ export function AdvancedSearch() {
 
   const columns: ColumnDef<EngineeringSearchResult, unknown>[] = [
     {
-      id: "item_number", header: "Item Number", accessorFn: (row) => row.item_number,
+      id: 'item_number',
+      header: 'Item Number',
+      accessorFn: (row) => row.item_number,
       cell: ({ getValue }) => <strong>{getValue() as string}</strong>,
       enableHiding: false,
     },
-    { id: "name", header: "Name", accessorFn: (row) => row.name },
+    { id: 'name', header: 'Name', accessorFn: (row) => row.name },
     {
-      id: "item_type", header: "Part Type", accessorFn: (row) => row.item_type,
+      id: 'item_type',
+      header: 'Part Type',
+      accessorFn: (row) => row.item_type,
       cell: ({ getValue }) => {
-        const value = String(getValue() ?? "");
-        return value ? value.charAt(0) + value.slice(1).toLowerCase() : "—";
+        const value = String(getValue() ?? '');
+        return value ? value.charAt(0) + value.slice(1).toLowerCase() : '—';
       },
     },
     {
-      id: "cad_system", header: "CAD System", accessorFn: (row) => row.cad_system ?? "—",
+      id: 'cad_system',
+      header: 'CAD System',
+      accessorFn: (row) => row.cad_system ?? '—',
       cell: ({ row }) => cadSystemLabel(row.original.cad_system),
     },
     {
-      id: "revision", header: "Revision", accessorFn: (row) => row.revision_code,
-      cell: ({ getValue }) => getValue() ? `Rev ${getValue()}` : "—",
+      id: 'revision',
+      header: 'Revision',
+      accessorFn: (row) => row.revision_code,
+      cell: ({ getValue }) => (getValue() ? `Rev ${getValue()}` : '—'),
     },
     {
-      id: "match", header: "Match", accessorFn: (row) => row.score,
+      id: 'match',
+      header: 'Match',
+      accessorFn: (row) => row.score,
       cell: ({ row }) => (
-        <span title={row.original.match_reasons
-          .map((reason) => `${reason.type}: ${reason.query}`).join("\n")}>
+        <span
+          title={row.original.match_reasons
+            .map((reason) => `${reason.type}: ${reason.query}`)
+            .join('\n')}
+        >
           {Math.round(row.original.score * 100)}%
         </span>
       ),
     },
-    { id: "description", header: "Description", accessorFn: (row) => row.description ?? "—" },
-    { id: "category", header: "Category", accessorFn: (row) => row.category ?? "—" },
-    { id: "item_status", header: "Item Status", accessorFn: (row) => row.item_status ?? "—" },
-    { id: "metadata_status", header: "Metadata Status", accessorFn: (row) => row.metadata_status ?? "—" },
-    { id: "material", header: "Material", accessorFn: (row) => row.material ?? "—" },
+    { id: 'description', header: 'Description', accessorFn: (row) => row.description ?? '—' },
+    { id: 'category', header: 'Category', accessorFn: (row) => row.category ?? '—' },
+    { id: 'item_status', header: 'Item Status', accessorFn: (row) => row.item_status ?? '—' },
     {
-      id: "dimensions_mm", header: "Overall Size", accessorFn: (row) => row.dimensions_mm,
+      id: 'metadata_status',
+      header: 'Metadata Status',
+      accessorFn: (row) => row.metadata_status ?? '—',
+    },
+    { id: 'material', header: 'Material', accessorFn: (row) => row.material ?? '—' },
+    {
+      id: 'dimensions_mm',
+      header: 'Overall Size',
+      accessorFn: (row) => row.dimensions_mm,
       cell: ({ getValue }) => {
         const value = getValue() as number[] | null | undefined;
-        return value?.length === 3 ? value.map((entry) => numericValue(entry, "mm")).join(" × ") : "—";
+        return value?.length === 3
+          ? value.map((entry) => numericValue(entry, 'mm')).join(' × ')
+          : '—';
       },
     },
-    { id: "mass_kg", header: "Mass", accessorFn: (row) => row.mass_kg, cell: ({ getValue }) => numericValue(getValue(), "kg", 4) },
-    { id: "volume_mm3", header: "Volume", accessorFn: (row) => row.volume_mm3, cell: ({ getValue }) => numericValue(getValue(), "mm³") },
-    { id: "surface_area_mm2", header: "Surface Area", accessorFn: (row) => row.surface_area_mm2, cell: ({ getValue }) => numericValue(getValue(), "mm²") },
-    { id: "solid_count", header: "Solids", accessorFn: (row) => row.solid_count ?? "—" },
-    { id: "face_count", header: "Faces", accessorFn: (row) => row.face_count ?? "—" },
-    { id: "edge_count", header: "Edges", accessorFn: (row) => row.edge_count ?? "—" },
-    { id: "hole_count", header: "Holes", accessorFn: (row) => row.hole_count ?? "—" },
-    { id: "fillet_count", header: "Fillets", accessorFn: (row) => row.fillet_count ?? "—" },
-    { id: "chamfer_count", header: "Chamfers", accessorFn: (row) => row.chamfer_count ?? "—" },
-    { id: "extrusion_count", header: "Extrusions", accessorFn: (row) => row.extrusion_count ?? "—" },
-    { id: "revolution_count", header: "Revolutions", accessorFn: (row) => row.revolution_count ?? "—" },
-    { id: "pocket_count", header: "Pockets", accessorFn: (row) => row.pocket_count ?? "—" },
-    { id: "pattern_count", header: "Patterns", accessorFn: (row) => row.pattern_count ?? "—" },
-    { id: "thread_count", header: "Threads", accessorFn: (row) => row.thread_count ?? "—" },
+    {
+      id: 'mass_kg',
+      header: 'Mass',
+      accessorFn: (row) => row.mass_kg,
+      cell: ({ getValue }) => numericValue(getValue(), 'kg', 4),
+    },
+    {
+      id: 'volume_mm3',
+      header: 'Volume',
+      accessorFn: (row) => row.volume_mm3,
+      cell: ({ getValue }) => numericValue(getValue(), 'mm³'),
+    },
+    {
+      id: 'surface_area_mm2',
+      header: 'Surface Area',
+      accessorFn: (row) => row.surface_area_mm2,
+      cell: ({ getValue }) => numericValue(getValue(), 'mm²'),
+    },
+    { id: 'solid_count', header: 'Solids', accessorFn: (row) => row.solid_count ?? '—' },
+    { id: 'face_count', header: 'Faces', accessorFn: (row) => row.face_count ?? '—' },
+    { id: 'edge_count', header: 'Edges', accessorFn: (row) => row.edge_count ?? '—' },
+    { id: 'hole_count', header: 'Holes', accessorFn: (row) => row.hole_count ?? '—' },
+    { id: 'fillet_count', header: 'Fillets', accessorFn: (row) => row.fillet_count ?? '—' },
+    { id: 'chamfer_count', header: 'Chamfers', accessorFn: (row) => row.chamfer_count ?? '—' },
+    {
+      id: 'extrusion_count',
+      header: 'Extrusions',
+      accessorFn: (row) => row.extrusion_count ?? '—',
+    },
+    {
+      id: 'revolution_count',
+      header: 'Revolutions',
+      accessorFn: (row) => row.revolution_count ?? '—',
+    },
+    { id: 'pocket_count', header: 'Pockets', accessorFn: (row) => row.pocket_count ?? '—' },
+    { id: 'pattern_count', header: 'Patterns', accessorFn: (row) => row.pattern_count ?? '—' },
+    { id: 'thread_count', header: 'Threads', accessorFn: (row) => row.thread_count ?? '—' },
   ];
 
   const defaultColumnVisibility = {
-    description: false, category: false, item_status: false, metadata_status: false,
-    material: false, dimensions_mm: false, mass_kg: false, volume_mm3: false,
-    surface_area_mm2: false, solid_count: false, face_count: false, edge_count: false,
-    hole_count: false, fillet_count: false, chamfer_count: false, extrusion_count: false,
-    revolution_count: false, pocket_count: false, pattern_count: false, thread_count: false,
+    description: false,
+    category: false,
+    item_status: false,
+    metadata_status: false,
+    material: false,
+    dimensions_mm: false,
+    mass_kg: false,
+    volume_mm3: false,
+    surface_area_mm2: false,
+    solid_count: false,
+    face_count: false,
+    edge_count: false,
+    hole_count: false,
+    fillet_count: false,
+    chamfer_count: false,
+    extrusion_count: false,
+    revolution_count: false,
+    pocket_count: false,
+    pattern_count: false,
+    thread_count: false,
   };
 
   return (
     <section className="page engineering-search-page">
       <div className="engineering-search-heading">
-        <div><p className="eyebrow">AI ENGINEERING SEARCH</p><h1>Engineering search</h1></div>
-        <Link className="button" to="/checkin">New Item</Link>
+        <div>
+          <p className="eyebrow">AI ENGINEERING SEARCH</p>
+          <h1>Engineering search</h1>
+        </div>
+        <Link className="button" to="/checkin">
+          New Item
+        </Link>
       </div>
-      <form className="engineering-search-box" onSubmit={(event) => {
-        event.preventDefault();
-        const submittedQuery = query.trim();
-        // The Library prompt represents a complete new search, not a conversational
-        // refinement. Clear the previous interpretation immediately and omit its
-        // session ID so stale terms and filters cannot carry into the new prompt.
-        setResponse(undefined);
-        if (submittedQuery) execute("/ai/search", {
-          query: submittedQuery,
-          limit: 50,
-          session_id: null,
-        });
-        else execute("/search", { limit: 50 });
-      }}>
-        <input value={query} onChange={(event) => setQuery(event.target.value)}
+      <form
+        className="engineering-search-box"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const submittedQuery = query.trim();
+          // The Library prompt represents a complete new search, not a conversational
+          // refinement. Clear the previous interpretation immediately and omit its
+          // session ID so stale terms and filters cannot carry into the new prompt.
+          setResponse(undefined);
+          if (submittedQuery)
+            execute('/ai/search', {
+              query: submittedQuery,
+              limit: 50,
+              session_id: null,
+            });
+          else execute('/search', { limit: 50 });
+        }}
+      >
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
           placeholder="Find aluminum motor housings between 100 and 150 mm wide…"
-          aria-label="Ask Modelryx" />
-        <button disabled={loading}>{loading ? "Searching…" : "Ask Modelryx"}</button>
+          aria-label="Ask Modelryx"
+        />
+        <button disabled={loading}>{loading ? 'Searching…' : 'Ask Modelryx'}</button>
       </form>
       <div className="library-quick-filters" aria-label="Library filters">
         <label>
           <span>Item Number</span>
-          <input value={itemNumberPattern} onChange={(event) => setItemNumberPattern(event.target.value)}
-            placeholder="^PART-00.*" title="Case-insensitive regular expression" />
+          <input
+            value={itemNumberPattern}
+            onChange={(event) => setItemNumberPattern(event.target.value)}
+            placeholder="^PART-00.*"
+            title="Case-insensitive regular expression"
+          />
         </label>
         <label>
           <span>Name</span>
-          <input value={namePattern} onChange={(event) => setNamePattern(event.target.value)}
-            placeholder="mount(ing)? plate" title="Case-insensitive regular expression" />
+          <input
+            value={namePattern}
+            onChange={(event) => setNamePattern(event.target.value)}
+            placeholder="mount(ing)? plate"
+            title="Case-insensitive regular expression"
+          />
         </label>
         <label>
           <span>Part Type</span>
-          <select value={itemType} onChange={(event) => setItemType(event.target.value as typeof itemType)}>
+          <select
+            value={itemType}
+            onChange={(event) => setItemType(event.target.value as typeof itemType)}
+          >
             <option value="item">All types</option>
             <option value="part">Part</option>
             <option value="assembly">Assembly</option>
@@ -443,86 +590,165 @@ export function AdvancedSearch() {
           <span>CAD System</span>
           <select value={cadSystem} onChange={(event) => setCadSystem(event.target.value)}>
             <option value="">All systems</option>
-            {libraryCadSystems.map((system) => <option key={system} value={system}>{system}</option>)}
+            {libraryCadSystems.map((system) => (
+              <option key={system} value={system}>
+                {system}
+              </option>
+            ))}
           </select>
         </label>
-        <button type="button" className="button secondary" disabled={loading}
-          onClick={applyLibraryFilters}>Apply filters</button>
-        {(itemType !== "item" || itemNumberPattern || namePattern || cadSystem || createdBy || checkedOutBy) && (
-          <button type="button" className="button secondary" disabled={loading}
+        <button
+          type="button"
+          className="button secondary"
+          disabled={loading}
+          onClick={applyLibraryFilters}
+        >
+          Apply filters
+        </button>
+        {(itemType !== 'item' ||
+          itemNumberPattern ||
+          namePattern ||
+          cadSystem ||
+          createdBy ||
+          checkedOutBy) && (
+          <button
+            type="button"
+            className="button secondary"
+            disabled={loading}
             onClick={() => {
-              setItemType("item");
-              setItemNumberPattern("");
-              setNamePattern("");
-              setCadSystem("");
-              setCreatedBy("");
-              setCheckedOutBy("");
-              execute("/search", { limit: 50 });
-            }}>Clear</button>
+              setItemType('item');
+              setItemNumberPattern('');
+              setNamePattern('');
+              setCadSystem('');
+              setCreatedBy('');
+              setCheckedOutBy('');
+              execute('/search', { limit: 50 });
+            }}
+          >
+            Clear
+          </button>
         )}
       </div>
-      {chips.length > 0 && <div className="interpretation-panel">
-        <span>Interpreted as</span>
-        <div className="filter-chips">{chips.map((chip) => (
-          <button key={chip.key} className="filter-chip" type="button" title="Remove filter"
-            onClick={() => {
-              if (response) execute("/search", withoutChip(response.interpretation, chip.key));
-            }}>
-            {chip.label}<span aria-hidden="true">×</span>
-          </button>
-        ))}</div>
-      </div>}
-      {response?.warnings.map((warning) =>
-        <p className="search-warning" key={warning}>{warning}</p>,
+      {chips.length > 0 && (
+        <div className="interpretation-panel">
+          <span>Interpreted as</span>
+          <div className="filter-chips">
+            {chips.map((chip) => (
+              <button
+                key={chip.key}
+                className="filter-chip"
+                type="button"
+                title="Remove filter"
+                onClick={() => {
+                  if (response) execute('/search', withoutChip(response.interpretation, chip.key));
+                }}
+              >
+                {chip.label}
+                <span aria-hidden="true">×</span>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
+      {response?.warnings.map((warning) => (
+        <p className="search-warning" key={warning}>
+          {warning}
+        </p>
+      ))}
       {response && response.coverage.excluded_unknown > 0 && (
         <p className="search-warning">
           {response.coverage.excluded_unknown} authorized record(s) were excluded because required
-          metadata coverage is unknown ({response.coverage.coverage_rules.join(", ")}).
+          metadata coverage is unknown ({response.coverage.coverage_rules.join(', ')}).
         </p>
       )}
-      {response?.session_id && <div className="search-feedback">
-        <span>Was this interpretation incorrect?</span>
-        <button type="button" className="button secondary"
-          disabled={feedbackState !== "idle"}
-          onClick={() => {
-            setFeedbackState("sending");
-            api(`/ai/search/sessions/${response.session_id}/feedback`, "POST", {
-              category: "incorrect_interpretation",
-            }).then(() => setFeedbackState("sent")).catch((reason: Error) => {
-              setFeedbackState("idle");
-              setError(reason.message);
-            });
-          }}>
-          {feedbackState === "sending" ? "Sending…"
-            : feedbackState === "sent" ? "Feedback recorded" : "Report interpretation"}
-        </button>
-      </div>}
+      {response?.session_id && (
+        <div className="search-feedback">
+          <span>Was this interpretation incorrect?</span>
+          <button
+            type="button"
+            className="button secondary"
+            disabled={feedbackState !== 'idle'}
+            onClick={() => {
+              setFeedbackState('sending');
+              api(`/ai/search/sessions/${response.session_id}/feedback`, 'POST', {
+                category: 'incorrect_interpretation',
+              })
+                .then(() => setFeedbackState('sent'))
+                .catch((reason: Error) => {
+                  setFeedbackState('idle');
+                  setError(reason.message);
+                });
+            }}
+          >
+            {feedbackState === 'sending'
+              ? 'Sending…'
+              : feedbackState === 'sent'
+                ? 'Feedback recorded'
+                : 'Report interpretation'}
+          </button>
+        </div>
+      )}
       {error && <p className="error">{error}</p>}
       <div className="search-summary">
-        <span>{response && response.total > 0
-          ? `${response.interpretation.offset + 1}–${Math.min(
-            response.interpretation.offset + response.results.length,
-            response.total,
-          )} of ${response.total} results`
-          : "0 results"}</span>
-        {response && <span>{response.trace.parser} interpretation · {response.trace.duration_ms.toFixed(0)} ms
-          {response.session_id ? " · conversation active" : ""}</span>}
+        <span>
+          {response && response.total > 0
+            ? `${response.interpretation.offset + 1}–${Math.min(
+                response.interpretation.offset + response.results.length,
+                response.total
+              )} of ${response.total} results`
+            : '0 results'}
+        </span>
+        {response && (
+          <span>
+            {response.trace.parser} interpretation · {response.trace.duration_ms.toFixed(0)} ms
+            {response.session_id ? ' · conversation active' : ''}
+          </span>
+        )}
       </div>
-      <DataTable columns={columns} data={response?.results ?? []} getRowId={(row) => `${row.item_id}:${row.revision_id ?? ""}`} initialPageSize={50} hidePagination defaultColumnVisibility={defaultColumnVisibility}
-        loading={loading} emptyMessage="No items match the interpreted search"
+      <DataTable
+        columns={columns}
+        data={response?.results ?? []}
+        getRowId={(row) => `${row.item_id}:${row.revision_id ?? ''}`}
+        initialPageSize={50}
+        hidePagination
+        defaultColumnVisibility={defaultColumnVisibility}
+        loading={loading}
+        emptyMessage="No items match the interpreted search"
         rowActions={(result) => [
-          { label: "Open item", onSelect: () => navigate(`/items/${result.item_id}`) },
-          ...(result.revision_id ? [{ label: "Open matching revision", onSelect: () => navigate(matchingRevisionTarget(result)) }, { label: "Compare revisions", onSelect: () => navigate(`/items/${encodeURIComponent(result.item_id)}/revisions/${encodeURIComponent(result.revision_id!)}?section=compare&to=${encodeURIComponent(result.revision_id!)}`) }] : []),
-        ]} />
+          { label: 'Open item', onSelect: () => navigate(`/items/${result.item_id}`) },
+          ...(result.revision_id
+            ? [
+                {
+                  label: 'Open matching revision',
+                  onSelect: () => navigate(matchingRevisionTarget(result)),
+                },
+                {
+                  label: 'Compare revisions',
+                  onSelect: () =>
+                    navigate(
+                      `/items/${encodeURIComponent(result.item_id)}/revisions/${encodeURIComponent(result.revision_id!)}?section=compare&to=${encodeURIComponent(result.revision_id!)}`
+                    ),
+                },
+              ]
+            : []),
+        ]}
+      />
       {response && response.total > response.interpretation.limit && (
         <nav className="library-pagination" aria-label="Library pages">
-          <button type="button" className="button secondary" disabled={loading || currentPage === 1}
-            onClick={() => changePage(0)}>
+          <button
+            type="button"
+            className="button secondary"
+            disabled={loading || currentPage === 1}
+            onClick={() => changePage(0)}
+          >
             First
           </button>
-          <button type="button" className="button secondary" disabled={loading || currentPage === 1}
-            onClick={() => changePage((currentPage - 2) * pageSize)}>
+          <button
+            type="button"
+            className="button secondary"
+            disabled={loading || currentPage === 1}
+            onClick={() => changePage((currentPage - 2) * pageSize)}
+          >
             Previous
           </button>
           <form onSubmit={browseToPage}>
@@ -538,17 +764,25 @@ export function AdvancedSearch() {
               aria-label={`Page number, 1 through ${totalPages}`}
             />
             <span>of {totalPages}</span>
-            <button type="submit" className="button secondary" disabled={loading}>Go</button>
+            <button type="submit" className="button secondary" disabled={loading}>
+              Go
+            </button>
           </form>
           <span className="library-page-total">{response.total} results</span>
-          <button type="button" className="button secondary"
+          <button
+            type="button"
+            className="button secondary"
             disabled={loading || currentPage === totalPages}
-            onClick={() => changePage(currentPage * pageSize)}>
+            onClick={() => changePage(currentPage * pageSize)}
+          >
             Next
           </button>
-          <button type="button" className="button secondary"
+          <button
+            type="button"
+            className="button secondary"
             disabled={loading || currentPage === totalPages}
-            onClick={() => changePage((totalPages - 1) * pageSize)}>
+            onClick={() => changePage((totalPages - 1) * pageSize)}
+          >
             Last
           </button>
         </nav>
@@ -556,8 +790,11 @@ export function AdvancedSearch() {
       {!loading && response?.total === 0 && chips.length > 0 && (
         <div className="search-empty-recovery">
           <p>No records matched all interpreted constraints.</p>
-          <button type="button" className="button secondary"
-            onClick={() => execute("/search", { limit: 50 })}>
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() => execute('/search', { limit: 50 })}
+          >
             Clear interpreted filters
           </button>
         </div>
@@ -574,7 +811,9 @@ export function AdvancedSearch() {
             <Link to={matchingRevisionTarget(rowMenu.result)}>Open matching revision</Link>
           )}
           {rowMenu.result.revision_id && (
-            <Link to={`/items/${encodeURIComponent(rowMenu.result.item_id)}/revisions/${encodeURIComponent(rowMenu.result.revision_id!)}?section=compare&to=${encodeURIComponent(rowMenu.result.revision_id!)}`}>
+            <Link
+              to={`/items/${encodeURIComponent(rowMenu.result.item_id)}/revisions/${encodeURIComponent(rowMenu.result.revision_id!)}?section=compare&to=${encodeURIComponent(rowMenu.result.revision_id!)}`}
+            >
               Compare revisions…
             </Link>
           )}

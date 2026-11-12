@@ -1,15 +1,15 @@
-export type DisplayProfileName = "cad" | "nx-like" | "studio";
-export type RenderMode = "shaded" | "shaded-edges" | "wireframe";
-export type StandardView = "front" | "back" | "left" | "right" | "top" | "bottom" | "iso";
-export type MeasurementUnit = "mm" | "cm" | "m" | "in";
-export type MeasurementType = "distance" | "edge" | "angle" | "point";
-export type ComparisonMode = "from" | "to" | "overlay";
+export type DisplayProfileName = 'cad' | 'nx-like' | 'studio';
+export type RenderMode = 'shaded' | 'shaded-edges' | 'wireframe';
+export type StandardView = 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom' | 'iso';
+export type MeasurementUnit = 'mm' | 'cm' | 'm' | 'in';
+export type MeasurementType = 'distance' | 'edge' | 'angle' | 'point';
+export type ComparisonMode = 'from' | 'to' | 'overlay';
 
 export interface ModelryxMetadata {
   partId: string;
   occurrenceId?: string;
   parentOccurrenceId?: string;
-  nodeType?: "assembly" | "body" | "part" | "mesh" | "feature" | "reference" | "joint";
+  nodeType?: 'assembly' | 'body' | 'part' | 'mesh' | 'feature' | 'reference' | 'joint';
   cadType?: string;
   renderOccurrenceId?: string;
   /** One or more rendered GLB occurrences represented by this navigation item. */
@@ -46,20 +46,20 @@ export interface LoadOptions {
 export interface SelectionChangedEvent {
   partIds: string[];
   occurrenceIds: string[];
-  source: "viewer" | "api";
+  source: 'viewer' | 'api';
 }
 
 export interface HoverChangedEvent {
   partId?: string;
   occurrenceId?: string;
   name?: string;
-  nodeType?: ModelryxMetadata["nodeType"];
+  nodeType?: ModelryxMetadata['nodeType'];
   clientX?: number;
   clientY?: number;
 }
 
 export interface MeasurementChangedEvent {
-  state: "started" | "point-picked" | "completed" | "cancelled" | "cleared";
+  state: 'started' | 'point-picked' | 'completed' | 'cancelled' | 'cleared';
   pointCount?: number;
   distance?: number;
   unit?: MeasurementUnit;

@@ -7,7 +7,6 @@
   gap: 1.25rem;
 }
 
-
 /* ==========================================================================
    Breadcrumb
    ========================================================================== */
@@ -24,7 +23,6 @@
 :where(.item-page) .item-breadcrumb a {
   color: var(--accent);
 }
-
 
 /* ==========================================================================
    Header
@@ -145,7 +143,6 @@
   gap: 0.75rem;
 }
 
-
 /* ==========================================================================
    Main two-panel layout
    ========================================================================== */
@@ -156,7 +153,6 @@
   gap: 1.5rem;
   align-items: start;
 }
-
 
 /* ==========================================================================
    Left navigation panel
@@ -196,16 +192,11 @@
 }
 
 :where(.item-page) .item-nav-button.active {
-  background: color-mix(
-    in srgb,
-    var(--accent) 12%,
-    var(--surface-3)
-  );
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-3));
 
   color: var(--accent);
   font-weight: 600;
 }
-
 
 /* ==========================================================================
    Right detail panel
@@ -235,7 +226,6 @@
 :where(.item-page) .item-section-header p {
   margin: 0.25rem 0 0;
 }
-
 
 /* ==========================================================================
    Panels
@@ -368,7 +358,6 @@
   margin-top: 0.35rem;
 }
 
-
 /* ==========================================================================
    Overview
    ========================================================================== */
@@ -414,7 +403,6 @@
   padding: 0.45rem 0;
 }
 
-
 /* ==========================================================================
    Current revision summary
    ========================================================================== */
@@ -439,7 +427,6 @@
 
   font-size: 1.25rem;
 }
-
 
 /* ==========================================================================
    Revisions table
@@ -507,18 +494,13 @@
 
   border-radius: 999px;
 
-  background: color-mix(
-    in srgb,
-    var(--accent) 12%,
-    var(--surface-3)
-  );
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-3));
 
   color: var(--accent);
 
   font-size: 0.7rem;
   font-weight: 600;
 }
-
 
 /* ========================================================================== 
    Shared helpers
@@ -541,11 +523,7 @@
 }
 
 :where(.item-page) .mono {
-  font-family:
-    ui-monospace,
-    SFMono-Regular,
-    Consolas,
-    monospace;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
 
   font-size: 0.85rem;
 }
@@ -573,7 +551,6 @@
   background: var(--surface-3);
   color: var(--text);
 }
-
 
 /* ==========================================================================
    Responsive

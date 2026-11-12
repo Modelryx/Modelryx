@@ -1,7 +1,7 @@
 """Add indexed metadata fields used by engineering and AI search."""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "0095_ai_metadata_search"
 down_revision = "0094_scope_bom_occurrence"

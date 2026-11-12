@@ -243,9 +243,7 @@ def _cad_worker_configurations(
     return configurations
 
 
-def _cad_worker_urls(
-    db: Session, settings: Settings | None = None
-) -> dict[str, str | None]:
+def _cad_worker_urls(db: Session, settings: Settings | None = None) -> dict[str, str | None]:
     return {
         field: configuration[0]
         for field, configuration in _cad_worker_configurations(db, settings).items()
@@ -253,7 +251,8 @@ def _cad_worker_urls(
 
 
 async def _probe_cad_worker(
-    cad_system: Literal["autocad", "inventor", "siemens_nx"], url: str | None,
+    cad_system: Literal["autocad", "inventor", "siemens_nx"],
+    url: str | None,
     worker_key: str | None,
 ) -> CadWorkerConnectionStatus:
     checked_at = datetime.now(UTC)
@@ -270,7 +269,9 @@ async def _probe_cad_worker(
             health.raise_for_status()
             if not worker_key:
                 return CadWorkerConnectionStatus(
-                    cad_system=cad_system, url=url, availability="OFFLINE",
+                    cad_system=cad_system,
+                    url=url,
+                    availability="OFFLINE",
                     checked_at=checked_at,
                     detail="Health check passed, but the worker key is not configured.",
                 )
@@ -280,7 +281,9 @@ async def _probe_cad_worker(
             )
             if not response.is_success:
                 return CadWorkerConnectionStatus(
-                    cad_system=cad_system, url=url, availability="OFFLINE",
+                    cad_system=cad_system,
+                    url=url,
+                    availability="OFFLINE",
                     checked_at=checked_at,
                     detail=(
                         "Health check passed, but capabilities returned "
@@ -291,14 +294,18 @@ async def _probe_cad_worker(
             capabilities = body if isinstance(body, dict) else {}
             if capabilities.get("cadSystem") != cad_system:
                 return CadWorkerConnectionStatus(
-                    cad_system=cad_system, url=url, availability="OFFLINE",
+                    cad_system=cad_system,
+                    url=url,
+                    availability="OFFLINE",
                     checked_at=checked_at,
                     detail="The configured endpoint identifies as a different CAD system.",
                     capabilities=capabilities,
                 )
             if "1.0" not in capabilities.get("contractVersions", []):
                 return CadWorkerConnectionStatus(
-                    cad_system=cad_system, url=url, availability="OFFLINE",
+                    cad_system=cad_system,
+                    url=url,
+                    availability="OFFLINE",
                     checked_at=checked_at,
                     detail="The configured endpoint does not support worker contract 1.0.",
                     capabilities=capabilities,
@@ -385,22 +392,39 @@ async def _probe_freecad_worker(
             if not isinstance(capabilities, dict) or (
                 capabilities.get("contractVersion") != "1.0"
                 or capabilities.get("cadSystem") != "freecad"
-                or (cad_system == "freecad_analyzer" and capabilities.get("dependencyAnalysis") is not True)
-                or (cad_system == "freecad" and not {"part", "assembly"}.issubset(
-                    set(capabilities.get("documentKinds", []))
-                ))
-                or (cad_system == "freecad" and not {
-                    "modelryx-preview", "part-metadata", "native-snapshot"
-                }.issubset(set(capabilities.get("outputRoles", []))))
+                or (
+                    cad_system == "freecad_analyzer"
+                    and capabilities.get("dependencyAnalysis") is not True
+                )
+                or (
+                    cad_system == "freecad"
+                    and not {"part", "assembly"}.issubset(
+                        set(capabilities.get("documentKinds", []))
+                    )
+                )
+                or (
+                    cad_system == "freecad"
+                    and not {"modelryx-preview", "part-metadata", "native-snapshot"}.issubset(
+                        set(capabilities.get("outputRoles", []))
+                    )
+                )
             ):
-                raise ValueError("The endpoint does not advertise the required standalone FreeCAD capabilities.")
+                raise ValueError(
+                    "The endpoint does not advertise the required standalone FreeCAD capabilities."
+                )
         return CadWorkerConnectionStatus(
-            cad_system=cad_system, url=url, availability="ONLINE", checked_at=checked_at,
+            cad_system=cad_system,
+            url=url,
+            availability="ONLINE",
+            checked_at=checked_at,
             capabilities=capabilities,
         )
     except (httpx.HTTPError, ValueError, TypeError) as exc:
         return CadWorkerConnectionStatus(
-            cad_system=cad_system, url=url, availability="OFFLINE", checked_at=checked_at,
+            cad_system=cad_system,
+            url=url,
+            availability="OFFLINE",
+            checked_at=checked_at,
             detail=f"Standalone FreeCAD check failed: {exc}",
         )
 
@@ -432,8 +456,14 @@ async def get_cad_worker_status(
             "inventor", configurations["inventor_url"][0], settings.internal_worker_key
         ),
         _probe_cad_worker("siemens_nx", configurations["nx_url"][0], settings.internal_worker_key),
-        _probe_freecad_worker("freecad", configurations["freecad_url"][0], settings.internal_worker_key),
-        _probe_freecad_worker("freecad_analyzer", configurations["freecad_analyzer_url"][0], settings.internal_worker_key),
+        _probe_freecad_worker(
+            "freecad", configurations["freecad_url"][0], settings.internal_worker_key
+        ),
+        _probe_freecad_worker(
+            "freecad_analyzer",
+            configurations["freecad_analyzer_url"][0],
+            settings.internal_worker_key,
+        ),
     )
     return CadWorkerStatusResponse(
         autocad=autocad.model_copy(
@@ -443,8 +473,12 @@ async def get_cad_worker_status(
             update={"configuration_source": configurations["inventor_url"][1]}
         ),
         nx=nx.model_copy(update={"configuration_source": configurations["nx_url"][1]}),
-        freecad=freecad.model_copy(update={"configuration_source": configurations["freecad_url"][1]}),
-        freecad_analyzer=freecad_analyzer.model_copy(update={"configuration_source": configurations["freecad_analyzer_url"][1]}),
+        freecad=freecad.model_copy(
+            update={"configuration_source": configurations["freecad_url"][1]}
+        ),
+        freecad_analyzer=freecad_analyzer.model_copy(
+            update={"configuration_source": configurations["freecad_analyzer_url"][1]}
+        ),
     )
 
 
@@ -459,8 +493,10 @@ def update_cad_worker_settings(
         "inventor_url": _worker_url(payload.inventor_url, "Inventor worker URL"),
         "nx_url": _worker_url(payload.nx_url, "Siemens NX worker URL"),
     }
-    for field, label in (("freecad_url", "FreeCAD worker URL"),
-                         ("freecad_analyzer_url", "FreeCAD analyzer URL")):
+    for field, label in (
+        ("freecad_url", "FreeCAD worker URL"),
+        ("freecad_analyzer_url", "FreeCAD analyzer URL"),
+    ):
         if field in payload.model_fields_set:
             values[field] = _worker_url(getattr(payload, field), label)
     now = datetime.now(UTC)
@@ -699,7 +735,7 @@ def update_user(
         entity_id=user.id,
         request_id=request.state.request_id,
         details={
-            "fields": sorted([*changes, *( ["roles"] if requested_roles is not None else [])]),
+            "fields": sorted([*changes, *(["roles"] if requested_roles is not None else [])]),
             "roles": sorted(roles_for_user(user)),
         },
     )
@@ -734,9 +770,7 @@ def reset_password(
 
 
 @router.post("/users/{user_id}/unlock", status_code=status.HTTP_204_NO_CONTENT)
-def unlock_user_account(
-    user_id: uuid.UUID, request: Request, db: Db, principal: Actor
-) -> None:
+def unlock_user_account(user_id: uuid.UUID, request: Request, db: Db, principal: Actor) -> None:
     require_admin(principal)
     user = db.get(User, user_id)
     if user is None:
@@ -757,9 +791,7 @@ def unlock_user_account(
 
 
 @router.post("/users/{user_id}/sessions/revoke", status_code=status.HTTP_204_NO_CONTENT)
-def revoke_user_sessions(
-    user_id: uuid.UUID, request: Request, db: Db, principal: Actor
-) -> None:
+def revoke_user_sessions(user_id: uuid.UUID, request: Request, db: Db, principal: Actor) -> None:
     require_admin(principal)
     user = db.get(User, user_id)
     if user is None:
@@ -825,11 +857,7 @@ def preview_item_deletion(item_id: uuid.UUID, db: Db, principal: Actor) -> ItemP
         artifact_count=preview.artifact_count,
         stored_bytes=preview.stored_bytes,
         attachment_count=preview.attachment_count,
-        blocking_reference_count=(
-            preview.blocking_reference_count
-            if external_blockers
-            else 0
-        ),
+        blocking_reference_count=(preview.blocking_reference_count if external_blockers else 0),
         blocking_item_numbers=external_blockers,
         cascade_item_numbers=[item.part_number for item in cascade.deletable_items],
         protected_legacy_item_numbers=[item.part_number for item in cascade.protected_items],

@@ -7,8 +7,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --legacy-peer-deps && \
-    npm install --no-save @rollup/rollup-linux-x64-musl esbuild
+RUN npm ci
 
 # Copy source code
 COPY . .

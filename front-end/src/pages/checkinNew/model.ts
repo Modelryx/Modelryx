@@ -1,23 +1,31 @@
-import { api } from "../../workflow-api";
+import { api } from '../../workflow-api';
 
 export type DuplicateMatch = {
-  item_id: string; item_number: string; item_name: string; item_type: string;
-  revision_id: string; revision_code: string;
+  item_id: string;
+  item_number: string;
+  item_name: string;
+  item_type: string;
+  revision_id: string;
+  revision_code: string;
   duplicate_check_id?: string;
   duplicate_candidate_id?: string;
   classification?: string;
 };
 export type IdentityReview = {
-  logical_path: string; item_number_exists: boolean; existing_item_id: string | null;
+  logical_path: string;
+  item_number_exists: boolean;
+  existing_item_id: string | null;
   duplicates: DuplicateMatch[];
 };
 
 export type FileEntry = {
   file: File;
   logicalPath: string;
-  documentType?: "PART" | "ASSEMBLY" | "DRAWING" | "PRESENTATION" | "PROJECT" | "SUPPORTING" | "UNKNOWN";
+  documentType?:
+    'PART' | 'ASSEMBLY' | 'DRAWING' | 'PRESENTATION' | 'PROJECT' | 'SUPPORTING' | 'UNKNOWN';
   sha256: string | null;
-  status: "pending" | "hashing" | "checking" | "duplicate" | "ready" | "uploading" | "complete" | "error";
+  status:
+    'pending' | 'hashing' | 'checking' | 'duplicate' | 'ready' | 'uploading' | 'complete' | 'error';
   isDuplicate: boolean;
   existingItemNumber?: string;
   existingItemName?: string;
@@ -31,15 +39,19 @@ export type FileEntry = {
   errorMessage?: string;
   formError?: string;
   duplicates?: DuplicateMatch[];
-  duplicateChoice?: "USE_EXISTING" | "CREATE_NEW";
+  duplicateChoice?: 'USE_EXISTING' | 'CREATE_NEW';
   selectedRevisionId?: string;
   createdItemId?: string;
 };
 
 export async function checkIdentities(entries: FileEntry[]): Promise<IdentityReview[]> {
-  const result = await api<{ files: IdentityReview[] }>("/staging/upload-preflight", "POST", {
-    files: entries.map((entry) => ({ logical_path: entry.logicalPath, sha256: entry.sha256,
-      byte_size: entry.file.size, item_number: entry.itemNumber.trim() || null })),
+  const result = await api<{ files: IdentityReview[] }>('/staging/upload-preflight', 'POST', {
+    files: entries.map((entry) => ({
+      logical_path: entry.logicalPath,
+      sha256: entry.sha256,
+      byte_size: entry.file.size,
+      item_number: entry.itemNumber.trim() || null,
+    })),
   });
   return result.files;
 }
@@ -48,7 +60,15 @@ export type AssemblyReconciliationEntry = {
   parent_logical_path?: string | null;
   depth?: number;
   occurrence_key: string;
-  status: "UNCHANGED" | "MODIFIED" | "ADDED" | "REMOVED" | "MOVED_RENAMED" | "RELINKED" | "MISSING" | "CONFLICT";
+  status:
+    | 'UNCHANGED'
+    | 'MODIFIED'
+    | 'ADDED'
+    | 'REMOVED'
+    | 'MOVED_RENAMED'
+    | 'RELINKED'
+    | 'MISSING'
+    | 'CONFLICT';
   old: Record<string, any> | null;
   new: Record<string, any> | null;
   reason: string;
@@ -72,30 +92,49 @@ export type StagingResult = {
       reconciliation: AssemblyReconciliationEntry[];
       safe_changes_applied?: boolean;
       package_staged?: boolean;
-      identity_decisions?: Record<string, {
-        decision: "USE_EXISTING" | "CREATE_NEW";
-        existing_revision_id?: string | null;
-        item?: {
-          item_number: string; name: string; item_type: string;
-          description?: string | null; category?: string | null;
-        } | null;
-        revision?: {
-          revision_code: string; description?: string | null;
-          cad_system: string; native_format: string;
-        } | null;
-      }>;
+      identity_decisions?: Record<
+        string,
+        {
+          decision: 'USE_EXISTING' | 'CREATE_NEW';
+          existing_revision_id?: string | null;
+          item?: {
+            item_number: string;
+            name: string;
+            item_type: string;
+            description?: string | null;
+            category?: string | null;
+          } | null;
+          revision?: {
+            revision_code: string;
+            description?: string | null;
+            cad_system: string;
+            native_format: string;
+          } | null;
+        }
+      >;
     };
   };
   files: Array<{
-    id: string; logical_path: string; filename: string; byte_size: number; sha256: string;
-    mime_type: string; state: string; upload_url: string;
+    id: string;
+    logical_path: string;
+    filename: string;
+    byte_size: number;
+    sha256: string;
+    mime_type: string;
+    state: string;
+    upload_url: string;
   }>;
   retained_artifacts: Array<{
     relation_id: string | null;
     artifact_id: string;
     files: Array<{
-      id: string; reference_name: string | null; filename: string; byte_size: number;
-      sha256: string; mime_type: string; download_url: string;
+      id: string;
+      reference_name: string | null;
+      filename: string;
+      byte_size: number;
+      sha256: string;
+      mime_type: string;
+      download_url: string;
     }>;
   }>;
   duplicate_check: {
@@ -122,13 +161,16 @@ export type StagingCommitResult = {
   artifact_ids: string[];
 };
 export type StagingWorkflowResult = {
-  staging_id: string; state: string; stage: string; progress_percent: number;
+  staging_id: string;
+  state: string;
+  stage: string;
+  progress_percent: number;
   error_detail: string | null;
 };
 export type CommitProcessingJob = {
   id: string;
   type: string;
-  state: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED";
+  state: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
   stage: string;
   progress_percent: number;
   error_detail: string | null;
@@ -146,16 +188,16 @@ export type EditWhereUsed = {
   warnings: string[];
 };
 export type WorkerPreflight = {
-  worker_type: "FREECAD" | "AUTOCAD" | "INVENTOR" | "STEP";
+  worker_type: 'FREECAD' | 'AUTOCAD' | 'INVENTOR' | 'STEP';
   available: boolean;
   compatible: boolean;
-  status: "IDLE" | "BUSY" | "DEGRADED" | null;
+  status: 'IDLE' | 'BUSY' | 'DEGRADED' | null;
   message: string;
 };
 
 export type GeneratedItemNumber = {
   item_number: string;
-  item_type: "PART" | "ASSEMBLY";
+  item_type: 'PART' | 'ASSEMBLY';
   template: string;
 };
 
@@ -174,14 +216,16 @@ export type CadDependencyReport = {
   analyzer_version?: string;
   part_metadata?: Record<string, unknown>;
   metadata_source_sha256?: string;
-  document_type: "PART" | "ASSEMBLY" | "DRAWING";
+  document_type: 'PART' | 'ASSEMBLY' | 'DRAWING';
   root_file: string;
   root_logical_path: string;
   files: Array<{
     logical_path: string;
     is_root: boolean;
-    document_type?: "PART" | "ASSEMBLY" | "DRAWING" | "PRESENTATION" | "PROJECT" | "SUPPORTING" | "UNKNOWN";
-    assembly_model?: "NONE" | "APP_PART" | "APP_LINK" | "BUILTIN_ASSEMBLY" | "ASSEMBLY3" | "ASSEMBLY4";
+    document_type?:
+      'PART' | 'ASSEMBLY' | 'DRAWING' | 'PRESENTATION' | 'PROJECT' | 'SUPPORTING' | 'UNKNOWN';
+    assembly_model?:
+      'NONE' | 'APP_PART' | 'APP_LINK' | 'BUILTIN_ASSEMBLY' | 'ASSEMBLY3' | 'ASSEMBLY4';
   }>;
   references?: Array<{
     parent_logical_path: string;
@@ -214,7 +258,7 @@ export type CadDependencyReport = {
   }>;
   validation_issues?: Array<{
     code: string;
-    severity: "ERROR" | "WARNING";
+    severity: 'ERROR' | 'WARNING';
     document: string;
     assembly_model?: string;
     object?: string;
@@ -228,10 +272,18 @@ export type CadDependencyReport = {
 
 // NX can report the same display name for repeated occurrences of one prototype.
 // Allocate unique proposal keys within each parent without treating these keys as native IDs.
-export const nxBomInstanceNames = (references: NonNullable<CadDependencyReport["references"]>): string[] => {
-  const names = references.map((reference) => (reference.occurrence_key || reference.occurrence_path
-    || `${reference.parent_logical_path}::${reference.occurrence_id
-      || reference.instance_name || reference.child_logical_path}`).slice(0, 255));
+export const nxBomInstanceNames = (
+  references: NonNullable<CadDependencyReport['references']>
+): string[] => {
+  const names = references.map((reference) =>
+    (
+      reference.occurrence_key ||
+      reference.occurrence_path ||
+      `${reference.parent_logical_path}::${
+        reference.occurrence_id || reference.instance_name || reference.child_logical_path
+      }`
+    ).slice(0, 255)
+  );
   const reserved = new Map<string, Set<string>>();
   references.forEach((reference, index) => {
     const parent = reference.parent_logical_path.toLocaleLowerCase();
@@ -269,83 +321,128 @@ export type CadBundleManifest = {
   snapshotId: string;
   root?: { path: string; itemId?: string; partNumber?: string; revisionId?: string };
   files: Array<{
-    path: string; itemId?: string; partNumber?: string; revisionId: string;
-    role?: string; byteSize: number; sha256: string;
+    path: string;
+    itemId?: string;
+    partNumber?: string;
+    revisionId: string;
+    role?: string;
+    byteSize: number;
+    sha256: string;
   }>;
 };
 
-export const cadProfile = (filename: string, documentType?: FileEntry["documentType"]) => {
-  const extension = filename.split(".").pop()?.toLowerCase();
-  if (extension === "prt") {
-    const assembly = documentType === "ASSEMBLY";
+export const cadProfile = (filename: string, documentType?: FileEntry['documentType']) => {
+  const extension = filename.split('.').pop()?.toLowerCase();
+  if (extension === 'prt') {
+    const assembly = documentType === 'ASSEMBLY';
     return {
-      cadSystem: "Siemens NX", nativeFormat: "PRT",
-      artifactType: assembly ? "CAD_ASSEMBLY" : "CAD_MODEL",
-      itemType: assembly ? "ASSEMBLY" : "PART",
+      cadSystem: 'Siemens NX',
+      nativeFormat: 'PRT',
+      artifactType: assembly ? 'CAD_ASSEMBLY' : 'CAD_MODEL',
+      itemType: assembly ? 'ASSEMBLY' : 'PART',
     };
   }
-  if (extension === "dwg" || extension === "dxf") {
-    return { cadSystem: "AutoCAD", nativeFormat: extension.toUpperCase(), artifactType: "CAD_MODEL", itemType: "PART" };
-  }
-  if (["ipt", "iam", "idw"].includes(extension ?? "")) {
+  if (extension === 'dwg' || extension === 'dxf') {
     return {
-      cadSystem: "Inventor",
+      cadSystem: 'AutoCAD',
+      nativeFormat: extension.toUpperCase(),
+      artifactType: 'CAD_MODEL',
+      itemType: 'PART',
+    };
+  }
+  if (['ipt', 'iam', 'idw'].includes(extension ?? '')) {
+    return {
+      cadSystem: 'Inventor',
       nativeFormat: extension!.toUpperCase(),
-      artifactType: extension === "iam" ? "CAD_ASSEMBLY" : extension === "idw" ? "DRAWING" : "CAD_MODEL",
-      itemType: extension === "iam" ? "ASSEMBLY" : "PART",
+      artifactType:
+        extension === 'iam' ? 'CAD_ASSEMBLY' : extension === 'idw' ? 'DRAWING' : 'CAD_MODEL',
+      itemType: extension === 'iam' ? 'ASSEMBLY' : 'PART',
     };
   }
-  if (extension === "step" || extension === "stp") {
-    return { cadSystem: "STEP", nativeFormat: "STEP", artifactType: "STEP", itemType: "PART" };
+  if (extension === 'step' || extension === 'stp') {
+    return { cadSystem: 'STEP', nativeFormat: 'STEP', artifactType: 'STEP', itemType: 'PART' };
   }
-  return { cadSystem: "FreeCAD", nativeFormat: "FCStd", artifactType: "CAD_MODEL", itemType: "PART" };
+  return {
+    cadSystem: 'FreeCAD',
+    nativeFormat: 'FCStd',
+    artifactType: 'CAD_MODEL',
+    itemType: 'PART',
+  };
 };
 
 export const logicalPathDepth = (path: string) => path.split(/[\\/]/).length - 1;
 
-export const isManagedCadDefinition = (entry: FileEntry) => /\.(iam|ipt)$/i.test(entry.file.name)
-  || entry.documentType === "ASSEMBLY" || entry.documentType === "PART";
+export const isManagedCadDefinition = (entry: FileEntry) =>
+  /\.(iam|ipt)$/i.test(entry.file.name) ||
+  entry.documentType === 'ASSEMBLY' ||
+  entry.documentType === 'PART';
 
-export const createsManagedItem = (entry: FileEntry, report: CadDependencyReport | null | undefined) =>
-  isManagedCadDefinition(entry) || !report || entry.logicalPath === report.root_logical_path;
+export const createsManagedItem = (
+  entry: FileEntry,
+  report: CadDependencyReport | null | undefined
+) => isManagedCadDefinition(entry) || !report || entry.logicalPath === report.root_logical_path;
 
 export const isProcessingSupport = (path: string, documentType?: string) =>
-  /\.ipj$/i.test(path) || documentType === "PROJECT" || documentType === "SUPPORTING";
+  /\.ipj$/i.test(path) || documentType === 'PROJECT' || documentType === 'SUPPORTING';
 
-export const isDrawing = (entry: FileEntry) => /\.(idw|dwg)$/i.test(entry.file.name)
-  || entry.documentType === "DRAWING";
+export const isDrawing = (entry: FileEntry) =>
+  /\.(idw|dwg)$/i.test(entry.file.name) || entry.documentType === 'DRAWING';
 
 export const relatedSupportPaths = (
   ownerPath: string,
   supportPaths: string[],
-  references: NonNullable<CadDependencyReport["references"]>,
+  references: NonNullable<CadDependencyReport['references']>
 ) => {
   const candidates = new Set(supportPaths);
-  return [...new Set(references.flatMap((reference) => {
-    if (reference.child_logical_path === ownerPath
-      && candidates.has(reference.parent_logical_path)) return [reference.parent_logical_path];
-    if (reference.parent_logical_path === ownerPath
-      && candidates.has(reference.child_logical_path)) return [reference.child_logical_path];
-    return [];
-  }))];
+  return [
+    ...new Set(
+      references.flatMap((reference) => {
+        if (
+          reference.child_logical_path === ownerPath &&
+          candidates.has(reference.parent_logical_path)
+        )
+          return [reference.parent_logical_path];
+        if (
+          reference.parent_logical_path === ownerPath &&
+          candidates.has(reference.child_logical_path)
+        )
+          return [reference.child_logical_path];
+        return [];
+      })
+    ),
+  ];
 };
 
 export const withoutProcessingSupport = (report: CadDependencyReport): CadDependencyReport => {
-  const excluded = new Set(report.files
-    .filter((file) => isProcessingSupport(file.logical_path, file.document_type))
-    .map((file) => file.logical_path));
+  const excluded = new Set(
+    report.files
+      .filter((file) => isProcessingSupport(file.logical_path, file.document_type))
+      .map((file) => file.logical_path)
+  );
   const missingSupporting = report.missing_references.filter((entry) => {
-    if (entry.kind?.toLocaleLowerCase() === "linked-resource") return true;
-    const extension = entry.reference?.replace(/\\/g, "/").split("/").pop()?.match(/\.[^.]+$/)?.[0]?.toLocaleLowerCase();
-    return Boolean(extension && ![".prt", ".iam", ".ipt", ".idw", ".ipn", ".dwg", ".dxf", ".fcstd"].includes(extension));
+    if (entry.kind?.toLocaleLowerCase() === 'linked-resource') return true;
+    const extension = entry.reference
+      ?.replace(/\\/g, '/')
+      .split('/')
+      .pop()
+      ?.match(/\.[^.]+$/)?.[0]
+      ?.toLocaleLowerCase();
+    return Boolean(
+      extension &&
+      !['.prt', '.iam', '.ipt', '.idw', '.ipn', '.dwg', '.dxf', '.fcstd'].includes(extension)
+    );
   });
-  const missingCad = report.missing_references.filter((entry) => !missingSupporting.includes(entry));
+  const missingCad = report.missing_references.filter(
+    (entry) => !missingSupporting.includes(entry)
+  );
   if (excluded.size === 0 && missingSupporting.length === 0) return report;
   return {
     ...report,
     files: report.files.filter((file) => !excluded.has(file.logical_path)),
-    references: report.references?.filter((reference) =>
-      !excluded.has(reference.parent_logical_path) && !excluded.has(reference.child_logical_path)),
+    references: report.references?.filter(
+      (reference) =>
+        !excluded.has(reference.parent_logical_path) && !excluded.has(reference.child_logical_path)
+    ),
     missing_references: missingCad,
     missing_supporting_references: [
       ...(report.missing_supporting_references ?? []),
@@ -357,22 +454,25 @@ export const withoutProcessingSupport = (report: CadDependencyReport): CadDepend
 export const inventorBomInstanceNames = (entries: FileEntry[]): Map<string, string> => {
   const normalized = entries.map((entry) => ({
     entry,
-    base: entry.logicalPath.replace(/\\/g, "/").replace(/\.(ipt|iam)$/i, ""),
-    kind: /\.iam$/i.test(entry.logicalPath) ? "Assembly" : "Part",
+    base: entry.logicalPath.replace(/\\/g, '/').replace(/\.(ipt|iam)$/i, ''),
+    kind: /\.iam$/i.test(entry.logicalPath) ? 'Assembly' : 'Part',
   }));
   const counts = new Map<string, number>();
-  normalized.forEach(({ base }) => counts.set(base.toLocaleLowerCase(),
-    (counts.get(base.toLocaleLowerCase()) ?? 0) + 1));
+  normalized.forEach(({ base }) =>
+    counts.set(base.toLocaleLowerCase(), (counts.get(base.toLocaleLowerCase()) ?? 0) + 1)
+  );
   const used = new Set<string>();
-  return new Map(normalized.map(({ entry, base, kind }) => {
-    const needsKind = (counts.get(base.toLocaleLowerCase()) ?? 0) > 1;
-    const initial = needsKind ? `${base} [${kind}]` : base;
-    let candidate = initial;
-    let sequence = 2;
-    while (used.has(candidate.toLocaleLowerCase())) candidate = `${initial} ${sequence++}`;
-    used.add(candidate.toLocaleLowerCase());
-    return [entry.logicalPath, candidate];
-  }));
+  return new Map(
+    normalized.map(({ entry, base, kind }) => {
+      const needsKind = (counts.get(base.toLocaleLowerCase()) ?? 0) > 1;
+      const initial = needsKind ? `${base} [${kind}]` : base;
+      let candidate = initial;
+      let sequence = 2;
+      while (used.has(candidate.toLocaleLowerCase())) candidate = `${initial} ${sequence++}`;
+      used.add(candidate.toLocaleLowerCase());
+      return [entry.logicalPath, candidate];
+    })
+  );
 };
 
 export type EditOccurrence = {
@@ -382,63 +482,78 @@ export type EditOccurrence = {
   quantity: number;
   child_item: { id: string; item_number: string; name: string; item_type: string };
   child_revision: {
-    id: string; revision_code: string; lifecycle_state: string; checkout_status: string;
+    id: string;
+    revision_code: string;
+    lifecycle_state: string;
+    checkout_status: string;
   };
   children: EditOccurrence[];
 };
 
 export const flattenEditOccurrences = (
-  occurrences: EditOccurrence[], depth = 0,
-): Array<{ occurrence: EditOccurrence; depth: number }> => occurrences.flatMap((occurrence) => [
-  { occurrence, depth },
-  ...flattenEditOccurrences(occurrence.children ?? [], depth + 1),
-]);
+  occurrences: EditOccurrence[],
+  depth = 0
+): Array<{ occurrence: EditOccurrence; depth: number }> =>
+  occurrences.flatMap((occurrence) => [
+    { occurrence, depth },
+    ...flattenEditOccurrences(occurrence.children ?? [], depth + 1),
+  ]);
 
 export const normalizedCadReference = (value: string | null | undefined) =>
-  (value ?? "").replace(/\\/g, "/").replace(/^\.\//, "").toLocaleLowerCase();
+  (value ?? '').replace(/\\/g, '/').replace(/^\.\//, '').toLocaleLowerCase();
 
 export const retainedFileOccurrence = (
   file: { reference_name: string | null; filename: string },
-  occurrences: EditOccurrence[],
+  occurrences: EditOccurrence[]
 ): EditOccurrence | undefined => {
   if (!/\.(?:iam|ipt)$/i.test(file.filename)) return undefined;
   const flattened = flattenEditOccurrences(occurrences).map(({ occurrence }) => occurrence);
   const reference = normalizedCadReference(file.reference_name);
   const filename = normalizedCadReference(file.filename);
-  const fileBasename = filename.split("/").at(-1) ?? "";
-  const stemIdentity = fileBasename.replace(/\.[^.]+$/, "").replace(/[^a-z0-9]+/g, "");
-  const expectedType = /\.iam$/i.test(file.filename) ? "ASSEMBLY" : "PART";
-  return flattened.map((occurrence) => {
-    const source = normalizedCadReference(occurrence.source_reference);
-    const sourceBasename = source.split("/").at(-1) ?? "";
-    const nameIdentity = occurrence.child_item.name.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "");
-    const numberIdentity = occurrence.child_item.item_number.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "");
-    let score = 0;
-    if (reference && reference === source) score = 100;
-    else if (reference && (reference.endsWith(`/${source}`) || source.endsWith(`/${reference}`))) score = 95;
-    else if (sourceBasename === fileBasename) score = 90;
-    else if (stemIdentity === nameIdentity) score = 80;
-    else if (stemIdentity === numberIdentity) score = 75;
-    if (occurrence.child_item.item_type !== expectedType) score = 0;
-    return { occurrence, score };
-  }).filter((candidate) => candidate.score > 0)
+  const fileBasename = filename.split('/').at(-1) ?? '';
+  const stemIdentity = fileBasename.replace(/\.[^.]+$/, '').replace(/[^a-z0-9]+/g, '');
+  const expectedType = /\.iam$/i.test(file.filename) ? 'ASSEMBLY' : 'PART';
+  return flattened
+    .map((occurrence) => {
+      const source = normalizedCadReference(occurrence.source_reference);
+      const sourceBasename = source.split('/').at(-1) ?? '';
+      const nameIdentity = occurrence.child_item.name
+        .toLocaleLowerCase()
+        .replace(/[^a-z0-9]+/g, '');
+      const numberIdentity = occurrence.child_item.item_number
+        .toLocaleLowerCase()
+        .replace(/[^a-z0-9]+/g, '');
+      let score = 0;
+      if (reference && reference === source) score = 100;
+      else if (reference && (reference.endsWith(`/${source}`) || source.endsWith(`/${reference}`)))
+        score = 95;
+      else if (sourceBasename === fileBasename) score = 90;
+      else if (stemIdentity === nameIdentity) score = 80;
+      else if (stemIdentity === numberIdentity) score = 75;
+      if (occurrence.child_item.item_type !== expectedType) score = 0;
+      return { occurrence, score };
+    })
+    .filter((candidate) => candidate.score > 0)
     .sort((left, right) => right.score - left.score)[0]?.occurrence;
 };
 
 export const setOccurrenceCheckoutStatus = (
-  occurrences: EditOccurrence[], revisionId: string, checkoutStatus: string,
-): EditOccurrence[] => occurrences.map((occurrence) => ({
-  ...occurrence,
-  child_revision: occurrence.child_revision.id === revisionId
-    ? { ...occurrence.child_revision, checkout_status: checkoutStatus }
-    : occurrence.child_revision,
-  children: setOccurrenceCheckoutStatus(occurrence.children ?? [], revisionId, checkoutStatus),
-}));
+  occurrences: EditOccurrence[],
+  revisionId: string,
+  checkoutStatus: string
+): EditOccurrence[] =>
+  occurrences.map((occurrence) => ({
+    ...occurrence,
+    child_revision:
+      occurrence.child_revision.id === revisionId
+        ? { ...occurrence.child_revision, checkout_status: checkoutStatus }
+        : occurrence.child_revision,
+    children: setOccurrenceCheckoutStatus(occurrence.children ?? [], revisionId, checkoutStatus),
+  }));
 
 class IncrementalSha256 {
   private readonly state = new Uint32Array([
-    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
   ]);
   private readonly block = new Uint8Array(64);
   private blockLength = 0;
@@ -480,15 +595,19 @@ class IncrementalSha256 {
     length.setUint32(56, Math.floor(bitLength / 0x1_0000_0000), false);
     length.setUint32(60, bitLength >>> 0, false);
     this.processBlock(this.block);
-    return Array.from(this.state, (word) => word.toString(16).padStart(8, "0")).join("");
+    return Array.from(this.state, (word) => word.toString(16).padStart(8, '0')).join('');
   }
 
   private processBlock(input: Uint8Array): void {
     const words = new Uint32Array(64);
     for (let index = 0; index < 16; index++) {
       const offset = index * 4;
-      words[index] = ((input[offset] << 24) | (input[offset + 1] << 16)
-        | (input[offset + 2] << 8) | input[offset + 3]) >>> 0;
+      words[index] =
+        ((input[offset] << 24) |
+          (input[offset + 1] << 16) |
+          (input[offset + 2] << 8) |
+          input[offset + 3]) >>>
+        0;
     }
     for (let index = 16; index < 64; index++) {
       const x = words[index - 15];
@@ -505,8 +624,14 @@ class IncrementalSha256 {
       const sigma0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
       const majority = (a & b) ^ (a & c) ^ (b & c);
       const temporary2 = (sigma0 + majority) >>> 0;
-      h = g; g = f; f = e; e = (d + temporary1) >>> 0;
-      d = c; c = b; b = a; a = (temporary1 + temporary2) >>> 0;
+      h = g;
+      g = f;
+      f = e;
+      e = (d + temporary1) >>> 0;
+      d = c;
+      c = b;
+      b = a;
+      a = (temporary1 + temporary2) >>> 0;
     }
     this.state[0] = (this.state[0] + a) >>> 0;
     this.state[1] = (this.state[1] + b) >>> 0;
@@ -530,15 +655,17 @@ const SHA256_CONSTANTS = new Uint32Array([
   0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 ]);
 
-export async function fileSha256(file: File, onProgress?: (percent: number) => void): Promise<string> {
+export async function fileSha256(
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<string> {
   const chunkSize = 4 * 1024 * 1024;
   const chunks = Math.max(1, Math.ceil(file.size / chunkSize));
   const hash = new IncrementalSha256();
   for (let index = 0; index < chunks; index++) {
     const offset = index * chunkSize;
     hash.update(new Uint8Array(await file.slice(offset, offset + chunkSize).arrayBuffer()));
-    onProgress?.(Math.round((index + 1) / chunks * 100));
+    onProgress?.(Math.round(((index + 1) / chunks) * 100));
   }
   return hash.digest();
 }
-

@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 
 from modelryx.models import Item, Revision
 
-
 IMMUTABLE_LIFECYCLE_STATES = {"RELEASED", "SUPERSEDED", "OBSOLETE"}
 
 

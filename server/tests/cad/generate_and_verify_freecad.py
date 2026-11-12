@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+# FreeCAD must initialize before standard-library imports.
+# ruff: noqa: I001
 import FreeCAD  # type: ignore
 import Part  # type: ignore
 

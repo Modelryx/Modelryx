@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from 'react';
 import {
   flexRender,
   getCoreRowModel,
@@ -13,10 +13,10 @@ import {
   type SortingState,
   type Updater,
   type VisibilityState,
-} from "@tanstack/react-table";
-import { Button } from "./Button";
+} from '@tanstack/react-table';
+import { Button } from './Button';
 
-export const BLANK_FILTER_VALUE = "\u0000";
+export const BLANK_FILTER_VALUE = '\u0000';
 export type ServerTableState = {
   total: number;
   pagination: PaginationState;
@@ -47,8 +47,13 @@ export type DataTableProps<T> = {
   initialPageSize?: number;
   defaultColumnVisibility?: VisibilityState;
   hidePagination?: boolean;
-  layout?: { visibility: VisibilityState; sizing: ColumnSizingState; onVisibilityChange: (updater: Updater<VisibilityState>) => void; onSizingChange: (updater: Updater<ColumnSizingState>) => void };
-  density?: "comfortable" | "compact";
+  layout?: {
+    visibility: VisibilityState;
+    sizing: ColumnSizingState;
+    onVisibilityChange: (updater: Updater<VisibilityState>) => void;
+    onSizingChange: (updater: Updater<ColumnSizingState>) => void;
+  };
+  density?: 'comfortable' | 'compact';
 };
 
 export function DataTable<T>({
@@ -60,13 +65,13 @@ export function DataTable<T>({
   server,
   loading = false,
   error,
-  emptyMessage = "No results found.",
+  emptyMessage = 'No results found.',
   pageSizeOptions = [10, 25, 50],
   initialPageSize = 10,
   defaultColumnVisibility = {},
   hidePagination = false,
   layout,
-  density = "comfortable",
+  density = 'comfortable',
 }: DataTableProps<T>) {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [filterMenu, setFilterMenu] = useState<{
@@ -93,26 +98,21 @@ export function DataTable<T>({
   useEffect(() => {
     const closeOutside = (event: PointerEvent) => {
       const picker = columnPickerRef.current;
-      if (picker?.open && !picker.contains(event.target as Node))
-        picker.open = false;
+      if (picker?.open && !picker.contains(event.target as Node)) picker.open = false;
     };
     const closeOnEscape = (event: KeyboardEvent) => {
       const picker = columnPickerRef.current;
-      if (
-        event.key === "Escape" &&
-        picker?.open &&
-        picker.contains(document.activeElement)
-      ) {
+      if (event.key === 'Escape' && picker?.open && picker.contains(document.activeElement)) {
         event.preventDefault();
         picker.open = false;
-        picker.querySelector<HTMLElement>("summary")?.focus();
+        picker.querySelector<HTMLElement>('summary')?.focus();
       }
     };
-    document.addEventListener("pointerdown", closeOutside);
-    document.addEventListener("keydown", closeOnEscape);
+    document.addEventListener('pointerdown', closeOutside);
+    document.addEventListener('keydown', closeOnEscape);
     return () => {
-      document.removeEventListener("pointerdown", closeOutside);
-      document.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener('pointerdown', closeOutside);
+      document.removeEventListener('keydown', closeOnEscape);
     };
   }, []);
   const table = useReactTable({
@@ -137,14 +137,14 @@ export function DataTable<T>({
         }
       : {}),
     onColumnSizingChange: layout?.onSizingChange ?? setColumnSizing,
-    columnResizeMode: "onChange",
+    columnResizeMode: 'onChange',
     onColumnFiltersChange: server?.onFiltersChange ?? setColumnFilters,
     defaultColumn: {
       size: 180,
       minSize: 80,
       maxSize: 800,
       filterFn: (row, columnId, values: string[]) =>
-        values.includes(String(row.getValue(columnId) ?? "—")),
+        values.includes(String(row.getValue(columnId) ?? '—')),
     },
     onSortingChange: server?.onSortingChange ?? setSorting,
     onColumnVisibilityChange: layout?.onVisibilityChange ?? setVisibility,
@@ -172,43 +172,38 @@ export function DataTable<T>({
     if (panel) {
       panel.style.left = `${Math.max(8, Math.min(menu.x, window.innerWidth - panel.offsetWidth - 8))}px`;
       panel.style.top = `${Math.max(8, Math.min(menu.y, window.innerHeight - panel.offsetHeight - 8))}px`;
-      panel.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+      panel.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
     }
     const dismiss = (event: MouseEvent) => {
       if (!menuRef.current?.contains(event.target as Node)) setMenu(null);
     };
     const key = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === 'Escape') {
         event.preventDefault();
         setMenu(null);
         menu.trigger.focus();
-      } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         const items = Array.from(
-          menuRef.current?.querySelectorAll<HTMLButtonElement>(
-            "button:not(:disabled)",
-          ) ?? [],
+          menuRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? []
         );
         if (!items.length) return;
         event.preventDefault();
-        const index = items.indexOf(
-          document.activeElement as HTMLButtonElement,
-        );
+        const index = items.indexOf(document.activeElement as HTMLButtonElement);
         items[
-          (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) %
-            items.length
+          (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length
         ]?.focus();
       }
     };
     const close = () => setMenu(null);
-    document.addEventListener("mousedown", dismiss);
-    document.addEventListener("keydown", key);
-    window.addEventListener("resize", close);
-    window.addEventListener("scroll", close, true);
+    document.addEventListener('mousedown', dismiss);
+    document.addEventListener('keydown', key);
+    window.addEventListener('resize', close);
+    window.addEventListener('scroll', close, true);
     return () => {
-      document.removeEventListener("mousedown", dismiss);
-      document.removeEventListener("keydown", key);
-      window.removeEventListener("resize", close);
-      window.removeEventListener("scroll", close, true);
+      document.removeEventListener('mousedown', dismiss);
+      document.removeEventListener('keydown', key);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('scroll', close, true);
     };
   }, [menu]);
   useEffect(() => {
@@ -217,14 +212,13 @@ export function DataTable<T>({
     if (panel) {
       panel.style.left = `${Math.max(8, Math.min(filterMenu.x, window.innerWidth - panel.offsetWidth - 8))}px`;
       panel.style.top = `${Math.max(8, Math.min(filterMenu.y, window.innerHeight - panel.offsetHeight - 8))}px`;
-      panel.querySelector<HTMLInputElement>("input")?.focus();
+      panel.querySelector<HTMLInputElement>('input')?.focus();
     }
     const outside = (event: MouseEvent) => {
-      if (!filterRef.current?.contains(event.target as Node))
-        setFilterMenu(null);
+      if (!filterRef.current?.contains(event.target as Node)) setFilterMenu(null);
     };
     const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === 'Escape') {
         event.preventDefault();
         setFilterMenu(null);
         filterMenu.trigger.focus();
@@ -234,15 +228,15 @@ export function DataTable<T>({
     const scroll = (event: Event) => {
       if (!filterRef.current?.contains(event.target as Node)) close();
     };
-    document.addEventListener("mousedown", outside);
-    document.addEventListener("keydown", escape);
-    window.addEventListener("resize", close);
-    window.addEventListener("scroll", scroll, true);
+    document.addEventListener('mousedown', outside);
+    document.addEventListener('keydown', escape);
+    window.addEventListener('resize', close);
+    window.addEventListener('scroll', scroll, true);
     return () => {
-      document.removeEventListener("mousedown", outside);
-      document.removeEventListener("keydown", escape);
-      window.removeEventListener("resize", close);
-      window.removeEventListener("scroll", scroll, true);
+      document.removeEventListener('mousedown', outside);
+      document.removeEventListener('keydown', escape);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('scroll', scroll, true);
     };
   }, [filterMenu?.id]);
   const filterOptions = (id: string) =>
@@ -250,23 +244,12 @@ export function DataTable<T>({
       new Set([
         ...(server
           ? (server.filterOptions[id] ?? [])
-          : table
-              .getCoreRowModel()
-              .flatRows.map((row) => String(row.getValue(id) ?? "—"))),
-        ...((table.getColumn(id)?.getFilterValue() as string[] | undefined) ??
-          []),
-      ]),
+          : table.getCoreRowModel().flatRows.map((row) => String(row.getValue(id) ?? '—'))),
+        ...((table.getColumn(id)?.getFilterValue() as string[] | undefined) ?? []),
+      ])
     ).sort((a, b) => a.localeCompare(b));
-  const openFilter = (
-    id: string,
-    label: string,
-    x: number,
-    y: number,
-    trigger: HTMLElement,
-  ) => {
-    const values = table.getColumn(id)?.getFilterValue() as
-      | string[]
-      | undefined;
+  const openFilter = (id: string, label: string, x: number, y: number, trigger: HTMLElement) => {
+    const values = table.getColumn(id)?.getFilterValue() as string[] | undefined;
     setFilterMenu({
       id,
       label,
@@ -285,7 +268,7 @@ export function DataTable<T>({
         <div>
           <strong>Results</strong>
           <span className="muted">
-            {" "}
+            {' '}
             {server
               ? `${server.total} total`
               : `${table.getFilteredRowModel().rows.length} of ${data.length} loaded`}
@@ -300,7 +283,7 @@ export function DataTable<T>({
                   type="checkbox"
                   checked={showActions}
                   onChange={(event) => setShowActions(event.target.checked)}
-                />{" "}
+                />{' '}
                 Actions
               </label>
             )}
@@ -313,10 +296,8 @@ export function DataTable<T>({
                     type="checkbox"
                     checked={c.getIsVisible()}
                     onChange={c.getToggleVisibilityHandler()}
-                  />{" "}
-                  {typeof c.columnDef.header === "string"
-                    ? c.columnDef.header
-                    : c.id}
+                  />{' '}
+                  {typeof c.columnDef.header === 'string' ? c.columnDef.header : c.id}
                 </label>
               ))}
           </div>
@@ -352,7 +333,7 @@ export function DataTable<T>({
                       if (!filterColumnIds.includes(header.column.id)) return;
                       event.preventDefault();
                       const label =
-                        typeof header.column.columnDef.header === "string"
+                        typeof header.column.columnDef.header === 'string'
                           ? header.column.columnDef.header
                           : header.column.id;
                       openFilter(
@@ -360,7 +341,7 @@ export function DataTable<T>({
                         label,
                         event.clientX,
                         event.clientY,
-                        event.currentTarget,
+                        event.currentTarget
                       );
                     }}
                   >
@@ -370,59 +351,50 @@ export function DataTable<T>({
                           className="sort-button"
                           onClick={header.column.getToggleSortingHandler()}
                         >
-                          {flexRender(
-                            header.column.columnDef.header,
-                            header.getContext(),
-                          )}{" "}
+                          {flexRender(header.column.columnDef.header, header.getContext())}{' '}
                           <span aria-hidden="true">
-                            {header.column.getIsSorted() === "asc"
-                              ? "↑"
-                              : header.column.getIsSorted() === "desc"
-                                ? "↓"
-                                : "↕"}
+                            {header.column.getIsSorted() === 'asc'
+                              ? '↑'
+                              : header.column.getIsSorted() === 'desc'
+                                ? '↓'
+                                : '↕'}
                           </span>
                         </button>
                       ) : (
-                        flexRender(
-                          header.column.columnDef.header,
-                          header.getContext(),
-                        )
+                        flexRender(header.column.columnDef.header, header.getContext())
                       )}
-                      {!header.isPlaceholder &&
-                        filterColumnIds.includes(header.column.id) && (
-                          <button
-                            className={`header-filter${header.column.getIsFiltered() ? " is-active" : ""}`}
-                            aria-label={`Filter ${typeof header.column.columnDef.header === "string" ? header.column.columnDef.header : header.column.id}`}
-                            aria-haspopup="dialog"
-                            aria-expanded={filterMenu?.id === header.column.id}
-                            onClick={(event) => {
-                              const rect =
-                                event.currentTarget.getBoundingClientRect();
-                              openFilter(
-                                header.column.id,
-                                typeof header.column.columnDef.header ===
-                                  "string"
-                                  ? header.column.columnDef.header
-                                  : header.column.id,
-                                rect.left,
-                                rect.bottom,
-                                event.currentTarget,
-                              );
-                            }}
-                          >
-                            ▾
-                            {header.column.getIsFiltered() && (
-                              <span className="sr-only"> (active)</span>
-                            )}
-                          </button>
-                        )}
+                      {!header.isPlaceholder && filterColumnIds.includes(header.column.id) && (
+                        <button
+                          className={`header-filter${header.column.getIsFiltered() ? ' is-active' : ''}`}
+                          aria-label={`Filter ${typeof header.column.columnDef.header === 'string' ? header.column.columnDef.header : header.column.id}`}
+                          aria-haspopup="dialog"
+                          aria-expanded={filterMenu?.id === header.column.id}
+                          onClick={(event) => {
+                            const rect = event.currentTarget.getBoundingClientRect();
+                            openFilter(
+                              header.column.id,
+                              typeof header.column.columnDef.header === 'string'
+                                ? header.column.columnDef.header
+                                : header.column.id,
+                              rect.left,
+                              rect.bottom,
+                              event.currentTarget
+                            );
+                          }}
+                        >
+                          ▾
+                          {header.column.getIsFiltered() && (
+                            <span className="sr-only"> (active)</span>
+                          )}
+                        </button>
+                      )}
                     </div>
                     {!header.isPlaceholder && header.column.getCanResize() && (
                       <div
-                        className={`column-resizer${header.column.getIsResizing() ? " is-resizing" : ""}`}
+                        className={`column-resizer${header.column.getIsResizing() ? ' is-resizing' : ''}`}
                         role="separator"
                         aria-orientation="vertical"
-                        aria-label={`Resize ${typeof header.column.columnDef.header === "string" ? header.column.columnDef.header : header.column.id} column`}
+                        aria-label={`Resize ${typeof header.column.columnDef.header === 'string' ? header.column.columnDef.header : header.column.id} column`}
                         aria-valuemin={header.column.columnDef.minSize ?? 80}
                         aria-valuemax={header.column.columnDef.maxSize ?? 800}
                         aria-valuenow={header.getSize()}
@@ -431,23 +403,17 @@ export function DataTable<T>({
                         onTouchStart={header.getResizeHandler()}
                         onDoubleClick={() => header.column.resetSize()}
                         onKeyDown={(event) => {
-                          if (
-                            event.key === "ArrowLeft" ||
-                            event.key === "ArrowRight"
-                          ) {
+                          if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
                             event.preventDefault();
-                            const delta = event.key === "ArrowRight" ? 10 : -10;
+                            const delta = event.key === 'ArrowRight' ? 10 : -10;
                             const min = header.column.columnDef.minSize ?? 80;
                             const max = header.column.columnDef.maxSize ?? 800;
-                            const size = Math.max(
-                              min,
-                              Math.min(max, header.getSize() + delta),
-                            );
+                            const size = Math.max(min, Math.min(max, header.getSize() + delta));
                             table.setColumnSizing((current) => ({
                               ...current,
                               [header.column.id]: size,
                             }));
-                          } else if (event.key === "Home") {
+                          } else if (event.key === 'Home') {
                             event.preventDefault();
                             header.column.resetSize();
                           }
@@ -469,27 +435,14 @@ export function DataTable<T>({
                   onContextMenu={(event) => {
                     if (!rowActions?.(row.original).length) return;
                     event.preventDefault();
-                    openMenu(
-                      row.original,
-                      event.clientX,
-                      event.clientY,
-                      event.currentTarget,
-                    );
+                    openMenu(row.original, event.clientX, event.clientY, event.currentTarget);
                   }}
                   tabIndex={rowActions ? 0 : undefined}
                   onKeyDown={(event) => {
-                    if (
-                      event.key === "ContextMenu" ||
-                      (event.shiftKey && event.key === "F10")
-                    ) {
+                    if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
                       event.preventDefault();
                       const rect = event.currentTarget.getBoundingClientRect();
-                      openMenu(
-                        row.original,
-                        rect.left + 20,
-                        rect.top + 20,
-                        event.currentTarget,
-                      );
+                      openMenu(row.original, rect.left + 20, rect.top + 20, event.currentTarget);
                     }
                   }}
                 >
@@ -501,14 +454,8 @@ export function DataTable<T>({
                         aria-label="Row actions"
                         aria-haspopup="menu"
                         onClick={(event) => {
-                          const rect =
-                            event.currentTarget.getBoundingClientRect();
-                          openMenu(
-                            row.original,
-                            rect.left,
-                            rect.bottom,
-                            event.currentTarget,
-                          );
+                          const rect = event.currentTarget.getBoundingClientRect();
+                          openMenu(row.original, rect.left, rect.bottom, event.currentTarget);
                         }}
                       >
                         ⋯
@@ -517,10 +464,7 @@ export function DataTable<T>({
                   )}
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext(),
-                      )}
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}
                   <td className="table-filler" aria-hidden="true" />
@@ -542,58 +486,60 @@ export function DataTable<T>({
           <p className="table-state">No results match the selected filters.</p>
         ) : null}
       </div>
-      {!hidePagination && <div className="table-footer">
-        <label>
-          Rows per page{" "}
-          <select
-            value={table.getState().pagination.pageSize}
-            onChange={(e) => table.setPageSize(Number(e.target.value))}
-          >
-            {Array.from(new Set([...pageSizeOptions, initialPageSize]))
-              .sort((a, b) => a - b)
-              .map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
-          </select>
-        </label>
-        <div className="pagination">
-          <label className="page-number">
-            Page{" "}
-            <input
-              key={`${currentPage}-${pageCount}`}
-              aria-label="Page number"
-              type="text"
-              inputMode="numeric"
-              defaultValue={currentPage}
-              disabled={pageCount === 0 || loading || !!error}
-              onBlur={(event) => commitPage(event.currentTarget)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  event.currentTarget.blur();
-                }
-              }}
-            />
+      {!hidePagination && (
+        <div className="table-footer">
+          <label>
+            Rows per page{' '}
+            <select
+              value={table.getState().pagination.pageSize}
+              onChange={(e) => table.setPageSize(Number(e.target.value))}
+            >
+              {Array.from(new Set([...pageSizeOptions, initialPageSize]))
+                .sort((a, b) => a - b)
+                .map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+            </select>
           </label>
-          <span>of {pageCount}</span>
-          <Button
-            variant="secondary"
-            disabled={!table.getCanPreviousPage()}
-            onClick={() => table.previousPage()}
-          >
-            Previous
-          </Button>
-          <Button
-            variant="secondary"
-            disabled={!table.getCanNextPage()}
-            onClick={() => table.nextPage()}
-          >
-            Next
-          </Button>
+          <div className="pagination">
+            <label className="page-number">
+              Page{' '}
+              <input
+                key={`${currentPage}-${pageCount}`}
+                aria-label="Page number"
+                type="text"
+                inputMode="numeric"
+                defaultValue={currentPage}
+                disabled={pageCount === 0 || loading || !!error}
+                onBlur={(event) => commitPage(event.currentTarget)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    event.currentTarget.blur();
+                  }
+                }}
+              />
+            </label>
+            <span>of {pageCount}</span>
+            <Button
+              variant="secondary"
+              disabled={!table.getCanPreviousPage()}
+              onClick={() => table.previousPage()}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={!table.getCanNextPage()}
+              onClick={() => table.nextPage()}
+            >
+              Next
+            </Button>
+          </div>
         </div>
-      </div>}
+      )}
       {filterMenu && (
         <div
           ref={filterRef}
@@ -602,9 +548,7 @@ export function DataTable<T>({
           aria-label={`Filter ${filterMenu.label}`}
         >
           <strong>{filterMenu.label}</strong>
-          <p>
-            {server ? "Filter all matching results" : "Filter loaded results"}
-          </p>
+          <p>{server ? 'Filter all matching results' : 'Filter loaded results'}</p>
           <div className="filter-options">
             {filterOptions(filterMenu.id).map((value) => (
               <label key={value}>
@@ -618,31 +562,23 @@ export function DataTable<T>({
                             ...current,
                             selected: event.target.checked
                               ? [...current.selected, value]
-                              : current.selected.filter(
-                                  (item) => item !== value,
-                                ),
+                              : current.selected.filter((item) => item !== value),
                           }
-                        : null,
+                        : null
                     )
                   }
                 />
-                {value === "—" || value === BLANK_FILTER_VALUE
-                  ? "(Blank)"
-                  : value}
+                {value === '—' || value === BLANK_FILTER_VALUE ? '(Blank)' : value}
               </label>
             ))}
           </div>
-          {filterOptions(filterMenu.id).length === 0 && (
-            <p>No matching values.</p>
-          )}
+          {filterOptions(filterMenu.id).length === 0 && <p>No matching values.</p>}
           <div className="filter-controls">
             <Button
               variant="ghost"
               onClick={() =>
                 setFilterMenu((current) =>
-                  current
-                    ? { ...current, selected: filterOptions(current.id) }
-                    : null,
+                  current ? { ...current, selected: filterOptions(current.id) } : null
                 )
               }
             >
@@ -651,9 +587,7 @@ export function DataTable<T>({
             <Button
               variant="ghost"
               onClick={() =>
-                setFilterMenu((current) =>
-                  current ? { ...current, selected: [] } : null,
-                )
+                setFilterMenu((current) => (current ? { ...current, selected: [] } : null))
               }
             >
               Select none
@@ -677,9 +611,7 @@ export function DataTable<T>({
                 table
                   .getColumn(filterMenu.id)
                   ?.setFilterValue(
-                    filterMenu.selected.length === options.length
-                      ? undefined
-                      : filterMenu.selected,
+                    filterMenu.selected.length === options.length ? undefined : filterMenu.selected
                   );
                 table.setPageIndex(0);
                 setFilterMenu(null);
@@ -692,18 +624,13 @@ export function DataTable<T>({
         </div>
       )}
       {menu && (
-        <div
-          ref={menuRef}
-          className="row-menu"
-          role="menu"
-          aria-label="Row actions"
-        >
+        <div ref={menuRef} className="row-menu" role="menu" aria-label="Row actions">
           {rowActions?.(menu.row).map((action, index) => (
             <button
               key={`${action.label}-${index}`}
               role="menuitem"
               disabled={action.disabled}
-              className={action.destructive ? "destructive" : ""}
+              className={action.destructive ? 'destructive' : ''}
               onClick={() => {
                 setMenu(null);
                 action.onSelect(menu.row);

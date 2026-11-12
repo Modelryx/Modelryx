@@ -2,13 +2,13 @@ import hashlib
 import uuid
 
 import pytest
-from modelryx.models import BomLine
 from modelryx.api.staging import (
     StagingBomLineProposal,
     StagingCreateRequest,
     StagingPromoteRequest,
     _duplicate_bom_occurrence_groups,
 )
+from modelryx.models import BomLine
 from pydantic import ValidationError
 
 
