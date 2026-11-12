@@ -394,7 +394,7 @@ export class ModelryxViewer {
     this.profile = profile;
     const value = displayProfiles[profile];
     this.scene.background = this.createGradientBackground(value.backgroundTop, value.backgroundBottom);
-    this.scene.environmentIntensity = value.environmentIntensity;
+    (this.scene as any).environmentIntensity = value.environmentIntensity;
     this.keyLight.intensity = value.keyIntensity;
     this.fillLight.intensity = value.fillIntensity;
     this.rimLight.intensity = value.rimIntensity;
