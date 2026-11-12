@@ -13,9 +13,9 @@ jobs:
       matrix:
         include:
           - {name: server, context: ., file: server/Dockerfile}
-          - {name: frontend, context: front-end, file: Dockerfile}
+          - {name: frontend, context: ., file: front-end/Dockerfile}
           - {name: freecad-worker, context: ., file: workers/freecad/Dockerfile}
-          - {name: step-worker, context: workers/step, file: workers/step/Dockerfile}
+          - {name: step-worker, context: ., file: workers/step/Dockerfile}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
