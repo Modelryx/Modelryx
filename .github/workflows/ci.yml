@@ -11,7 +11,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run migrated database test suite
-        env: {MODELRYX_INTERNAL_WORKER_KEY: ci-only-worker-key}
+        env:
+          MODELRYX_INTERNAL_WORKER_KEY: ci-only-worker-key
+          MODELRYX_JWT_SECRET: ci-only-test-secret-1234567890123456
+          MODELRYX_ENVIRONMENT: test
+          POSTGRES_PASSWORD: modelryx-test-password
+          MINIO_ROOT_USER: ci-only-minio
+          MINIO_ROOT_PASSWORD: ci-only-minio-password
         run: docker compose --profile test run --rm test
   frontend:
     runs-on: ubuntu-24.04
@@ -82,5 +88,11 @@ jobs:
             exit 1
           fi
       - name: Validate Compose
-        env: {MODELRYX_INTERNAL_WORKER_KEY: ci-only-worker-key}
+        env:
+          MODELRYX_INTERNAL_WORKER_KEY: ci-only-worker-key
+          MODELRYX_JWT_SECRET: ci-only-test-secret-1234567890123456
+          MODELRYX_ENVIRONMENT: test
+          POSTGRES_PASSWORD: modelryx-test-password
+          MINIO_ROOT_USER: ci-only-minio
+          MINIO_ROOT_PASSWORD: ci-only-minio-password
         run: docker compose config --quiet
