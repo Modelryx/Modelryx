@@ -18,48 +18,26 @@ Modelryx is a web-based platform for managing CAD (Computer-Aided Design) data w
 
 ## Key Features
 
-- �?**Multi-CAD Support** - Built-in support for FreeCAD and STEP formats, extensible to others
-- �?**Version Control** - Track revisions, assemblies, and metadata
-- �?**3D Preview** - Real-time GLB/3D model previewing and interaction
-- �?**Worker Framework** - Extensible system for adding new CAD formats and tools
-- �?**Production Ready** - PostgreSQL backend, S3/MinIO object storage, containerized deployment
-- �?**Security** - HMAC authentication, role-based access, HTTPS support
-- �?**APIs** - Complete REST API for programmatic access
-- �?**Open Source** - Apache 2.0 licensed, community-driven
+- **Multi-CAD Support** - Built-in support for FreeCAD and STEP formats, extensible to others
+- **Version Control** - Track revisions, assemblies, and metadata
+- **3D Preview** - Real-time GLB/3D model previewing and interaction
+- **Worker Framework** - Extensible system for adding new CAD formats and tools
+- **Production Ready** - PostgreSQL backend, S3/MinIO object storage, containerized deployment
+- **Security** - HMAC authentication, role-based access, HTTPS support
+- **APIs** - Complete REST API for programmatic access
+- **Open Source** - Apache 2.0 licensed, community-driven
 
 ## Architecture
 
-Modelryx follows a microservices architecture:
+Modelryx follows a microservices architecture with these components:
 
-```
-┌─────────────────────────────────────�?
-�?  React Frontend (Vite)             �?
-�?  http://localhost:5173             �?
-└──────────────┬──────────────────────�?
-               �?
-         ┌─────▼─────�?
-         �?REST API  �?
-         �?FastAPI   �?
-         �?:8000     �?
-         └─────┬─────�?
-               �?
-    ┌──────────┼──────────�?
-    �?         �?         �?
-    �?   ┌─────▼─────�?   �?
-    �?   │PostgreSQL �?   �?
-    �?   │Database   �?   �?
-    �?   └───────────�?   �?
-    �?                    �?
-    �? ┌─────────────────────�?
-    �? �?CAD Workers         �?
-    �? ├─────────────────────�?
-    �? �?�?FreeCAD Worker    �?
-    �? �?�?STEP Worker       �?
-    �? �?�?Custom Workers    �?
-    �? └─────────────────────�?
-    �?
-    └─ MinIO (Object Storage)
-```
+- **Frontend**: React 18+ with TypeScript on Vite, served at http://localhost:5173
+- **API Server**: FastAPI application on port 8000 with OpenAPI documentation
+- **Database**: PostgreSQL 14+ with pgvector for vector operations
+- **CAD Workers**: Containerized processing workers for format conversion and analysis
+- **Object Storage**: MinIO for S3-compatible file storage and versioning
+
+Frontend -> REST API (FastAPI) -> PostgreSQL + CAD Workers + MinIO Storage
 
 See the [platform architecture documentation](docs/architecture/platform-architecture.md) for detailed design.
 
@@ -67,7 +45,7 @@ See the [platform architecture documentation](docs/architecture/platform-archite
 
 ### Prerequisites
 
-- **Docker & Docker Compose** v24.0+ 
+- **Docker & Docker Compose** v24.0+
 - **Node.js** v18.0+ (for frontend development)
 - **Python** v3.10+ (for server and workers)
 - **8+ GB RAM**, **10+ GB disk space**
@@ -119,20 +97,23 @@ For local development with hot reloading:
 cd server
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-python -m uvicorn src.server.main:app --reload
+pip install -e ".[dev]"
+python -m uvicorn src.server.modelryx.api.main:app --reload
 
 # Terminal 2: Frontend
 cd front-end
 npm install
 npm run dev
 
-# Then visit http://localhost:5173
+# Terminal 3: Database (if not using Docker)
+docker run -e POSTGRES_PASSWORD=dev -p 5432:5432 postgres:15
 ```
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed setup instructions.
 
 ## Deployment
+
+### Production Deployment
 
 For production deployment:
 
@@ -186,14 +167,14 @@ Example workers included:
 
 ```
 modelryx/
-├── server/              # Python/FastAPI backend API
-├── front-end/           # React/TypeScript/Vite UI
-├── workers/
-�?  ├── freecad/         # FreeCAD worker (built-in)
-�?  └── step/            # STEP processor (built-in)
-├── docs/                # Documentation
-├── scripts/             # Utility scripts (backup, deploy)
-└── compose.yaml         # Docker Compose orchestration
+|-- server/              # Python/FastAPI backend API
+|-- front-end/           # React/TypeScript/Vite UI
+|-- workers/
+|   |-- freecad/         # FreeCAD worker (built-in)
+|   |-- step/            # STEP processor (built-in)
+|-- docs/                # Documentation
+|-- scripts/             # Utility scripts (backup, deploy)
+|-- compose.yaml         # Docker Compose orchestration
 ```
 
 ## Technology Stack
@@ -212,7 +193,7 @@ modelryx/
 - **Issues** - Report bugs and request features on GitHub
 - **Discussions** - Ask questions and share ideas
 - **Contributing** - See [CONTRIBUTING.md](CONTRIBUTING.md)
-- **Code of Conduct** - Be respectful and constructive
+- **Code of Conduct** - See [code-of-conduct.md](code-of-conduct.md)
 
 ## License
 
@@ -222,29 +203,18 @@ The platform includes integrations with:
 - **FreeCAD** - LGPL v2.1 (open source)
 - **STEP format** - Open standard (ISO 10303)
 
-## Roadmap
-
-See [docs/roadmap/](docs/roadmap/) for planned features and long-term direction.
-
-Current focus areas:
-- Expanded CAD format support
-- Enhanced collaboration features
-- Performance optimization for large assemblies
-- Cloud deployment templates
-
 ## Getting Help
 
-1. Check [docs/DEVELOPMENT.md](DEVELOPMENT.md) for setup issues
-2. Review [docs/testing.md](docs/testing.md) for test and validation
+1. Check [DEVELOPMENT.md](DEVELOPMENT.md) for setup issues
+2. Review [docs/development/testing.md](docs/development/testing.md) for test and validation
 3. Search existing [Issues](../../issues)
 4. Ask in [Discussions](../../discussions)
-5. Review security advisories before reporting security issues
+5. See [security-policy.md](security-policy.md) for security reporting
 
 ---
 
 **Ready to get started?** See [Quick Start](#quick-start) or [DEVELOPMENT.md](DEVELOPMENT.md).
 
-**Want to deploy to production?** See [deployment.md](docs/deployment.md).
+**Want to deploy to production?** See [docs/operations/deployment.md](docs/operations/deployment.md).
 
 **Building a custom worker?** See [CAD Worker Guide](docs/workers/new-cad-worker-guide.md).
-
