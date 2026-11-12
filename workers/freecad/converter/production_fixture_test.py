@@ -20,7 +20,7 @@ from modelryx.metadata import validate_part_metadata
 from modelryx.cad.inspection import inspect_metadata_snapshot
 from modelryx.cad.models import CADParameterChangeRequest
 from modelryx.cad.plans import resolve_parameter_change
-from workers.freecad.converter.fcstd_to_modelryx_glb import convert_fcstd_to_modelryx_package, extract_fcstd_part_metadata
+from fcstd_to_modelryx_glb import convert_fcstd_to_modelryx_package, extract_fcstd_part_metadata
 from execute_cad_plan import execute, sha256_file
 from document_health import recompute_for_extraction
 

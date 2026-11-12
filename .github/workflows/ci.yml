@@ -63,10 +63,10 @@ jobs:
         run: docker build --file workers/freecad/Dockerfile --tag modelryx-freecad-ci .
       - name: Run native FreeCAD release gates
         run: |
-          docker run --rm -e PYTHONPATH=/app/workers:/app modelryx-freecad-ci python /opt/modelryx-converter/golden_integration_test.py
-          docker run --rm -e PYTHONPATH=/app/workers:/app modelryx-freecad-ci python /opt/modelryx-preprocessor/dependency_integration_test.py
-          docker run --rm -e PYTHONPATH=/app/workers:/app modelryx-freecad-ci python /opt/modelryx-converter/production_fixture_test.py
-          docker run --rm -e PYTHONPATH=/app/workers:/app modelryx-freecad-ci python /opt/modelryx-converter/process_tree_integration_test.py
+          docker run --rm modelryx-freecad-ci python /opt/modelryx-converter/golden_integration_test.py
+          docker run --rm modelryx-freecad-ci python /opt/modelryx-preprocessor/dependency_integration_test.py
+          docker run --rm modelryx-freecad-ci python /opt/modelryx-converter/production_fixture_test.py
+          docker run --rm modelryx-freecad-ci python /opt/modelryx-converter/process_tree_integration_test.py
   step-worker:
     name: STEP worker
     runs-on: ubuntu-24.04

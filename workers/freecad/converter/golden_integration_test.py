@@ -18,9 +18,9 @@ from pathlib import Path
 
 import trimesh
 from modelryx.metadata import validate_part_metadata
-import workers.freecad.converter.fcstd_to_modelryx_glb as converter
+import fcstd_to_modelryx_glb as converter
 from link_array_geometry import filtered_expanded_array_shape
-from workers.freecad.converter.fcstd_to_modelryx_glb import (
+from fcstd_to_modelryx_glb import (
     convert_fcstd_to_modelryx_package,
     extract_fcstd_part_metadata,
 )
