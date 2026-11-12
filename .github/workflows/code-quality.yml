@@ -59,7 +59,8 @@ jobs:
     - name: Install dependencies
       run: |
         cd front-end
-        npm ci
+        npm ci --legacy-peer-deps
+        npm rebuild esbuild @rollup/rollup-linux-x64-gnu 2>/dev/null || true
     
     - name: Run ESLint
       run: |

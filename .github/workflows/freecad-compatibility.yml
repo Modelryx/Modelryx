@@ -21,6 +21,6 @@ jobs:
           --tag modelryx-freecad-compat .
       - name: Test native metadata and dependency fixtures
         run: |
-          docker run --rm modelryx-freecad-compat python /opt/modelryx-converter/golden_integration_test.py
-          docker run --rm modelryx-freecad-compat python /opt/modelryx-preprocessor/dependency_integration_test.py
-          docker run --rm modelryx-freecad-compat python /opt/modelryx-converter/production_fixture_test.py --compatibility-candidate
+          docker run --rm -e PYTHONPATH=/app/workers:/app modelryx-freecad-compat python /opt/modelryx-converter/golden_integration_test.py
+          docker run --rm -e PYTHONPATH=/app/workers:/app modelryx-freecad-compat python /opt/modelryx-preprocessor/dependency_integration_test.py
+          docker run --rm -e PYTHONPATH=/app/workers:/app modelryx-freecad-compat python /opt/modelryx-converter/production_fixture_test.py --compatibility-candidate

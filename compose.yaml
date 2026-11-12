@@ -25,7 +25,7 @@ services:
     environment:
       POSTGRES_DB: modelryx
       POSTGRES_USER: modelryx
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Error: POSTGRES_PASSWORD must be set in .env}
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Error: POSTGRES_PASSWORD must be set in .env}"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U modelryx -d modelryx"]
       interval: 5s
@@ -40,10 +40,10 @@ services:
       dockerfile: server/Dockerfile
     command: ["alembic", "upgrade", "head"]
     environment: &app-environment
-      MODELRYX_DATABASE_URL: postgresql://modelryx:${POSTGRES_PASSWORD:?Error: POSTGRES_PASSWORD must be set in .env}@db:5432/modelryx
-      MODELRYX_ENVIRONMENT: ${MODELRYX_ENVIRONMENT:?Error: MODELRYX_ENVIRONMENT must be set in .env}
+      MODELRYX_DATABASE_URL: "postgresql://modelryx:${POSTGRES_PASSWORD:?Error: POSTGRES_PASSWORD must be set in .env}@db:5432/modelryx"
+      MODELRYX_ENVIRONMENT: "${MODELRYX_ENVIRONMENT:?Error: MODELRYX_ENVIRONMENT must be set in .env}"
       MODELRYX_STORAGE_ROOT: /var/lib/modelryx/objects
-      MODELRYX_JWT_SECRET: ${MODELRYX_JWT_SECRET:?Error: MODELRYX_JWT_SECRET must be set in .env}
+      MODELRYX_JWT_SECRET: "${MODELRYX_JWT_SECRET:?Error: MODELRYX_JWT_SECRET must be set in .env}"
       MODELRYX_AI_GATEWAY_BASE_URL: ${MODELRYX_AI_GATEWAY_BASE_URL:-}
       MODELRYX_AI_GATEWAY_API_KEY: ${MODELRYX_AI_GATEWAY_API_KEY:-}
       MODELRYX_AI_CHAT_MODEL: ${MODELRYX_AI_CHAT_MODEL:-}
@@ -60,7 +60,7 @@ services:
       MODELRYX_NX_WORKER_URL: ${MODELRYX_NX_WORKER_URL:-}
       MODELRYX_NX_ALLOW_UNQUALIFIED_PROCESSING: ${MODELRYX_NX_ALLOW_UNQUALIFIED_PROCESSING:-false}
       MODELRYX_BOOTSTRAP_ADMIN_USERNAME: ${MODELRYX_BOOTSTRAP_ADMIN_USERNAME:-admin}
-      MODELRYX_BOOTSTRAP_ADMIN_PASSWORD: ${MODELRYX_BOOTSTRAP_ADMIN_PASSWORD:?Error: MODELRYX_BOOTSTRAP_ADMIN_PASSWORD must be set in .env}
+      MODELRYX_BOOTSTRAP_ADMIN_PASSWORD: "${MODELRYX_BOOTSTRAP_ADMIN_PASSWORD:?Error: MODELRYX_BOOTSTRAP_ADMIN_PASSWORD must be set in .env}"
       MODELRYX_CORS_ORIGINS: ${MODELRYX_CORS_ORIGINS:-["http://localhost:5173","http://localhost:5174"]}
       MODELRYX_REQUIRE_RELEASE_APPROVAL: ${MODELRYX_REQUIRE_RELEASE_APPROVAL:-false}
       MODELRYX_APPROVAL_REQUIRED_COUNT: ${MODELRYX_APPROVAL_REQUIRED_COUNT:-1}
@@ -161,8 +161,8 @@ services:
     image: minio/minio:latest
     restart: unless-stopped
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Error: MINIO_ROOT_USER must be set in .env}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Error: MINIO_ROOT_PASSWORD must be set in .env}
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:?Error: MINIO_ROOT_USER must be set in .env}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:?Error: MINIO_ROOT_PASSWORD must be set in .env}"
     command: server /data --console-address ":9001"
     ports:
       - "0.0.0.0:9000:9000"
@@ -187,8 +187,8 @@ services:
       echo 'MinIO initialization complete'
       "
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Error: MINIO_ROOT_USER must be set in .env}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Error: MINIO_ROOT_PASSWORD must be set in .env}
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:?Error: MINIO_ROOT_USER must be set in .env}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:?Error: MINIO_ROOT_PASSWORD must be set in .env}"
     volumes:
       - ./scripts/minio-lifecycle-policy.json:/tmp/lifecycle-policy.json:ro
     depends_on:
@@ -203,7 +203,7 @@ services:
       target: test
     environment:
       <<: *app-environment
-      MODELRYX_DATABASE_URL: postgresql+psycopg://modelryx:modelryx@db-test:5432/modelryx_test
+      MODELRYX_DATABASE_URL: postgresql://modelryx:modelryx@db-test:5432/modelryx_test
       MODELRYX_ENVIRONMENT: test
       MODELRYX_AUTOCAD_WORKER_URL: ""
       MODELRYX_INVENTOR_WORKER_URL: ""
@@ -252,7 +252,7 @@ services:
     command: ["alembic", "upgrade", "head"]
     environment:
       <<: *app-environment
-      MODELRYX_DATABASE_URL: postgresql+psycopg://modelryx:modelryx@db-test:5432/modelryx_test
+      MODELRYX_DATABASE_URL: postgresql://modelryx:modelryx@db-test:5432/modelryx_test
       MODELRYX_ENVIRONMENT: test
     depends_on:
       reset-test-db:
