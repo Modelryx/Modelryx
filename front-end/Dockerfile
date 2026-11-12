@@ -8,7 +8,7 @@ COPY package*.json ./
 
 # Install dependencies
 RUN npm ci --legacy-peer-deps && \
-    npm rebuild esbuild @rollup/rollup-linux-x64-gnu 2>/dev/null || true
+    npm install --no-save @rollup/rollup-linux-x64-gnu esbuild
 
 # Copy source code
 COPY . .
