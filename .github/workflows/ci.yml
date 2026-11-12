@@ -15,6 +15,7 @@ jobs:
           MODELRYX_INTERNAL_WORKER_KEY: ci-only-worker-key
           MODELRYX_JWT_SECRET: ci-only-test-secret-1234567890123456
           MODELRYX_ENVIRONMENT: test
+          MODELRYX_BOOTSTRAP_ADMIN_PASSWORD: ci-only-bootstrap-password
           POSTGRES_PASSWORD: modelryx-test-password
           MINIO_ROOT_USER: ci-only-minio
           MINIO_ROOT_PASSWORD: ci-only-minio-password
@@ -27,6 +28,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: {node-version: 22, cache: npm, cache-dependency-path: front-end/package-lock.json}
       - run: npm ci
+      - run: npm install --no-save @rollup/rollup-linux-x64-gnu esbuild
       - run: npm run typecheck
       - run: npm run build
       - name: Install Playwright browser
@@ -92,6 +94,7 @@ jobs:
           MODELRYX_INTERNAL_WORKER_KEY: ci-only-worker-key
           MODELRYX_JWT_SECRET: ci-only-test-secret-1234567890123456
           MODELRYX_ENVIRONMENT: test
+          MODELRYX_BOOTSTRAP_ADMIN_PASSWORD: ci-only-bootstrap-password
           POSTGRES_PASSWORD: modelryx-test-password
           MINIO_ROOT_USER: ci-only-minio
           MINIO_ROOT_PASSWORD: ci-only-minio-password

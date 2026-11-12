@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "modelryx-new-ui",
   "private": true,
   "version": "0.1.0",
@@ -36,4 +36,3 @@
     "eslint-plugin-react-hooks": "^4.6.0"
   }
 }
-
