@@ -9,7 +9,6 @@ description = "CAD-neutral part management API"
 license = {file = "LICENSE"}
 requires-python = ">=3.11"
 dependencies = [
-  "alembic>=1.14,<2",
   "fastapi>=0.115,<1",
   "httpx>=0.28,<1",
   "jsonschema[format]>=4.23,<5",

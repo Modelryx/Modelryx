@@ -9,6 +9,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     String,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -33,7 +34,7 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(32))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     auth_version: Mapped[int] = mapped_column(default=0)
-    failed_login_attempts: Mapped[int] = mapped_column(default=0)
+    failed_login_attempts: Mapped[int] = mapped_column(default=0, server_default=text("0"))
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -47,7 +48,7 @@ class UserRole(Base):
     """Independent business-role assignment for a user.
 
     ``users.role`` remains as a derived compatibility value during the transition
-    so older integrations and migrations continue to work.
+    so callers that use the single effective-role field continue to work.
     """
 
     __tablename__ = "user_roles"
@@ -62,5 +63,7 @@ class UserRole(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     role: Mapped[str] = mapped_column(String(32), primary_key=True)
-    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    assigned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=text("now()")
+    )
     user: Mapped[User] = relationship(back_populates="role_assignments")

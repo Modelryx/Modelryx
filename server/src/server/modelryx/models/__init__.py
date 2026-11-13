@@ -42,6 +42,7 @@ from modelryx.models.knowledge import (
 )
 from modelryx.models.metadata import MetadataExtraction
 from modelryx.models.personalization import Favorite, RecentlyViewedItem, UserNotification
+from modelryx.models.schema_state import DatabaseSchema
 from modelryx.models.staging import StagingFile, StagingSession
 from modelryx.models.system import ApplicationSetting, WorkerHeartbeat
 from modelryx.models.ui_views import UiSavedView
@@ -54,6 +55,7 @@ from modelryx.models.validation import (
 from modelryx.models.workspace import Checkout, DownloadBundle, ProcessingJob
 
 __all__ = [
+    "DatabaseSchema",
     "utcnow",
     "User",
     "UserRole",
@@ -119,3 +121,6 @@ __all__ = [
     "WorkerHeartbeat",
     "Part",
 ]
+
+# Attach PostgreSQL indexes after all model tables have been declared.
+from modelryx.models import indexes as _indexes  # noqa: E402,F401

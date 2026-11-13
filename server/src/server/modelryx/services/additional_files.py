@@ -35,7 +35,7 @@ class AdditionalFileConsistencyReport:
 
 
 def inspect_additional_files(db: Session) -> AdditionalFileConsistencyReport:
-    """Read-only audit used before and during the relation-based attachment migration."""
+    """Read-only audit of relation-based attachment consistency."""
     attachments = list(db.scalars(select(Attachment).order_by(Attachment.id)))
     versions = list(db.scalars(
         select(Artifact)

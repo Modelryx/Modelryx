@@ -16,7 +16,7 @@ def roles_for_user(user: User) -> frozenset[str]:
     assigned = frozenset(value.role for value in user.role_assignments)
     if assigned:
         return assigned
-    # Compatibility for fixtures and databases before migration 0069 is applied.
+    # Source compatibility for callers that supply a single effective role.
     return normalize_roles([user.role])
 
 

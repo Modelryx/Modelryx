@@ -3,7 +3,6 @@
 !server/pyproject.toml
 !server/README.md
 !server/LICENSE
-!server/alembic.ini
 !server/src/
 !server/src/server/
 !server/src/server/**

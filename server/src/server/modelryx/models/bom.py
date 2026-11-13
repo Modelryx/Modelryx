@@ -11,6 +11,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -31,7 +32,7 @@ class BomViewRevision(Base):
     snapshot_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("revision_content_snapshots.id"), unique=True
     )
-    sequence: Mapped[int] = mapped_column(default=1)
+    sequence: Mapped[int] = mapped_column(default=1, server_default=text("1"))
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -57,7 +58,9 @@ class BomLine(Base):
         UUID(as_uuid=True), ForeignKey("revisions.id"), index=True
     )
     occurrence_key: Mapped[str] = mapped_column(String(255))
-    source_reference: Mapped[str] = mapped_column(String(500), default="")
+    source_reference: Mapped[str] = mapped_column(
+        String(500), default="", server_default=text("''::character varying")
+    )
     reference_designator: Mapped[str | None] = mapped_column(String(255))
     transform: Mapped[list[float]] = mapped_column(
         JSONB,
@@ -79,12 +82,17 @@ class BomLine(Base):
             0.0,
             1.0,
         ],
+        server_default=text("'[1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]'::jsonb"),
     )
-    is_suppressed: Mapped[bool] = mapped_column(Boolean, default=False)
-    is_visible: Mapped[bool] = mapped_column(Boolean, default=True)
-    properties_json: Mapped[dict] = mapped_column(JSONB, default=dict)
-    quantity: Mapped[int] = mapped_column(default=1)
-    sequence: Mapped[int] = mapped_column(default=0)
+    is_suppressed: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false")
+    )
+    is_visible: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+    properties_json: Mapped[dict] = mapped_column(
+        JSONB, default=dict, server_default=text("'{}'::jsonb")
+    )
+    quantity: Mapped[int] = mapped_column(default=1, server_default=text("1"))
+    sequence: Mapped[int] = mapped_column(default=0, server_default=text("0"))
 
     __table_args__ = (
         UniqueConstraint(

@@ -34,11 +34,11 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
 
-  migrate:
+  initialize-db:
     build:
       context: .
       dockerfile: server/Dockerfile
-    command: ["alembic", "upgrade", "head"]
+    command: ["python", "-m", "modelryx.initialize_database"]
     environment: &app-environment
       MODELRYX_DATABASE_URL: "postgresql://modelryx:${POSTGRES_PASSWORD:?Error: POSTGRES_PASSWORD must be set in .env}@db:5432/modelryx"
       MODELRYX_ENVIRONMENT: "${MODELRYX_ENVIRONMENT:?Error: MODELRYX_ENVIRONMENT must be set in .env}"
@@ -93,7 +93,7 @@ services:
     volumes:
       - object-data:/var/lib/modelryx/objects
     depends_on:
-      migrate:
+      initialize-db:
         condition: service_completed_successfully
       storage-init:
         condition: service_completed_successfully
@@ -116,7 +116,7 @@ services:
     volumes:
       - object-data:/var/lib/modelryx/objects
     depends_on:
-      migrate:
+      initialize-db:
         condition: service_completed_successfully
       storage-init:
         condition: service_completed_successfully
@@ -138,7 +138,7 @@ services:
     volumes:
       - object-data:/var/lib/modelryx/objects
     depends_on:
-      migrate:
+      initialize-db:
         condition: service_completed_successfully
       storage-init:
         condition: service_completed_successfully
@@ -173,7 +173,7 @@ services:
     volumes:
       - test-object-data:/var/lib/modelryx/objects
     depends_on:
-      migrate-test:
+      initialize-test-db:
         condition: service_completed_successfully
       storage-test-init:
         condition: service_completed_successfully
@@ -206,12 +206,12 @@ services:
       db-test:
         condition: service_healthy
 
-  migrate-test:
+  initialize-test-db:
     profiles: ["test"]
     build:
       context: .
       dockerfile: server/Dockerfile
-    command: ["alembic", "upgrade", "head"]
+    command: ["python", "-m", "modelryx.initialize_database"]
     environment:
       <<: *app-environment
       MODELRYX_DATABASE_URL: postgresql://modelryx:modelryx@db-test:5432/modelryx_test
@@ -244,7 +244,7 @@ services:
     volumes:
       - object-data:/var/lib/modelryx/objects
     depends_on:
-      migrate:
+      initialize-db:
         condition: service_completed_successfully
       storage-init:
         condition: service_completed_successfully

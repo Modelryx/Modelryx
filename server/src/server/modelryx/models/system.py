@@ -8,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     String,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -24,7 +25,9 @@ class ApplicationSetting(Base):
     key: Mapped[str] = mapped_column(String(100), primary_key=True)
     value: Mapped[str] = mapped_column(String(2000))
     updated_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=text("now()")
+    )
 
 
 class WorkerHeartbeat(Base):
@@ -37,8 +40,12 @@ class WorkerHeartbeat(Base):
     worker_version: Mapped[str] = mapped_column(String(100))
     application_version: Mapped[str | None] = mapped_column(String(100))
     adapter_version: Mapped[str | None] = mapped_column(String(100))
-    compatibility_state: Mapped[str] = mapped_column(String(24), default="UNKNOWN")
-    capabilities_json: Mapped[dict] = mapped_column(JSONB, default=dict)
+    compatibility_state: Mapped[str] = mapped_column(
+        String(24), default="UNKNOWN", server_default=text("'UNKNOWN'::character varying")
+    )
+    capabilities_json: Mapped[dict] = mapped_column(
+        JSONB, default=dict, server_default=text("'{}'::jsonb")
+    )
     status: Mapped[str] = mapped_column(String(16), default="IDLE")
     current_job_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     detail: Mapped[str | None] = mapped_column(String(500))

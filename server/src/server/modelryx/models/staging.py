@@ -10,6 +10,7 @@ from sqlalchemy import (
     ForeignKey,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -26,8 +27,13 @@ class StagingSession(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     client_staging_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), unique=True)
     status: Mapped[str] = mapped_column(String(32), default="HASHED", index=True)
-    operation: Mapped[str] = mapped_column(String(32), default="CREATE_ITEM", index=True)
-    snapshot_version: Mapped[int] = mapped_column(default=1)
+    operation: Mapped[str] = mapped_column(
+        String(32),
+        default="CREATE_ITEM",
+        index=True,
+        server_default=text("'CREATE_ITEM'::character varying"),
+    )
+    snapshot_version: Mapped[int] = mapped_column(default=1, server_default=text("1"))
     base_revision_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("revisions.id"), index=True, nullable=True
     )
@@ -36,9 +42,13 @@ class StagingSession(Base):
     )
     package_sha256: Mapped[str] = mapped_column(String(64), index=True)
     metadata_json: Mapped[dict | None] = mapped_column(JSONB)
-    proposal_json: Mapped[dict] = mapped_column(JSONB, default=dict)
+    proposal_json: Mapped[dict] = mapped_column(
+        JSONB, default=dict, server_default=text("'{}'::jsonb")
+    )
     commit_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), unique=True)
-    result_json: Mapped[dict] = mapped_column(JSONB, default=dict)
+    result_json: Mapped[dict] = mapped_column(
+        JSONB, default=dict, server_default=text("'{}'::jsonb")
+    )
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -73,9 +83,18 @@ class StagingFile(Base):
     filename: Mapped[str] = mapped_column(String(255))
     byte_size: Mapped[int] = mapped_column(BigInteger)
     sha256: Mapped[str] = mapped_column(String(64), index=True)
-    mime_type: Mapped[str] = mapped_column(String(255), default="application/octet-stream")
+    mime_type: Mapped[str] = mapped_column(
+        String(255),
+        default="application/octet-stream",
+        server_default=text("'application/octet-stream'::character varying"),
+    )
     storage_key: Mapped[str] = mapped_column(String(1024), unique=True)
-    state: Mapped[str] = mapped_column(String(32), default="PENDING", index=True)
+    state: Mapped[str] = mapped_column(
+        String(32),
+        default="PENDING",
+        index=True,
+        server_default=text("'PENDING'::character varying"),
+    )
 
     __table_args__ = (
         UniqueConstraint("staging_id", "logical_path", name="uq_staging_files_logical_path"),

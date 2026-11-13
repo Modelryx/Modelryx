@@ -16,7 +16,7 @@ cd server
 python -m venv venv
 source venv/bin/activate  # or venv\Scripts\activate on Windows
 pip install -r requirements.txt
-python -m alembic upgrade head
+python -m modelryx.initialize_database
 python -m uvicorn src.server.main:app --reload
 ```
 
@@ -202,21 +202,15 @@ python -m server
 
 ## 馃搳 Database Operations
 
-### Migrations
+### Fresh database initialization
 ```bash
-# Run pending migrations
 cd server
-python -m alembic upgrade head
-
-# Create new migration
-python -m alembic revision --autogenerate -m "description"
-
-# Rollback last migration
-python -m alembic downgrade -1
-
-# View migration history
-python -m alembic history
+python -m modelryx.initialize_database
 ```
+
+This creates an empty database's current schema or verifies a previously initialized
+matching schema. It does not upgrade or reset existing databases. See
+[the initialization procedure](operations/database-initialization.md).
 
 ### Backup & Restore
 ```bash
@@ -304,7 +298,7 @@ npm install
 ## 鉁?Pre-Production Checklist
 
 - [ ] All environment variables configured in `.env`
-- [ ] Database migrations run successfully
+- [ ] Fresh database initialization completes successfully
 - [ ] Backend API health check returns 200: `curl http://localhost:8000/health`
 - [ ] Frontend starts without errors: `npm run dev`
 - [ ] CAD workers configured and tested

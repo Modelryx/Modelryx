@@ -11,6 +11,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -28,7 +29,7 @@ class ValidationRun(Base):
     staging_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("staging_sessions.id"), index=True
     )
-    snapshot_version: Mapped[int] = mapped_column()
+    snapshot_version: Mapped[int] = mapped_column(server_default=text("1"))
     run_number: Mapped[int] = mapped_column()
     status: Mapped[str] = mapped_column(String(32), index=True)
     report_hash: Mapped[str] = mapped_column(String(64), index=True)

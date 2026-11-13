@@ -9,6 +9,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     String,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -40,17 +41,27 @@ class MetadataExtraction(Base):
     status: Mapped[str] = mapped_column(String(32), index=True)
     extracted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     metadata_json: Mapped[dict] = mapped_column(JSONB)
-    derived_json: Mapped[dict] = mapped_column(JSONB, default=dict)
-    kind: Mapped[str] = mapped_column(String(32), index=True)
+    derived_json: Mapped[dict] = mapped_column(
+        JSONB, default=dict, server_default=text("'{}'::jsonb")
+    )
+    kind: Mapped[str] = mapped_column(
+        String(32), index=True, server_default=text("'unknown'::character varying")
+    )
     material: Mapped[str | None] = mapped_column(String(255), index=True)
-    bbox_x_mm: Mapped[float] = mapped_column(Float)
-    bbox_y_mm: Mapped[float] = mapped_column(Float)
-    bbox_z_mm: Mapped[float] = mapped_column(Float)
-    bbox_min_mm: Mapped[float] = mapped_column(Float)
-    bbox_mid_mm: Mapped[float] = mapped_column(Float)
-    bbox_max_mm: Mapped[float] = mapped_column(Float, index=True)
-    volume_mm3: Mapped[float] = mapped_column(Float, index=True)
-    surface_area_mm2: Mapped[float] = mapped_column(Float)
+    bbox_x_mm: Mapped[float] = mapped_column(Float, server_default=text("'0'::double precision"))
+    bbox_y_mm: Mapped[float] = mapped_column(Float, server_default=text("'0'::double precision"))
+    bbox_z_mm: Mapped[float] = mapped_column(Float, server_default=text("'0'::double precision"))
+    bbox_min_mm: Mapped[float] = mapped_column(Float, server_default=text("'0'::double precision"))
+    bbox_mid_mm: Mapped[float] = mapped_column(Float, server_default=text("'0'::double precision"))
+    bbox_max_mm: Mapped[float] = mapped_column(
+        Float, index=True, server_default=text("'0'::double precision")
+    )
+    volume_mm3: Mapped[float] = mapped_column(
+        Float, index=True, server_default=text("'0'::double precision")
+    )
+    surface_area_mm2: Mapped[float] = mapped_column(
+        Float, server_default=text("'0'::double precision")
+    )
     mass_kg: Mapped[float | None] = mapped_column(Float)
     density_kg_m3: Mapped[float | None] = mapped_column(Float)
     hole_diameter_min_mm: Mapped[float | None] = mapped_column(Float)

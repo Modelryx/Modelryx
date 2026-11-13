@@ -7,7 +7,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY server/pyproject.toml server/README.md server/LICENSE ./
 COPY server/src/server ./src/server
-COPY server/alembic.ini ./
 COPY worker-sdk /tmp/worker-sdk
 RUN pip install --no-cache-dir /tmp/worker-sdk && pip install --no-cache-dir .
 

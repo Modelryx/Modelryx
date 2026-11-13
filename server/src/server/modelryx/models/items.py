@@ -12,6 +12,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -29,7 +30,9 @@ class Item(Base):
     description: Mapped[str | None] = mapped_column(Text)
     category: Mapped[str | None] = mapped_column(String(100), index=True)
     status: Mapped[str] = mapped_column(String(32), default="ACTIVE", index=True)
-    part_type: Mapped[str] = mapped_column(String(32), default="PART", index=True)
+    part_type: Mapped[str] = mapped_column(
+        String(32), default="PART", index=True, server_default=text("'PART'::character varying")
+    )
     current_revision_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("revisions.id", name="fk_parts_current_revision", use_alter=True),
@@ -57,14 +60,20 @@ class ItemNumberTemplate(Base):
     assembly_pattern: Mapped[str] = mapped_column(String(100))
     part_next_value: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)
     assembly_next_value: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)
-    is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    is_selected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+    is_selected: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=text("now()")
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, server_default=text("now()")
     )
 
     __table_args__ = (
@@ -76,8 +85,7 @@ class ItemNumberTemplate(Base):
 
 
 # Transitional source-code alias. ``Item`` is the public domain term; the existing
-# table and attribute names remain stable so installations can upgrade without a
-# disruptive data rewrite.
+# table and attribute names remain stable for callers using the source-code alias.
 Part = Item
 
 
@@ -97,8 +105,18 @@ class Revision(Base):
     search_text: Mapped[str] = mapped_column(Text, default="")
     package_sha256: Mapped[str | None] = mapped_column(String(64), index=True)
     state: Mapped[str] = mapped_column(String(32), default="DRAFT", index=True)
-    lifecycle_state: Mapped[str] = mapped_column(String(24), default="WORKING", index=True)
-    metadata_status: Mapped[str] = mapped_column(String(32), default="UNAVAILABLE", index=True)
+    lifecycle_state: Mapped[str] = mapped_column(
+        String(24),
+        default="WORKING",
+        index=True,
+        server_default=text("'WORKING'::character varying"),
+    )
+    metadata_status: Mapped[str] = mapped_column(
+        String(32),
+        default="UNAVAILABLE",
+        index=True,
+        server_default=text("'UNAVAILABLE'::character varying"),
+    )
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

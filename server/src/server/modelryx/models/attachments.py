@@ -10,6 +10,7 @@ from sqlalchemy import (
     ForeignKey,
     String,
     Text,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -28,7 +29,9 @@ class Attachment(Base):
     name: Mapped[str] = mapped_column(String(255))
     attachment_type: Mapped[str] = mapped_column(String(32), default="OTHER", index=True)
     description: Mapped[str | None] = mapped_column(Text)
-    lifecycle_state: Mapped[str] = mapped_column(String(16), default="ACTIVE", index=True)
+    lifecycle_state: Mapped[str] = mapped_column(
+        String(16), default="ACTIVE", index=True, server_default=text("'ACTIVE'::character varying")
+    )
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 

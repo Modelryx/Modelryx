@@ -28,7 +28,10 @@ class UiSavedView(Base):
     __table_args__ = (
         UniqueConstraint("owner_id", "entity_type", "scope", "name", name="uq_ui_saved_view_owner"),
         Index(
-            "uq_ui_saved_view_shared_name", "entity_type", "name", unique=True,
+            "uq_ui_saved_view_shared_name",
+            "entity_type",
+            "name",
+            unique=True,
             postgresql_where=text("scope = 'SHARED'"),
         ),
     )

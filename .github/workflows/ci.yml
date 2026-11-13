@@ -20,7 +20,7 @@ jobs:
       POSTGRES_PASSWORD: modelryx-test-password
     steps:
       - uses: actions/checkout@v4
-      - name: Run migrated database test suite
+      - name: Run freshly initialized database test suite
         id: backend-tests
         run: >-
           docker compose --profile test run --build --env COVERAGE_FILE=/tmp/.coverage
@@ -43,11 +43,11 @@ jobs:
           name: backend-coverage
           path: coverage.xml
           if-no-files-found: warn
-      - name: Show database and migration logs
+      - name: Show database and initialization logs
         if: failure()
         run: |
           docker logs modelryx-backend-tests 2>&1 || true
-          docker compose --profile test logs --no-color db-test reset-test-db migrate-test storage-test-init
+          docker compose --profile test logs --no-color db-test reset-test-db initialize-test-db storage-test-init
       - name: Clean up test services
         if: always()
         run: docker compose --profile test down --volumes

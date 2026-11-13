@@ -287,57 +287,30 @@ WHERE ir.item_id = $1
   );
 ```
 
-## Migration Best Practices
+## Fresh database initialization
 
-### Creating a Migration
+This release builds the current schema directly from SQLAlchemy models. There is
+no historical upgrade chain. PostgreSQL must have pgvector installed; initialization
+creates its extension before the vector columns and HNSW indexes.
 
 ```bash
-# Auto-generate migration based on model changes
-python -m alembic revision --autogenerate -m "add user preferences table"
-
-# Review generated migration in migrations/versions/
-# Edit if needed (auto-generate sometimes needs manual adjustment)
-
-# Apply migration
-python -m alembic upgrade head
+cd server
+python -m modelryx.initialize_database
 ```
 
-### Migration Template
+Models declare tables, constraints, indexes, and database defaults. Specialized
+PostgreSQL indexes are registered in `modelryx/models/indexes.py`. Numbering defaults
+are seeded by the initializer; administrator credentials continue to be provisioned
+through the authentication bootstrap flow.
 
-```python
-"""Add user preferences table
+The initializer runs transactionally and serializes concurrent calls. A schema
+fingerprint allows safe repeat execution on the same schema. An existing schema
+without that identity, an incompatible fingerprint, or a missing table causes an
+error without upgrading or deleting application data.
 
-Revision ID: abc123def456
-Revises: xyz789uvw012
-Create Date: 2026-11-11 13:40:00.000000
-
-"""
-from alembic import op
-import sqlalchemy as sa
-
-# revision identifiers
-revision = 'abc123def456'
-down_revision = 'xyz789uvw012'
-branch_labels = None
-depends_on = None
-
-def upgrade():
-    op.create_table(
-        'user_preferences',
-        sa.Column('id', sa.UUID(), nullable=False),
-        sa.Column('user_id', sa.UUID(), nullable=False),
-        sa.Column('theme', sa.VARCHAR(50), default='light'),
-        sa.Column('created_at', sa.TIMESTAMP(), nullable=False, server_default=sa.func.now()),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('user_id')
-    )
-    op.create_index('idx_user_preferences_user', 'user_preferences', ['user_id'])
-
-def downgrade():
-    op.drop_index('idx_user_preferences_user', 'user_preferences')
-    op.drop_table('user_preferences')
-```
+Use an empty database after changing the schema during development. Preserving data
+across incompatible schema changes requires a separately designed upgrade process.
+See [database-initialization.md](database-initialization.md) for deployment and tests.
 
 ## Performance Optimization
 

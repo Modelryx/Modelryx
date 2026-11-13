@@ -12,6 +12,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -37,15 +38,27 @@ class DuplicateCheck(Base):
     candidate_count_before_filter: Mapped[int] = mapped_column(default=0)
     candidate_count_after_filter: Mapped[int] = mapped_column(default=0)
     exact_match_found: Mapped[bool] = mapped_column(Boolean, default=False)
-    total_duration_ms: Mapped[float] = mapped_column(Float, default=0)
-    metadata_duration_ms: Mapped[float] = mapped_column(Float, default=0)
-    vector_duration_ms: Mapped[float] = mapped_column(Float, default=0)
-    ai_duration_ms: Mapped[float] = mapped_column(Float, default=0)
+    total_duration_ms: Mapped[float] = mapped_column(
+        Float, default=0, server_default=text("'0'::double precision")
+    )
+    metadata_duration_ms: Mapped[float] = mapped_column(
+        Float, default=0, server_default=text("'0'::double precision")
+    )
+    vector_duration_ms: Mapped[float] = mapped_column(
+        Float, default=0, server_default=text("'0'::double precision")
+    )
+    ai_duration_ms: Mapped[float] = mapped_column(
+        Float, default=0, server_default=text("'0'::double precision")
+    )
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     __table_args__ = (
         CheckConstraint("status IN ('COMPLETED', 'FAILED')", name="ck_duplicate_checks_status"),
+        CheckConstraint(
+            "(source_revision_id IS NOT NULL) <> (source_staging_id IS NOT NULL)",
+            name="ck_duplicate_checks_one_source",
+        ),
     )
 
 
@@ -74,10 +87,6 @@ class DuplicateCandidate(Base):
             "duplicate_check_id",
             "candidate_revision_id",
             name="uq_duplicate_candidates_check_revision",
-        ),
-        CheckConstraint(
-            "(source_revision_id IS NOT NULL) <> (source_staging_id IS NOT NULL)",
-            name="ck_duplicate_checks_one_source",
         ),
     )
 

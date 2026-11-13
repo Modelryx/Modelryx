@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     String,
     Text,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -58,8 +59,10 @@ class ProcessingJob(Base):
     )
     type: Mapped[str] = mapped_column(String(64))
     state: Mapped[str] = mapped_column(String(32), default="PENDING", index=True)
-    stage: Mapped[str] = mapped_column(String(32), default="QUEUED")
-    progress_percent: Mapped[int] = mapped_column(default=0)
+    stage: Mapped[str] = mapped_column(
+        String(32), default="QUEUED", server_default=text("'QUEUED'::character varying")
+    )
+    progress_percent: Mapped[int] = mapped_column(default=0, server_default=text("0"))
     converter_version: Mapped[str | None] = mapped_column(String(64))
     cache_key: Mapped[str | None] = mapped_column(String(128), index=True)
     diagnostics_json: Mapped[dict | None] = mapped_column(JSONB)
@@ -97,7 +100,9 @@ class DownloadBundle(Base):
     state: Mapped[str] = mapped_column(String(32), default="PENDING", index=True)
     source_signature: Mapped[str | None] = mapped_column(String(64), index=True)
     revision_snapshots_json: Mapped[dict | None] = mapped_column(JSONB)
-    workspace_state: Mapped[str] = mapped_column(String(32), default="ACTIVE", index=True)
+    workspace_state: Mapped[str] = mapped_column(
+        String(32), default="ACTIVE", index=True, server_default=text("'ACTIVE'::character varying")
+    )
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

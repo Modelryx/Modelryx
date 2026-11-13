@@ -224,7 +224,7 @@ def process_bundle_job(db: Session, job: ProcessingJob, settings: Settings) -> N
             for revision_id, snapshot_id in bundle.revision_snapshots_json.items()
         }
     else:
-        # Pre-migration queued tasks did not persist the child selection.
+        # Resolve child selection for tasks that have not pinned it yet.
         selected = collect_revision_snapshots(db, bundle.revision_id, bundle.snapshot_id)
         bundle.revision_snapshots_json = {
             str(revision_id): str(snapshot_id)

@@ -4,6 +4,7 @@ from modelryx.models import entities
 from sqlalchemy.orm import configure_mappers
 
 EXPECTED_TABLES = {
+    "database_schema",
     "additional_file_stages",
     "ai_action_executions",
     "ai_action_proposals",

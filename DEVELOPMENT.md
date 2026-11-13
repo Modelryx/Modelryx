@@ -65,8 +65,8 @@ source venv/bin/activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Run migrations
-python -m alembic upgrade head
+# Initialize the fresh database
+python -m modelryx.initialize_database
 
 # Start server (runs on port 8000)
 python -m uvicorn src.server.main:app --reload
@@ -145,23 +145,20 @@ For a production `.env`, see [deployment.md](./docs/operations/deployment.md).
 
 ### Database Setup
 
-Database and migrations are managed automatically:
+Docker Compose runs `initialize-db` before the API and workers. For a local Python
+installation, configure `MODELRYX_DATABASE_URL` for an empty PostgreSQL database
+with pgvector installed, then run:
 
 ```bash
-# Inspect current migrations
-python -m alembic current
-
-# Create new migration (after modifying models)
-python -m alembic revision --autogenerate -m "add new table"
-
-# View migration history
-python -m alembic history
-
-# Rollback last migration
-python -m alembic downgrade -1
+cd server
+python -m modelryx.initialize_database
 ```
 
-For database schema details, see [docs/database.md](./docs/operations/database.md).
+The command creates the current schema and default numbering template in one
+transaction. Repeating it for the same schema preserves data and configuration.
+It refuses existing unrecognized or incompatible schemas and never upgrades or
+resets them. After changing schema declarations during development, use a new,
+empty development database. See [database initialization](docs/operations/database-initialization.md).
 
 ### Running Services with Docker Compose
 
@@ -384,10 +381,10 @@ See [docs/api.md](./docs/development/api.md) for endpoint conventions.
 
 ### Adding a New Database Table
 
-1. **Create model** in `server/src/server/models/`
-2. **Generate migration** with `alembic revision --autogenerate`
-3. **Review and apply migration**
-4. **Add API routes** to expose the model
+1. **Create the model** in `server/src/server/modelryx/models/` and import it in the model registry.
+2. **Declare indexes, constraints, and database defaults** with the models.
+3. **Initialize an empty development database** and run the backend tests.
+4. **Add API routes** to expose the model.
 
 See [docs/database.md](./docs/operations/database.md) for schema guidelines.
 

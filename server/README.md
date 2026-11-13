@@ -74,3 +74,12 @@ docker compose run --rm test
 - `../workers/freecad`: FreeCAD conversion runtime and optional command-line tools
 - `../workers/step`: shared neutral STEP processing service
 - `tests`: backend tests
+
+## Database initialization
+
+Compose initializes an empty PostgreSQL/pgvector database with `initialize-db`
+before starting the API and workers. For a local Python installation, run
+`python -m modelryx.initialize_database` from `server/` after configuring the database
+URL. The command creates the current schema directly, seeds a paired Part/Assembly
+numbering template, and safely verifies repeat runs. It never upgrades or resets an
+existing incompatible schema. See [database initialization](../docs/operations/database-initialization.md).

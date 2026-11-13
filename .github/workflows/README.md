@@ -1,6 +1,6 @@
 # Workflow layout
 
-- `ci.yml` runs required backend migrations/tests, frontend compilation, SDK tests,
+- `ci.yml` runs required backend schema initialization/tests, frontend compilation, SDK tests,
   FreeCAD unit/native tests, STEP contract tests, and repository checks. Backend
   coverage and the Trivy security report are uploaded as artifacts.
 - `container-builds.yml` runs independently of CI. Its matrix builds server,

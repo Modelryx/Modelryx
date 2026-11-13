@@ -86,7 +86,7 @@ Resource requirements depend on the CAD application:
 ### Production Compose configuration
 
 Use the repository's [compose.yaml](../../compose.yaml), which includes database
-migrations, processing workers, and persistent `postgres-data` and `object-data`
+database initialization, processing workers, and persistent `postgres-data` and `object-data`
 volumes. The API and workers share `/var/lib/modelryx/objects` for file storage.
 Deploy the frontend separately as described in the [README](../../README.md).
 
@@ -123,20 +123,18 @@ PostgreSQL must have the pgvector extension for AI embeddings:
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-### Run Migrations
+### Initialize the fresh database
 
-After starting PostgreSQL:
-
-```bash
-# Run database migrations
-docker compose exec server python -m alembic upgrade head
-```
-
-Verify migration status:
+Compose runs the one-shot `initialize-db` service before the API and workers.
+To initialize explicitly or verify the same installed schema:
 
 ```bash
-docker compose exec server python -m alembic current
+docker compose run --rm initialize-db
 ```
+
+This release requires an empty database for a new installation. Initialization
+never upgrades or resets an existing database. See
+[database-initialization.md](database-initialization.md).
 
 ### Backup Strategy
 
@@ -245,8 +243,8 @@ docker compose logs -f
 ### 5. Initialize Database
 
 ```bash
-# Run migrations
-docker compose exec server python -m alembic upgrade head
+# Verify database initialization
+docker compose run --rm initialize-db
 
 # Verify health
 curl http://localhost:8000/health
@@ -362,18 +360,13 @@ curl https://yourdomain.com/api/health
 docker compose logs -f server
 ```
 
-### Database Migration
+### Database schema compatibility
 
-```bash
-# 1. Backup database
-# (See backup strategy above)
-
-# 2. Run migrations
-docker compose exec server python -m alembic upgrade head
-
-# 3. Verify
-docker compose exec server python -m alembic current
-```
+This fresh-install release has no historical upgrade or downgrade commands.
+`docker compose run --rm initialize-db` creates an empty database or verifies a
+matching initialized schema. It refuses incompatible schemas without changing them.
+Do not use a different-schema release against an existing deployment without a
+separately tested data-preserving upgrade process.
 
 ## Disaster Recovery
 
