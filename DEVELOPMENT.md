@@ -5,12 +5,12 @@ This guide walks you through setting up your local development environment to ru
 ## System Requirements
 
 ### Minimum Requirements
-- **Docker & Docker Compose** ï¿?v24.0+ (for PostgreSQL, object storage, services)
-- **Node.js** ï¿?v18.0+ (for React frontend)
-- **Python** ï¿?v3.10+ (for server and workers)
-- **Git** ï¿?v2.35+ (for version control)
-- **RAM** ï¿?8 GB (16 GB recommended)
-- **Disk** ï¿?10 GB free space
+- **Docker & Docker Compose** é”Ÿ?v24.0+ (for PostgreSQL, object storage, services)
+- **Node.js** é”Ÿ?v18.0+ (for React frontend)
+- **Python** é”Ÿ?v3.10+ (for server and workers)
+- **Git** é”Ÿ?v2.35+ (for version control)
+- **RAM** é”Ÿ?8 GB (16 GB recommended)
+- **Disk** é”Ÿ?10 GB free space
 
 ### Operating Systems
 - **Linux** (Ubuntu 20.04+, Fedora, etc.)
@@ -128,10 +128,8 @@ MODELRYX_SERVER_PORT=8000
 MODELRYX_DATABASE_URL=postgresql://modelryx:modelryx@localhost:5432/modelryx_db
 MODELRYX_DATABASE_ECHO=false
 
-# Object Storage (MinIO S3-compatible storage)
-MODELRYX_OBJECT_STORE_ENDPOINT=http://localhost:9000
-MODELRYX_OBJECT_STORE_ACCESS_KEY=modelryx
-MODELRYX_OBJECT_STORE_SECRET_KEY=modelryxsecret
+# Local file storage
+MODELRYX_STORAGE_ROOT=data/objects
 
 # FreeCAD Worker (optional - set to empty to use embedded)
 MODELRYX_FREECAD_WORKER_URL=http://localhost:8090
@@ -226,7 +224,7 @@ npm run preview
 - TypeScript validates type safety
 - Run `npm run lint:fix` before committing to fix auto-fixable issues
 
-The dev server includes hot reload ï¿?changes to React components are automatically reflected in the browser.
+The dev server includes hot reload é”Ÿ?changes to React components are automatically reflected in the browser.
 
 ### Server Development
 
@@ -301,7 +299,6 @@ cd front-end && npm run test:e2e
 lsof -i :8000  # Server
 lsof -i :5174  # Frontend
 lsof -i :5432  # PostgreSQL
-lsof -i :9000  # MinIO
 
 # Kill process
 kill -9 <PID>
@@ -458,7 +455,7 @@ See [docs/workers/new-cad-worker-guide.md](./docs/workers/new-cad-worker-guide.m
 
 ---
 
-Happy developing! ðŸš€
+Happy developing! é¦ƒæ®Œ
 
 
 

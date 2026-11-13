@@ -111,10 +111,6 @@ Builds 4 Docker images in parallel:
 - **Cache To:** Store in GitHub Actions for future builds (max mode)
 - **Speed Benefit:** 10-15x faster builds on subsequent runs
 
-### Key Changes from PartForge
-- ✅ Updated context path: `front` → `front-end`
-- ✅ Updated registry prefix: `partforge/` → `modelryx/`
-
 ---
 
 ## FreeCAD Compatibility (`freecad-compatibility.yml`)
@@ -147,11 +143,6 @@ For each FreeCAD version:
 ### Continue on Error
 - Version 1.1.3: Tests must pass (blocks release)
 - Other versions: Can fail without blocking (informational)
-
-### Key Changes from PartForge
-- ✅ Updated build arg: `PARTFORGE_FREECAD_VERSION` → `MODELRYX_FREECAD_VERSION`
-- ✅ Updated image name: `partforge-freecad-compat` → `modelryx-freecad-compat`
-- ✅ Updated Python paths: `/opt/partforge-*` → `/opt/modelryx-*`
 
 ---
 

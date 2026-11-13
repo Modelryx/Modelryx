@@ -14,7 +14,7 @@ This guide covers deploying Modelryx to production environments.
 - **Docker** and **Docker Compose** v24.0+
 - **Operating System:** Linux (Ubuntu 22.04 LTS recommended) or compatible
 - **PostgreSQL** v14+ (can be managed by Docker Compose)
-- **Object Storage:** MinIO or AWS S3
+- **Object Storage:** persistent local `object-data` volume
 
 ### Ports Required
 - **80** — HTTP (reverse proxy/load balancer)
@@ -22,7 +22,6 @@ This guide covers deploying Modelryx to production environments.
 - **8000** — Modelryx server (internal)
 - **8090** — FreeCAD worker (if standalone mode)
 - **5432** — PostgreSQL (internal)
-- **9000** — MinIO (internal)
 
 ## CAD Worker Resource Requirements
 
@@ -74,7 +73,7 @@ Resource requirements depend on the CAD application:
 
 - [ ] Server hardware provisioned and tested
 - [ ] PostgreSQL database initialized and backed up
-- [ ] Object storage configured (MinIO or S3)
+- [ ] Persistent object-data volume configured
 - [ ] SSL/TLS certificates obtained
 - [ ] Firewall rules configured
 - [ ] CAD workers sized for expected workload
@@ -84,90 +83,12 @@ Resource requirements depend on the CAD application:
 
 ## Docker Compose Setup
 
-### Production compose.yaml Template
+### Production Compose configuration
 
-```yaml
-version: '3.8'
-
-services:
-  postgres:
-    image: pgvector/pgvector:pg15-latest
-    environment:
-      POSTGRES_USER: modelryx
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: modelryx_db
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    restart: always
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U modelryx"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  minio:
-    image: minio/minio:latest
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio_data:/data
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    restart: always
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  server:
-    image: modelryx/server:latest
-    environment:
-      MODELRYX_SERVER_HOST: 0.0.0.0
-      MODELRYX_SERVER_PORT: 8000
-      MODELRYX_DATABASE_URL: postgresql://modelryx:${POSTGRES_PASSWORD}@postgres:5432/modelryx_db
-      MODELRYX_OBJECT_STORE_ENDPOINT: http://minio:9000
-      MODELRYX_OBJECT_STORE_ACCESS_KEY: ${MINIO_ROOT_USER}
-      MODELRYX_OBJECT_STORE_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
-      MODELRYX_FREECAD_WORKER_URL: ${FREECAD_WORKER_URL:-}
-      MODELRYX_CORS_ORIGINS: ${CORS_ORIGINS}
-      MODELRYX_ENABLE_AI: "true"
-      LOG_LEVEL: info
-    ports:
-      - "8000:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-    restart: always
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro
-    depends_on:
-      - server
-    restart: always
-
-volumes:
-  postgres_data:
-  minio_data:
-```
+Use the repository's [compose.yaml](../../compose.yaml), which includes database
+migrations, processing workers, and persistent `postgres-data` and `object-data`
+volumes. The API and workers share `/var/lib/modelryx/objects` for file storage.
+Deploy the frontend separately as described in the [README](../../README.md).
 
 ### Environment Configuration (.env)
 
@@ -176,10 +97,6 @@ Create a `.env` file for production secrets and configuration:
 ```bash
 # Database
 POSTGRES_PASSWORD=<strong-random-password>
-
-# Object Storage (MinIO)
-MINIO_ROOT_USER=minioadmin
-MINIO_ROOT_PASSWORD=<strong-random-password>
 
 # Frontend CORS
 CORS_ORIGINS=https://yourdomain.com
@@ -191,10 +108,6 @@ FREECAD_WORKER_URL=
 # Optional: External database (instead of Docker Postgres)
 # MODELRYX_DATABASE_URL=postgresql://user:pass@external-db:5432/modelryx_db
 
-# Optional: AWS S3 (instead of MinIO)
-# MODELRYX_OBJECT_STORE_ENDPOINT=https://s3.amazonaws.com
-# MODELRYX_OBJECT_STORE_ACCESS_KEY=<aws-access-key>
-# MODELRYX_OBJECT_STORE_SECRET_KEY=<aws-secret-key>
 ```
 
 **Security:** Never commit `.env` to Git. Use a secrets manager (AWS Secrets Manager, HashiCorp Vault, etc.).
@@ -227,26 +140,11 @@ docker compose exec server python -m alembic current
 
 ### Backup Strategy
 
-**Daily backups** (add to cron):
+Back up PostgreSQL **and** the `object-data` volume used by the API and processing
+workers. Both volumes are required for recovery.
 
-```bash
-#!/bin/bash
-BACKUP_DIR="/backups/modelryx"
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-
-# Backup PostgreSQL
-docker compose exec -T postgres pg_dump -U modelryx modelryx_db \
-  > $BACKUP_DIR/modelryx_$TIMESTAMP.sql
-
-# Backup MinIO (object storage)
-docker compose exec -T minio mc cp --recursive /data /backups/minio_$TIMESTAMP/
-
-# Compress
-gzip $BACKUP_DIR/modelryx_$TIMESTAMP.sql
-
-# Retain only last 30 days
-find $BACKUP_DIR -mtime +30 -delete
-```
+Use the [backup and restore procedure](backup-strategy.md) during a maintenance
+window to produce a consistent database/object snapshot.
 
 ## HTTPS / TLS Configuration
 
@@ -383,7 +281,6 @@ curl https://yourdomain.com/api/health
 docker compose exec postgres psql -U modelryx -d modelryx_db -c "SELECT version();"
 
 # Test object storage
-docker compose exec minio mc ls minio/
 ```
 
 ## Monitoring and Health Checks
@@ -515,14 +412,7 @@ environment:
   POSTGRES_INITDB_ARGS: "-c shared_buffers=256MB -c max_connections=200"
 ```
 
-### Object Storage (MinIO)
-
-```bash
-# Monitor MinIO performance
-docker compose exec minio mc du minio/
-
-# Increase connection limits
-export MINIO_API_REQUESTS_MAX=1000
+### Increase connection limits
 ```
 
 ### Server
@@ -582,17 +472,11 @@ docker compose top server
 docker compose restart server
 ```
 
-### Object Storage (MinIO) Issues
 
-```bash
-# Check MinIO status
-docker compose exec minio mc admin info minio
 
 # Verify bucket exists
-docker compose exec minio mc ls minio/
 
 # Check logs
-docker compose logs minio
 ```
 
 ## Security Best Practices

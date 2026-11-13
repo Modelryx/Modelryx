@@ -157,44 +157,6 @@ services:
       MODELRYX_INTERNAL_WORKER_KEY: ${MODELRYX_INTERNAL_WORKER_KEY:?Set MODELRYX_INTERNAL_WORKER_KEY in .env}
     restart: unless-stopped
 
-  minio:
-    image: minio/minio:latest
-    restart: unless-stopped
-    environment:
-      MINIO_ROOT_USER: "${MINIO_ROOT_USER:?Error: MINIO_ROOT_USER must be set in .env}"
-      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:?Error: MINIO_ROOT_PASSWORD must be set in .env}"
-    command: server /data --console-address ":9001"
-    ports:
-      - "0.0.0.0:9000:9000"
-      - "0.0.0.0:9001:9001"
-    volumes:
-      - minio-data:/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  minio-init:
-    image: minio/mc:latest
-    restart: "no"
-    entrypoint: >
-      sh -c "
-      /usr/bin/mc alias set minio http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD;
-      /usr/bin/mc mb minio/modelryx-objects --ignore-existing;
-      /usr/bin/mc version enable minio/modelryx-objects;
-      /usr/bin/mc ilm import minio/modelryx-objects < /tmp/lifecycle-policy.json || true;
-      echo 'MinIO initialization complete'
-      "
-    environment:
-      MINIO_ROOT_USER: "${MINIO_ROOT_USER:?Error: MINIO_ROOT_USER must be set in .env}"
-      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:?Error: MINIO_ROOT_PASSWORD must be set in .env}"
-    volumes:
-      - ./scripts/minio-lifecycle-policy.json:/tmp/lifecycle-policy.json:ro
-    depends_on:
-      minio:
-        condition: service_healthy
-
   test:
     profiles: ["test"]
     build:
@@ -292,5 +254,4 @@ volumes:
   object-data:
   test-object-data:
   step-worker-data:
-  minio-data:
 

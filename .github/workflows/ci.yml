@@ -18,8 +18,6 @@ jobs:
       MODELRYX_ENVIRONMENT: test
       MODELRYX_BOOTSTRAP_ADMIN_PASSWORD: change-this-admin-password
       POSTGRES_PASSWORD: modelryx-test-password
-      MINIO_ROOT_USER: ci-only-minio
-      MINIO_ROOT_PASSWORD: ci-only-minio-password
     steps:
       - uses: actions/checkout@v4
       - name: Run migrated database test suite
@@ -77,8 +75,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
-      - run: pip install "pytest>=8.3,<9" './worker-sdk[conformance]'
-      - run: python -m pytest -q worker-sdk/tests scripts/tests/test_export_public.py
+      - run: pip install "pytest>=8.3,<9" "pydantic-settings>=2.7,<3" "boto3>=1.35,<2" './worker-sdk[conformance]'
+      - run: python -m pytest -q worker-sdk/tests scripts/tests/test_export_public.py scripts/tests/test_production_settings.py scripts/tests/test_s3_storage.py
   freecad-worker:
     name: FreeCAD worker
     runs-on: ubuntu-24.04
@@ -144,8 +142,6 @@ jobs:
           MODELRYX_ENVIRONMENT: test
           MODELRYX_BOOTSTRAP_ADMIN_PASSWORD: change-this-admin-password
           POSTGRES_PASSWORD: modelryx-test-password
-          MINIO_ROOT_USER: ci-only-minio
-          MINIO_ROOT_PASSWORD: ci-only-minio-password
         run: docker compose config --quiet
   python-quality:
     runs-on: ubuntu-24.04

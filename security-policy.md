@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Modelryx, please report it responsibly by sending an email to the project maintainers rather than using the public issue tracker.
+If you discover a security vulnerability in Modelryx, please report it responsibly using [GitHub private vulnerability reporting](https://github.com/Modelryx/Modelryx/security/advisories/new). Do not include vulnerability details in public issues.
 
 **Please do not publicly disclose the vulnerability until it has been addressed.**
 
@@ -51,7 +51,7 @@ Older versions may receive critical security fixes at the maintainers' discretio
 
 ### Worker Communication
 
-- All CAD worker communication is signed with HMAC-SHA256
+- Worker authentication depends on the worker contract; the STEP worker uses a shared key header
 - Worker secrets should be unique per deployment
 - Use TLS for worker communication over untrusted networks
 
@@ -80,4 +80,4 @@ For bug reports and feature requests, use the public [GitHub Issues](https://git
 
 ## Security Contacts
 
-For security inquiries, please contact the project maintainers privately rather than using public channels.
+Use [Report a vulnerability](https://github.com/Modelryx/Modelryx/security/advisories/new) on GitHub. Maintainers must enable private vulnerability reporting in the repository security settings before publication. If the form is unavailable, open an issue requesting that private reporting be enabled, without including vulnerability details.

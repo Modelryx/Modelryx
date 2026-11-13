@@ -1,6 +1,6 @@
 # Modelryx Production Deployment & Development Quick Reference
 
-## 🚀 Quick Start (5 minutes)
+## 馃殌 Quick Start (5 minutes)
 
 ### First Time Setup
 ```bash
@@ -35,7 +35,7 @@ npm run dev
 
 ---
 
-## 🔍 Health Check Endpoints
+## 馃攳 Health Check Endpoints
 
 ```bash
 # Liveness (is the service running?)
@@ -57,7 +57,7 @@ curl http://localhost:8000/health
 
 ---
 
-## ⚙️ Environment Configuration
+## 鈿欙笍 Environment Configuration
 
 ### Critical (Must Set Before Production)
 ```bash
@@ -65,7 +65,6 @@ MODELRYX_JWT_SECRET=<32+ random chars>           # Generate with: python3 -c "im
 MODELRYX_INTERNAL_WORKER_KEY=<32+ random chars>  # Worker authentication key
 MODELRYX_BOOTSTRAP_ADMIN_PASSWORD=<strong pwd>   # Initial admin password
 POSTGRES_PASSWORD=<random 16+ chars>              # Database password
-MINIO_ROOT_PASSWORD=<random 16+ chars>            # Object storage password
 ```
 
 ### Timeouts (Optional, Tune for Your Workload)
@@ -85,7 +84,7 @@ MODELRYX_FREECAD_WORKER_URL=http://...            # FreeCAD worker (optional)
 
 ---
 
-## 🧪 Testing
+## 馃И Testing
 
 ### Backend Tests
 ```bash
@@ -112,7 +111,7 @@ npm run test:e2e
 
 ---
 
-## 💅 Code Quality
+## 馃拝 Code Quality
 
 ### Linting
 ```bash
@@ -131,7 +130,7 @@ npm run build           # Full build (includes type check)
 
 ---
 
-## 🐳 Docker Commands
+## 馃惓 Docker Commands
 
 ```bash
 # Start all services
@@ -140,7 +139,6 @@ docker compose up -d
 # View logs
 docker compose logs -f server       # Backend logs
 docker compose logs -f postgres     # Database logs
-docker compose logs -f minio        # Object storage logs
 
 # Stop services
 docker compose stop
@@ -154,7 +152,7 @@ docker compose up -d --build
 
 ---
 
-## 📦 CAD Worker Deployment Options
+## 馃摝 CAD Worker Deployment Options
 
 ### 1. FreeCAD Worker in Container (Recommended)
 ```yaml
@@ -188,7 +186,7 @@ python -m server
 
 ---
 
-## 🔐 Security Checklist
+## 馃攼 Security Checklist
 
 - [ ] JWT secret: 32+ random characters (production)
 - [ ] Worker key: 32+ random characters (production)
@@ -202,7 +200,7 @@ python -m server
 
 ---
 
-## 📊 Database Operations
+## 馃搳 Database Operations
 
 ### Migrations
 ```bash
@@ -234,7 +232,7 @@ bash scripts/verify-backups.sh
 
 ---
 
-## 🚨 Troubleshooting
+## 馃毃 Troubleshooting
 
 ### Port Already in Use
 ```bash
@@ -242,7 +240,6 @@ bash scripts/verify-backups.sh
 lsof -i :8000          # Server
 lsof -i :5173          # Frontend
 lsof -i :5432          # PostgreSQL
-lsof -i :9000          # MinIO
 
 # Kill process
 kill -9 <PID>
@@ -280,7 +277,7 @@ npm install
 
 ---
 
-## 📖 Documentation
+## 馃摉 Documentation
 
 | Document | Purpose |
 |----------|---------|
@@ -294,17 +291,17 @@ npm install
 
 ---
 
-## 🆘 Getting Help
+## 馃啒 Getting Help
 
-1. **Read the docs** �?Check [DEPLOYMENT.md](./docs/DEPLOYMENT.md) and [DEVELOPMENT.md](./DEVELOPMENT.md)
-2. **Check logs** �?`docker compose logs -f service-name`
-3. **Test endpoints** �?Use curl or Postman to test API
-4. **Run tests** �?`cd server && pytest -v`
-5. **Review errors** �?Check error messages carefully; they often indicate the solution
+1. **Read the docs** 鈥?Check [DEPLOYMENT.md](./docs/DEPLOYMENT.md) and [DEVELOPMENT.md](./DEVELOPMENT.md)
+2. **Check logs** 鈥?`docker compose logs -f service-name`
+3. **Test endpoints** 鈥?Use curl or Postman to test API
+4. **Run tests** 鈥?`cd server && pytest -v`
+5. **Review errors** 鈥?Check error messages carefully; they often indicate the solution
 
 ---
 
-## �?Pre-Production Checklist
+## 鉁?Pre-Production Checklist
 
 - [ ] All environment variables configured in `.env`
 - [ ] Database migrations run successfully

@@ -124,14 +124,32 @@ class Settings(BaseSettings):
             raise ValueError("duplicate max AI candidates must be between 0 and 20")
         if self.environment != "production":
             return self
-        if len(self.jwt_secret) < 32 or self.jwt_secret == "change-this-development-secret":
+
+        def is_placeholder(value: str) -> bool:
+            normalized = value.strip().lower()
+            return (
+                normalized in {"admin", "password", "changeme"}
+                or normalized.startswith(
+                    ("replace-", "change-this-", "ci-only-", "local-validation-")
+                )
+                or len(set(normalized)) < 8
+            )
+
+        if len(self.jwt_secret.strip()) < 32 or is_placeholder(self.jwt_secret):
             raise ValueError("production requires a unique JWT secret of at least 32 characters")
-        if self.bootstrap_admin_password in {
-            "admin",
-            "change-this-admin-password",
-            "replace-this-password",
-        }:
-            raise ValueError("production requires a strong bootstrap administrator password")
+        if (
+            len(self.bootstrap_admin_password.strip()) < 16
+            or is_placeholder(self.bootstrap_admin_password)
+        ):
+            raise ValueError(
+                "production requires a unique administrator password of at least 16 characters"
+            )
+        if (
+            not self.internal_worker_key
+            or len(self.internal_worker_key.strip()) < 32
+            or is_placeholder(self.internal_worker_key)
+        ):
+            raise ValueError("production requires a unique worker key of at least 32 characters")
         return self
 
 

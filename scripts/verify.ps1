@@ -3,7 +3,7 @@ $Root = Split-Path -Parent $PSScriptRoot
 $env:MODELRYX_INTERNAL_WORKER_KEY = "local-validation-key"
 docker compose -f "$Root\compose.yaml" --profile test run --rm test
 if ($LASTEXITCODE) { throw "Backend tests failed" }
-Push-Location "$Root\front"
+Push-Location "$Root\front-end"
 try {
     npm run typecheck; if ($LASTEXITCODE) { throw "Frontend type-check failed" }
     npm run build; if ($LASTEXITCODE) { throw "Frontend build failed" }
@@ -18,8 +18,8 @@ if (Test-Path -LiteralPath "$Root\autocad_worker") {
 }
 Push-Location "$Root\workers\freecad"
 try {
-    $FreeCadTemp = Join-Path ([System.IO.Path]::GetTempPath()) ("modelryx-freecad-tests-" + [guid]::NewGuid().ToString("N"))
-    & "$Root\server\.venv\Scripts\python.exe" -m pytest -q --basetemp=$FreeCadTemp
+    $FreeCadTemp = Join-Path "$Root\tmp" ("fc-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
+    python -m pytest -q --basetemp=$FreeCadTemp
     if ($LASTEXITCODE) { throw "FreeCAD tests failed" }
 } finally { Pop-Location }
 docker compose -f "$Root\compose.yaml" config --quiet

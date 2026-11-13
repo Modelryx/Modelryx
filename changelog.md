@@ -59,7 +59,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Backend (Python/FastAPI)
 - REST API with OpenAPI/Swagger documentation
 - PostgreSQL database with ORM and migrations
-- MinIO S3-compatible object storage integration
 - CAD worker coordination and artifact management
 - AI-assisted search and engineering workflows
 

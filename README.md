@@ -22,7 +22,7 @@ Modelryx is a web-based platform for managing CAD (Computer-Aided Design) data w
 - **Version Control** - Track revisions, assemblies, and metadata
 - **3D Preview** - Real-time GLB/3D model previewing and interaction
 - **Worker Framework** - Extensible system for adding new CAD formats and tools
-- **Production Ready** - PostgreSQL backend, S3/MinIO object storage, containerized deployment
+- **Containerized Deployment** - PostgreSQL backend and persistent local object storage
 - **Security** - HMAC authentication, role-based access, HTTPS support
 - **APIs** - Complete REST API for programmatic access
 - **Open Source** - Apache 2.0 licensed, community-driven
@@ -31,13 +31,13 @@ Modelryx is a web-based platform for managing CAD (Computer-Aided Design) data w
 
 Modelryx follows a microservices architecture with these components:
 
-- **Frontend**: React 18+ with TypeScript on Vite, served at http://localhost:5173
+- **Frontend**: React 18+ with TypeScript on Vite, run locally at http://localhost:5174
 - **API Server**: FastAPI application on port 8000 with OpenAPI documentation
 - **Database**: PostgreSQL 14+ with pgvector for vector operations
 - **CAD Workers**: Containerized processing workers for format conversion and analysis
-- **Object Storage**: MinIO for S3-compatible file storage and versioning
+- **Object Storage**: Persistent local filesystem volume for CAD files and artifacts
 
-Frontend -> REST API (FastAPI) -> PostgreSQL + CAD Workers + MinIO Storage
+Frontend -> REST API (FastAPI) -> PostgreSQL + CAD Workers + Local Object Storage
 
 See the [platform architecture documentation](docs/architecture/platform-architecture.md) for detailed design.
 
@@ -46,15 +46,15 @@ See the [platform architecture documentation](docs/architecture/platform-archite
 ### Prerequisites
 
 - **Docker & Docker Compose** v24.0+
-- **Node.js** v18.0+ (for frontend development)
-- **Python** v3.10+ (for server and workers)
+- **Node.js** v22.0+ (for the frontend)
+- **Python** v3.11+ (for server and workers)
 - **8+ GB RAM**, **10+ GB disk space**
 
 ### 1. Clone & Configure
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/modelryx.git
+git clone https://github.com/Modelryx/Modelryx.git
 cd modelryx
 
 # Generate secure environment variables
@@ -64,7 +64,6 @@ print(f"POSTGRES_PASSWORD={secrets.token_urlsafe(16)}")
 print(f"MODELRYX_JWT_SECRET={secrets.token_urlsafe(32)}")
 print(f"MODELRYX_INTERNAL_WORKER_KEY={secrets.token_urlsafe(32)}")
 print(f"MODELRYX_BOOTSTRAP_ADMIN_PASSWORD={secrets.token_urlsafe(16)}")
-print(f"MINIO_ROOT_PASSWORD={secrets.token_urlsafe(16)}")
 EOF
 
 # Copy to .env and edit as needed
@@ -72,15 +71,28 @@ cp .env.example .env
 # nano .env  # Edit and fill in the generated values
 ```
 
-### 2. Start Services
+### 2. Start the backend and frontend
+
+Start the API, database, and workers from the repository root:
 
 ```bash
-# Build and start all services
 docker compose up --build
-
-# Wait for logs to show "API server started"
-# Then open http://localhost:5173
 ```
+
+In a separate terminal, install and start the frontend:
+
+```bash
+cd front-end
+npm ci
+npm run dev
+```
+
+Open http://localhost:5174. The frontend is a React and TypeScript application
+served by Vite, with hot reload during development. On the login screen, use
+`http://localhost:8000` as the server URL. For a production frontend build, run
+`npm run build` in `front-end`; deploy the generated `dist` files with a web
+server configured for single-page application routing. Configure the API's
+`MODELRYX_CORS_ORIGINS` for the deployed frontend origin.
 
 ### 3. Login
 
@@ -97,13 +109,14 @@ For local development with hot reloading:
 cd server
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install ../worker-sdk
 pip install -e ".[dev]"
-python -m uvicorn src.server.modelryx.api.main:app --reload
+python -m uvicorn modelryx.api.main:app --reload
 
 # Terminal 2: Frontend
 cd front-end
 npm install
-npm run dev
+npm run dev  # http://localhost:5174
 
 # Terminal 3: Database (if not using Docker)
 docker run -e POSTGRES_PASSWORD=dev -p 5432:5432 postgres:15
@@ -135,6 +148,9 @@ docker compose up -d
 # Verify deployment
 curl https://your-domain.com/health
 ```
+
+See [S3 object operations](docs/development/s3-operations.md) for the optional Python
+storage component. Application file workflows currently use local storage.
 
 ## Adding Custom CAD Workers
 
@@ -181,10 +197,10 @@ modelryx/
 
 | Component | Technology |
 |-----------|-----------|
-| Backend | Python 3.10+, FastAPI, SQLAlchemy |
+| Backend | Python 3.11+, FastAPI, SQLAlchemy |
 | Frontend | React 18+, TypeScript, Vite |
 | Database | PostgreSQL 14+ with pgvector |
-| Object Storage | MinIO (S3-compatible) |
+| Object Storage | Persistent local filesystem |
 | Processing | Docker (containerized workers) |
 | CAD | FreeCAD SDK, STEP format processing |
 

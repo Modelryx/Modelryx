@@ -183,7 +183,7 @@ Fields:
 - `filename` — Original filename
 - `file_type` — File type (step, iges, stl, pdf, etc.)
 - `size_bytes` — File size in bytes
-- `storage_key` — Object storage key (S3/MinIO)
+- `storage_key` — Local object storage key
 - `uploaded_by` — Uploader user ID (foreign key)
 - `created_at` — Upload timestamp
 
