@@ -149,7 +149,9 @@ def geometry_findings(metadata: dict[str, Any]) -> list[FindingInput]:
             )
         ]
 
-    surface_only = any("surface-only model; no solid bodies" in warning.casefold() for warning in warnings)
+    surface_only = any(
+        "surface-only model; no solid bodies" in warning.casefold() for warning in warnings
+    )
     if volume is not None and float(volume) <= 0 and not surface_only:
         findings.append(
             FindingInput(

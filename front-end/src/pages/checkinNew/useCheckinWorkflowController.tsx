@@ -1988,9 +1988,10 @@ export function useCheckinWorkflowController({
         if (!row) throw new Error(`${entry.file.name} is missing from staging.`);
         return row;
       };
-      const relatedDrawings = main.externalCadSystem?.toLowerCase() === 'inventor'
-        ? files.filter((entry) => entry !== main && isDrawing(entry))
-        : [];
+      const relatedDrawings =
+        main.externalCadSystem?.toLowerCase() === 'inventor'
+          ? files.filter((entry) => entry !== main && isDrawing(entry))
+          : [];
       staging = await api<StagingResult>(`/staging/${stagingId}/proposal`, 'PUT', {
         expected_snapshot_version: staging.snapshot_version,
         operation: targetItemId ? 'CREATE_REVISION' : 'CREATE_ITEM',
@@ -2012,16 +2013,23 @@ export function useCheckinWorkflowController({
         artifacts: [
           {
             client_artifact_id: randomUUID(),
-            artifact_type: main.documentType === 'ASSEMBLY' ? 'CAD_ASSEMBLY' : main.documentType === 'DRAWING' ? 'DRAWING' : 'CAD_MODEL',
+            artifact_type:
+              main.documentType === 'ASSEMBLY'
+                ? 'CAD_ASSEMBLY'
+                : main.documentType === 'DRAWING'
+                  ? 'DRAWING'
+                  : 'CAD_MODEL',
             name: main.itemName.trim(),
             classification: 'AUTHORITATIVE',
             relation_type: 'SPECIFICATION',
             is_primary: true,
-            files: files.filter((entry) => !relatedDrawings.includes(entry)).map((entry) => ({
-              staged_file_id: staged(entry).id,
-              reference_name: entry.logicalPath,
-              role: entry === main ? 'PRIMARY' : 'SECONDARY',
-            })),
+            files: files
+              .filter((entry) => !relatedDrawings.includes(entry))
+              .map((entry) => ({
+                staged_file_id: staged(entry).id,
+                reference_name: entry.logicalPath,
+                role: entry === main ? 'PRIMARY' : 'SECONDARY',
+              })),
           },
           ...relatedDrawings.map((drawing) => ({
             client_artifact_id: randomUUID(),
@@ -2030,7 +2038,13 @@ export function useCheckinWorkflowController({
             classification: 'AUTHORITATIVE',
             relation_type: 'DRAWING',
             is_primary: false,
-            files: [{ staged_file_id: staged(drawing).id, reference_name: drawing.logicalPath, role: 'PRIMARY' }],
+            files: [
+              {
+                staged_file_id: staged(drawing).id,
+                reference_name: drawing.logicalPath,
+                role: 'PRIMARY',
+              },
+            ],
           })),
         ],
         identity_decisions: [{ staged_file_id: staged(main).id, decision: 'CREATE_NEW' }],

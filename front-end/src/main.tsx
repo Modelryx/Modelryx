@@ -441,8 +441,12 @@ function Library({
       .then((workers) => {
         if (active) setWorkerCadSystems(workers.map((worker) => worker.cadSystem).filter(Boolean));
       })
-      .catch(() => { if (active) setWorkerCadSystems([]); });
-    return () => { active = false; };
+      .catch(() => {
+        if (active) setWorkerCadSystems([]);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
   useEffect(() => {
     let active = true;
@@ -821,12 +825,15 @@ function Library({
                 cad: (() => {
                   const existing = values(state.data.facets?.cad_systems);
                   const seen = new Set(existing.map((value) => value.toLocaleLowerCase()));
-                  return [...existing, ...workerCadSystems.filter((system) => {
-                    const key = system.toLocaleLowerCase();
-                    if (seen.has(key)) return false;
-                    seen.add(key);
-                    return true;
-                  })];
+                  return [
+                    ...existing,
+                    ...workerCadSystems.filter((system) => {
+                      const key = system.toLocaleLowerCase();
+                      if (seen.has(key)) return false;
+                      seen.add(key);
+                      return true;
+                    }),
+                  ];
                 })(),
                 status: values(state.data.facets?.item_statuses),
               },

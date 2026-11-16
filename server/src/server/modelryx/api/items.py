@@ -525,7 +525,9 @@ def release_item_revision(
         raise HTTPException(status_code=404, detail="Item revision not found")
     actor = user_for_principal(db, principal)
     if revision.created_by != actor.id and not principal.has_role("reviewer"):
-        raise HTTPException(status_code=403, detail="Only the revision creator or a reviewer can release it")
+        raise HTTPException(
+            status_code=403, detail="Only the revision creator or a reviewer can release it"
+        )
     if revision.lifecycle_state == "RELEASED":
         checkout_status = revision_checkout_status(db, revision.id, principal)
         return item_revision_response(revision, checkout_status, db)
@@ -1004,12 +1006,16 @@ def revision_action_availability(
     can_review = any(approval.status == "PENDING" and actor_is_eligible(
         approval, actor.id, principal.role) for approval in approvals)
     source_files = current_artifact_files(
-        db, revision.id, artifact_types={"CAD_MODEL", "CAD_ASSEMBLY", "DRAWING", "CAD_DRAWING", "STEP"}
+        db,
+        revision.id,
+        artifact_types={"CAD_MODEL", "CAD_ASSEMBLY", "DRAWING", "CAD_DRAWING", "STEP"},
     )
     filenames = [file.original_filename for file in source_files if file.role == "PRIMARY"]
     if not filenames:
         filenames = [file.original_filename for file in source_files]
-    built_in = any(Path(name).suffix.casefold() in {".fcstd", ".step", ".stp"} for name in filenames)
+    built_in = any(
+        Path(name).suffix.casefold() in {".fcstd", ".step", ".stp"} for name in filenames
+    )
     try:
         worker_configured = built_in or any(
             matching_worker(db, name, revision.cad_system) is not None for name in filenames

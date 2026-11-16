@@ -195,7 +195,9 @@ def submit_approval_request(
     revision = revision_for_item(db, item_id, revision_id)
     actor = user_for_principal(db, principal)
     if not payload.emergency and revision.created_by != actor.id:
-        raise HTTPException(status_code=403, detail="Only the revision creator can request approval")
+        raise HTTPException(
+            status_code=403, detail="Only the revision creator can request approval"
+        )
     if revision.lifecycle_state != "WORKING":
         raise HTTPException(status_code=409, detail="Only a working revision can be submitted")
     if revision.state not in {"READY", "READY_WITH_WARNINGS"}:

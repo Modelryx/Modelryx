@@ -136,9 +136,10 @@ export function createAssemblyUploadActions(context: Context) {
         return row;
       };
       const createNewEntries = ready.filter((entry) => entry.duplicateChoice !== 'USE_EXISTING');
-      const inventorDrawings = main.externalCadSystem?.toLowerCase() === 'inventor'
-        ? packageEntries.filter((entry) => entry !== main && isDrawing(entry))
-        : [];
+      const inventorDrawings =
+        main.externalCadSystem?.toLowerCase() === 'inventor'
+          ? packageEntries.filter((entry) => entry !== main && isDrawing(entry))
+          : [];
       const nxInstanceNames = /\.prt$/i.test(main.file.name)
         ? nxBomInstanceNames(dependencyReport?.references ?? [])
         : [];
@@ -157,7 +158,9 @@ export function createAssemblyUploadActions(context: Context) {
             pending.push(reference.child_logical_path);
           }
         }
-        return packageEntries.filter((entry) => paths.has(entry.logicalPath) && !inventorDrawings.includes(entry));
+        return packageEntries.filter(
+          (entry) => paths.has(entry.logicalPath) && !inventorDrawings.includes(entry)
+        );
       };
       const artifacts = [
         {
@@ -168,25 +171,40 @@ export function createAssemblyUploadActions(context: Context) {
           classification: 'AUTHORITATIVE',
           relation_type: 'SPECIFICATION',
           is_primary: true,
-          files: packageEntries.filter((entry) => !inventorDrawings.includes(entry)).map((entry) => ({
-            staged_file_id: stagedFile(entry).id,
-            reference_name: entry.logicalPath,
-            role: entry === main ? 'PRIMARY' : 'SECONDARY',
+          files: packageEntries
+            .filter((entry) => !inventorDrawings.includes(entry))
+            .map((entry) => ({
+              staged_file_id: stagedFile(entry).id,
+              reference_name: entry.logicalPath,
+              role: entry === main ? 'PRIMARY' : 'SECONDARY',
+            })),
+          ...inventorDrawings.map((drawing) => ({
+            client_artifact_id: randomUUID(),
+            owner_staged_file_id: (() => {
+              const owner = createNewEntries.find(
+                (entry) =>
+                  entry !== main &&
+                  relatedSupportPaths(
+                    entry.logicalPath,
+                    [drawing.logicalPath],
+                    dependencyReport?.references ?? []
+                  ).length > 0
+              );
+              return owner ? stagedFile(owner).id : null;
+            })(),
+            artifact_type: 'DRAWING',
+            name: drawing.file.name.replace(/\.[^.]+$/, ''),
+            classification: 'AUTHORITATIVE',
+            relation_type: 'DRAWING',
+            is_primary: false,
+            files: [
+              {
+                staged_file_id: stagedFile(drawing).id,
+                reference_name: drawing.logicalPath,
+                role: 'PRIMARY',
+              },
+            ],
           })),
-        ...inventorDrawings.map((drawing) => ({
-          client_artifact_id: randomUUID(),
-          owner_staged_file_id: (() => {
-            const owner = createNewEntries.find((entry) => entry !== main &&
-              relatedSupportPaths(entry.logicalPath, [drawing.logicalPath], dependencyReport?.references ?? []).length > 0);
-            return owner ? stagedFile(owner).id : null;
-          })(),
-          artifact_type: 'DRAWING',
-          name: drawing.file.name.replace(/\.[^.]+$/, ''),
-          classification: 'AUTHORITATIVE',
-          relation_type: 'DRAWING',
-          is_primary: false,
-          files: [{ staged_file_id: stagedFile(drawing).id, reference_name: drawing.logicalPath, role: 'PRIMARY' }],
-        })),
         },
         ...createNewEntries
           .filter((entry) => entry !== main)
@@ -230,7 +248,9 @@ export function createAssemblyUploadActions(context: Context) {
                 },
                 revision: {
                   revision_code: entry.revision.trim(),
-                  cad_system: entry.externalCadSystem || cadProfile(entry.file.name, entry.documentType).cadSystem,
+                  cad_system:
+                    entry.externalCadSystem ||
+                    cadProfile(entry.file.name, entry.documentType).cadSystem,
                   native_format: cadProfile(entry.file.name, entry.documentType).nativeFormat,
                 },
               }
@@ -253,42 +273,45 @@ export function createAssemblyUploadActions(context: Context) {
         artifacts,
         identity_decisions: identityDecisions,
         bom: dependencyReport?.references?.length
-          ? dependencyReport.references.filter((reference) =>
-              ready.some((entry) => entry.logicalPath === reference.parent_logical_path) &&
-              ready.some((entry) => entry.logicalPath === reference.child_logical_path)
-            ).map((reference, index) => {
-              const parent = ready.find(
-                (entry) => entry.logicalPath === reference.parent_logical_path
-              );
-              const child = ready.find(
-                (entry) => entry.logicalPath === reference.child_logical_path
-              );
-              if (!parent || !child) {
-                throw new Error(
-                  `The dependency graph references an unavailable file at relationship ${index + 1}.`
+          ? dependencyReport.references
+              .filter(
+                (reference) =>
+                  ready.some((entry) => entry.logicalPath === reference.parent_logical_path) &&
+                  ready.some((entry) => entry.logicalPath === reference.child_logical_path)
+              )
+              .map((reference, index) => {
+                const parent = ready.find(
+                  (entry) => entry.logicalPath === reference.parent_logical_path
                 );
-              }
-              return {
-                parent_staged_file_id: stagedFile(parent).id,
-                child_staged_file_id: stagedFile(child).id,
-                instance_name:
-                  nxInstanceNames[index] ||
-                  reference.occurrence_key ||
-                  reference.occurrence_path ||
-                  `${reference.parent_logical_path}::${
-                    reference.occurrence_id ||
-                    reference.instance_name ||
-                    reference.child_logical_path
-                  }`,
-                quantity: 1,
-                source_reference: reference.source_reference || reference.child_logical_path,
-                reference_designator: reference.reference_designator || reference.instance_name,
-                transform: reference.transform,
-                is_suppressed: reference.is_suppressed ?? false,
-                is_visible: reference.is_visible ?? true,
-                properties: reference.properties || {},
-              };
-            })
+                const child = ready.find(
+                  (entry) => entry.logicalPath === reference.child_logical_path
+                );
+                if (!parent || !child) {
+                  throw new Error(
+                    `The dependency graph references an unavailable file at relationship ${index + 1}.`
+                  );
+                }
+                return {
+                  parent_staged_file_id: stagedFile(parent).id,
+                  child_staged_file_id: stagedFile(child).id,
+                  instance_name:
+                    nxInstanceNames[index] ||
+                    reference.occurrence_key ||
+                    reference.occurrence_path ||
+                    `${reference.parent_logical_path}::${
+                      reference.occurrence_id ||
+                      reference.instance_name ||
+                      reference.child_logical_path
+                    }`,
+                  quantity: 1,
+                  source_reference: reference.source_reference || reference.child_logical_path,
+                  reference_designator: reference.reference_designator || reference.instance_name,
+                  transform: reference.transform,
+                  is_suppressed: reference.is_suppressed ?? false,
+                  is_visible: reference.is_visible ?? true,
+                  properties: reference.properties || {},
+                };
+              })
           : ready
               .filter((entry) => entry !== main)
               .map((entry, index) => ({

@@ -1551,7 +1551,10 @@ def preferred_cad_outputs(
         outputs.append("drawing-representations")
     if document_kind == "assembly" and cad_system != "siemens_nx":
         outputs.append("component-geometry")
-    return outputs if supported_roles is None else [role for role in outputs if role in supported_roles]
+    return (
+        outputs if supported_roles is None
+        else [role for role in outputs if role in supported_roles]
+    )
 
 
 def process_licensed_cad_job(db: Session, job: ProcessingJob, settings: Settings) -> None:

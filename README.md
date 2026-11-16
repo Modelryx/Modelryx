@@ -54,7 +54,7 @@ See the [platform architecture documentation](docs/architecture/platform-archite
 
 ```bash
 # Clone the repository
-git clone https://github.com/yanggmtl/Modelryx.git
+git clone https://github.com/Modelryx/Modelryx.git
 cd Modelryx
 
 # Generate secure environment variables

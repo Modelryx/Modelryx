@@ -11,7 +11,7 @@ Be respectful, inclusive, and professional in all interactions. We are committed
 ### Fork and Clone
 
 1. **Fork the repository** on GitHub
-   - Click the "Fork" button at https://github.com/yanggmtl/Modelryx
+   - Click the "Fork" button at https://github.com/Modelryx/Modelryx
 
 2. **Clone your fork locally**
    ```bash
@@ -21,7 +21,7 @@ Be respectful, inclusive, and professional in all interactions. We are committed
 
 3. **Add upstream remote** (to stay in sync)
    ```bash
-   git remote add upstream https://github.com/yanggmtl/Modelryx.git
+   git remote add upstream https://github.com/Modelryx/Modelryx.git
    git remote -v  # verify both origin and upstream are configured
    ```
 

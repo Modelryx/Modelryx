@@ -39,7 +39,6 @@ export function RevisionLifecycle({
   itemId,
   revision,
   canEdit,
-  isAdmin,
   canRelease,
   isCreator,
   closeMenu,
@@ -75,10 +74,11 @@ export function RevisionLifecycle({
     );
   return (
     <>
-      {isCreator && choice(
-        'approval',
-        canEdit && !unavailable && !pending && !approved && !groups.loading && !groups.error
-      )}
+      {isCreator &&
+        choice(
+          'approval',
+          canEdit && !unavailable && !pending && !approved && !groups.loading && !groups.error
+        )}
       {canRelease && choice('release', !unavailable)}
       {pending?.can_withdraw && choice('withdraw', true)}
       <div className="revision-action-status">

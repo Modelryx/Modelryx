@@ -264,10 +264,13 @@ def reprocess_revision_preview(
     if revision is None:
         raise HTTPException(status_code=404, detail="Revision not found")
     if not principal.has_role("designer", "administrator"):
-        raise HTTPException(status_code=403, detail="Designer role required to generate metadata and preview")
+        raise HTTPException(
+            status_code=403, detail="Designer role required to generate metadata and preview"
+        )
     from modelryx.api.items import revision_action_availability
 
-    if not revision_action_availability(revision.part_id, revision.id, db, principal)["worker_configured"]:
+    availability = revision_action_availability(revision.part_id, revision.id, db, principal)
+    if not availability["worker_configured"]:
         raise HTTPException(status_code=409, detail="No matching CAD worker is configured")
     snapshot_id = latest_content_snapshot_id(db, revision.id)
     if snapshot_id is None:

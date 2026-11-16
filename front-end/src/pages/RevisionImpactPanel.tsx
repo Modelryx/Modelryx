@@ -38,9 +38,9 @@ export function RevisionImpactPanel({
     (job) => !snapshotId || job.snapshot_id === snapshotId
   );
   // The API returns newest jobs first. A retry supersedes older attempts of the same type.
-  const latestJobs = [...new Map(
-    [...relevantJobs].reverse().map((job) => [job.type, job])
-  ).values()];
+  const latestJobs = [
+    ...new Map([...relevantJobs].reverse().map((job) => [job.type, job])).values(),
+  ];
   const active = latestJobs.filter((job) => ['PENDING', 'RUNNING'].includes(job.state));
   const failed = latestJobs.filter((job) => job.state === 'FAILED');
   const parents = new Map(

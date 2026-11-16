@@ -680,7 +680,6 @@ function RevisionActionChoices({
   canEdit,
   canReview,
   isAdmin,
-  canRelease,
   closeMenu,
   refreshToken,
   activeSection,
@@ -710,7 +709,8 @@ function RevisionActionChoices({
       >
         Compare revisions
       </Link>
-      {availability?.is_creator && canEdit &&
+      {availability?.is_creator &&
+      canEdit &&
       revision.lifecycle_state === 'WORKING' &&
       revision.checkout_status !== 'CHECKED_OUT_BY_OTHER' ? (
         <Link
@@ -722,16 +722,26 @@ function RevisionActionChoices({
           Edit revision
         </Link>
       ) : null}
-      {availability?.can_generate && (availability.worker_configured ? <Link
-        role="menuitem"
-        aria-current={activeSection === 'generate' ? 'page' : undefined}
-        to={`${revisionPath}?section=generate`}
-        onClick={closeMenu}
-      >
-        Generate metadata &amp; preview
-      </Link> : <button type="button" role="menuitem" disabled title="No matching CAD worker is configured">
-        Generate metadata &amp; preview
-      </button>)}
+      {availability?.can_generate &&
+        (availability.worker_configured ? (
+          <Link
+            role="menuitem"
+            aria-current={activeSection === 'generate' ? 'page' : undefined}
+            to={`${revisionPath}?section=generate`}
+            onClick={closeMenu}
+          >
+            Generate metadata &amp; preview
+          </Link>
+        ) : (
+          <button
+            type="button"
+            role="menuitem"
+            disabled
+            title="No matching CAD worker is configured"
+          >
+            Generate metadata &amp; preview
+          </button>
+        ))}
       {canReview && availability?.can_review ? (
         <Link
           role="menuitem"
@@ -1116,14 +1126,19 @@ export function ItemWorkspace({
                     declared={revision.data.metadata_json}
                   />
                 )}
-              {activeSection === 'generate' && actionAvailability.data?.worker_configured && actionAvailability.data?.can_generate && <GeneratePreviewPage key={revisionId} embedded />}
+                {activeSection === 'generate' &&
+                  actionAvailability.data?.worker_configured &&
+                  actionAvailability.data?.can_generate && (
+                    <GeneratePreviewPage key={revisionId} embedded />
+                  )}
                 {activeSection === 'compare' && (
                   <Suspense fallback={<p role="status">Loading comparison…</p>}>
                     <Comparison key={revisionId} embedded />
                   </Suspense>
                 )}
                 {activeSection === 'edit' &&
-                (actionAvailability.data?.is_creator && canEdit &&
+                  (actionAvailability.data?.is_creator &&
+                  canEdit &&
                   revision.data.lifecycle_state === 'WORKING' &&
                   revision.data.checkout_status !== 'CHECKED_OUT_BY_OTHER' ? (
                     <Suspense fallback={<p role="status">Loading revision editor…</p>}>
