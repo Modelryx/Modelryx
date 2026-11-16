@@ -91,7 +91,10 @@ def test_active_catalog_is_stable_and_published() -> None:
         "CHECKOUT",
     }
     assert sum(1 + len(scenario["paraphrases"]) for scenario in first.scenarios) >= 100
-    assert all(len(scenario["paraphrases"]) >= 5 for scenario in first.scenarios)
+    underspecified = [
+        scenario["id"] for scenario in first.scenarios if len(scenario["paraphrases"]) < 5
+    ]
+    assert not underspecified, f"Scenarios need at least five paraphrases: {underspecified}"
     assert all(len(scenario["negative_examples"]) >= 2 for scenario in first.scenarios)
 
 

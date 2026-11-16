@@ -3,10 +3,9 @@
 - `ci.yml` runs required backend schema initialization/tests, frontend compilation, SDK tests,
   FreeCAD unit/native tests, STEP contract tests, and repository checks. Backend
   coverage and the Trivy security report are uploaded as artifacts.
-- `container-builds.yml` runs independently of CI. Its matrix builds server,
-  frontend, and STEP images in parallel. The STEP image also runs native converter
-  tests and an authenticated service smoke test. FreeCAD is built and tested once,
-  in CI, using the native Docker builder to avoid a second full-image export/import.
+  The STEP job also builds its image once with Buildx caching, runs native converter tests,
+  and runs an authenticated service smoke test. Backend Compose tests build the API runtime
+  and test images. FreeCAD is built and tested once using the native Docker builder.
 - `freecad-compatibility.yml` is manually dispatched for the FreeCAD version matrix.
   Failures for versions other than the supported production version are advisory.
 
@@ -24,8 +23,8 @@ severity filtering is explicitly enabled, and matching rule IDs and locations ar
 printed in the job log.
 
 Worker unit tests use Python 3.11 to match the native worker images. Server and SDK
-checks use Python 3.12, and frontend checks use Node 22. Frontend CI and container
-builds install the committed lockfile with `npm ci`, without ad hoc package installs.
+checks use Python 3.12, and frontend checks use Node 22. Frontend CI installs the
+committed lockfile with `npm ci`, without ad hoc package installs.
 When updating dependencies, generate the lockfile in a clean directory without an
 existing lockfile or node_modules and verify Linux glibc, musl, and Windows entries.
 
@@ -34,13 +33,11 @@ coverage data and XML reports are written under `/tmp`, which is writable by the
 non-root test user. Coverage is required after passing tests; when tests fail before coverage is
 written, collection warns and preserves the original test failure.
 
-There is currently no frontend unit or browser test script. CI does not install
-Playwright or invoke nonexistent test scripts. Add required test steps when a real
-test suite is introduced.
+Frontend CI runs `npm run test:upload` for the neutral upload contract. It does not
+install Playwright or run browser tests.
 
 ## Required checks
 
-This replaces `tests.yml` and `code-quality.yml`. Repository administrators should
-remove their old check names from branch protection and select checks from Platform
-CI and Container Builds. Keep the existing CI job IDs where possible. The removed
-FreeCAD container matrix check is covered by the `FreeCAD worker` CI job.
+Select required checks from Platform CI. The `STEP worker` job includes native image and
+service checks, and the `FreeCAD worker` job includes native release gates. Remove any obsolete
+container matrix checks from branch protection after this workflow change is applied.

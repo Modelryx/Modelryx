@@ -12,15 +12,14 @@ required checks are repository settings; a workflow failure alone does not confi
   ESLint, and Prettier.
 - Worker SDK tests cover the protocol and repository configuration/export checks.
 - FreeCAD checks cover unit tests, a native image build, and native release gates.
-- STEP checks cover API, component-bundle, and GLB contracts.
+- STEP checks cover API, component-bundle, and GLB contracts, a cached container build,
+  native converter tests, and an authenticated running-service smoke test.
 - Repository safety checks scan common credential patterns and validate Compose.
 - Python quality runs Ruff; dependency/configuration scanning uses Trivy and retains SARIF.
 
-## Container builds
-
-[container-builds.yml](workflows/container-builds.yml) builds the API and STEP images on
-pull requests and pushes to `main` and `develop`. It also runs STEP native converter and
-service smoke checks. It does not push images to a registry.
+Backend Compose tests build the API runtime and test images. The STEP image is built and
+loaded once by the STEP worker job for its native and service checks. Images are not pushed
+to a registry.
 
 ## FreeCAD compatibility
 

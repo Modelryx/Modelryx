@@ -743,10 +743,10 @@ def test_search_reliability_seeded_result_membership_metrics() -> None:
     revision_match = _phase22_item(
         f"{token} Revision Match", "", {}, revision_code=revision_code
     )
-    cad_match = _phase22_item(
+    _phase22_item(
         f"{token} CAD Match", "", {}, cad_system="SolidWorks"
     )
-    cad_other = _phase22_item(f"{token} CAD Other", "", {}, cad_system="FreeCAD")
+    _phase22_item(f"{token} CAD Other", "", {}, cad_system="FreeCAD")
     lifecycle_match = _phase22_item(
         f"{token} Lifecycle Match", "", {}, revision_state="READY_WITH_WARNINGS"
     )

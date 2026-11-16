@@ -158,7 +158,7 @@
       "id": "CAD-FORMAT", "version": 1, "status": "published", "priority": "P0",
       "entities": ["item", "part", "assembly"], "operation": "engineering_search",
       "capabilities": ["cad_system", "artifact_format"], "owner": "engineering-search",
-      "canonical_example": "find STEP parts", "paraphrases": ["parts with STEP files", "models from FreeCAD", "STP components", "IGES models"],
+      "canonical_example": "find STEP parts", "paraphrases": ["parts with STEP files", "models from FreeCAD", "STP components", "IGES models", "assemblies with STEP files"],
       "negative_examples": ["step through parts", "free CAD training"],
       "example_request": {"entity_type": "part", "filters": {"artifact_format": "step"}},
       "configuration": {

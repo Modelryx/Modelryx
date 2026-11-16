@@ -110,7 +110,7 @@ jobs:
   step-worker:
     name: STEP worker
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -123,6 +123,47 @@ jobs:
       - name: Test API, bundle units and GLB contracts
         run: python -m pytest -q tests/test_api_contract.py tests/test_component_bundle_api.py tests/test_component_bundle_units.py tests/test_glb_utils.py
         working-directory: workers/step
+      - uses: docker/setup-buildx-action@v3
+      - name: Build STEP worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: workers/step
+          file: workers/step/Dockerfile
+          load: true
+          push: false
+          tags: modelryx/step-worker:ci
+          cache-from: type=gha,scope=step-worker
+          cache-to: type=gha,mode=max,scope=step-worker
+      - name: Run STEP native converter tests
+        run: >-
+          docker run --rm modelryx/step-worker:ci
+          python -m pytest -q tests/test_step_metadata.py tests/test_component_bundle_to_glb.py
+      - name: Run STEP service smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --detach --name modelryx-step-smoke --env MODELRYX_INTERNAL_WORKER_KEY=ci-only-worker-key modelryx/step-worker:ci
+          for attempt in $(seq 1 60); do
+            if docker exec modelryx-step-smoke python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/ready')"; then
+              docker exec modelryx-step-smoke python /app/tests/compose_smoke.py
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "STEP worker did not become ready"
+          exit 1
+      - name: Show STEP service logs
+        if: always()
+        run: |
+          if docker container inspect modelryx-step-smoke >/dev/null 2>&1; then
+            docker logs modelryx-step-smoke
+          fi
+      - name: Clean up STEP service
+        if: always()
+        run: |
+          if docker container inspect modelryx-step-smoke >/dev/null 2>&1; then
+            docker rm --force modelryx-step-smoke
+          fi
   repository-safety:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
