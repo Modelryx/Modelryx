@@ -23,8 +23,6 @@ param(
 $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-$RetiredCadSettings = @("MODELRYX_AUTOCAD_WORKER_URL", "MODELRYX_INVENTOR_WORKER_URL", "MODELRYX_NX_WORKER_URL", "MODELRYX_NX_ALLOW_UNQUALIFIED_PROCESSING")
-
 function Get-EnvMap([string]$Path)
 {
     $Values = @{}
@@ -53,7 +51,6 @@ function Write-EnvFile([string]$TemplatePath, [string]$DestinationPath, [hashtab
             continue
         }
         $Name = ($Text -split "=", 2)[0].Trim()
-        if ($Name -in $RetiredCadSettings) { continue }
         $Value = if ($Overrides.ContainsKey($Name)) { $Overrides[$Name] }
             elseif ($Existing.ContainsKey($Name)) { $Existing[$Name] }
             else { ($Text -split "=", 2)[1] }
@@ -68,7 +65,7 @@ function Write-EnvFile([string]$TemplatePath, [string]$DestinationPath, [hashtab
     }
     foreach ($Name in $Existing.Keys | Sort-Object)
     {
-        if ($Name -notin $RetiredCadSettings -and -not $Written.ContainsKey($Name) -and -not $Overrides.ContainsKey($Name)) {
+        if (-not $Written.ContainsKey($Name) -and -not $Overrides.ContainsKey($Name)) {
             $Lines.Add("$Name=$($Existing[$Name])")
         }
     }

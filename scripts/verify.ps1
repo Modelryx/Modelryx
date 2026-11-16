@@ -8,14 +8,6 @@ try {
     npm run typecheck; if ($LASTEXITCODE) { throw "Frontend type-check failed" }
     npm run build; if ($LASTEXITCODE) { throw "Frontend build failed" }
 } finally { Pop-Location }
-if (Test-Path -LiteralPath "$Root\autocad_worker") {
-    Push-Location "$Root\autocad_worker"
-    try {
-        dotnet build Modelryx.AutoCAD.Worker.sln --no-restore; if ($LASTEXITCODE) { throw ".NET build failed" }
-        dotnet run --project tests\Modelryx.AutoCAD.Tests --no-restore; if ($LASTEXITCODE) { throw ".NET tests failed" }
-        dotnet run --project tests\Modelryx.AutoCAD.ApiTests --no-restore; if ($LASTEXITCODE) { throw ".NET API integration tests failed" }
-    } finally { Pop-Location }
-}
 Push-Location "$Root\workers\freecad"
 try {
     $FreeCadTemp = Join-Path "$Root\tmp" ("fc-" + [guid]::NewGuid().ToString("N").Substring(0, 8))

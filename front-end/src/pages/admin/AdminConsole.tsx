@@ -48,9 +48,6 @@ export function AdminConsole({
   const [items, setItems] = useState<Item[]>([]);
   const [status, setStatus] = useState<Status | null>(null);
   const [cadWorkerSettings, setCadWorkerSettings] = useState<CadWorkerSettings>({
-    autocad_url: null,
-    inventor_url: null,
-    nx_url: null,
     freecad_url: null,
     freecad_analyzer_url: null,
   });

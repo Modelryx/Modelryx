@@ -18,7 +18,7 @@ a meter-scale scene parent so mesh coordinates, translations and local edge meta
 Legacy bundles without `geometryUnits` retain their previous unit behavior.
 
 Authenticated `/capabilities` advertises `component_bundle_input_units: ["millimeter"]` alongside
-`component_bundle_to_glb`. NX workers require this declaration before submitting assembly bundles.
+`component_bundle_to_glb`. External workers require this declaration before submitting assembly bundles.
 
 Within a conversion job, repeated references to the same resolved geometry file reuse one read,
 tessellation and edge extraction. Each placement retains its own transform, identity and color;

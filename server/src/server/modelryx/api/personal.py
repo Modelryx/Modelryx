@@ -1,6 +1,5 @@
 import uuid
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -345,12 +344,10 @@ def workspace(db: Db, principal: Actor) -> WorkspaceResponse:
     def primary_file(files: list[StagingFile]) -> str | None:
         if not files:
             return None
-        extension_priority = {".iam": 0, ".ipt": 1, ".step": 2, ".stp": 2}
         return min(
             files,
             key=lambda file: (
                 file.logical_path.count("/") + file.logical_path.count("\\"),
-                extension_priority.get(Path(file.filename).suffix.casefold(), 10),
                 file.logical_path.casefold(),
             ),
         ).filename

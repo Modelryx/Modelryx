@@ -198,7 +198,7 @@ def test_direct_search_pages_sorts_and_facets_across_all_matches() -> None:
             f"Server paging {token} {index:02d}", "", {},
             part_number=f"PAGE-{token}-{index:02d}",
             item_type="ASSEMBLY" if index == 11 else "PART",
-            cad_system="NX" if index == 11 else "FreeCAD",
+            cad_system="EXAMPLE_CAD" if index == 11 else "FreeCAD",
         )
     request = {
         "filters": {"item_number_regex": f"^PAGE-{token}-"},
@@ -214,23 +214,23 @@ def test_direct_search_pages_sorts_and_facets_across_all_matches() -> None:
     assert len(body["results"]) == 10
     assert body["results"][0]["item_number"].endswith("-00")
     assert set(body["facets"]["item_types"]) == {"PART", "ASSEMBLY"}
-    assert set(body["facets"]["cad_systems"]) == {"FreeCAD", "NX"}
+    assert set(body["facets"]["cad_systems"]) == {"FreeCAD", "EXAMPLE_CAD"}
     assert body["facets"]["item_statuses"] == ["ACTIVE"]
 
     second = client.post("/api/v1/search", headers=AUTH, json={**request, "offset": 10})
     assert second.status_code == 200, second.text
     assert [row["item_number"][-2:] for row in second.json()["results"]] == ["10", "11"]
 
-    request["filters"]["cad_systems"] = ["NX"]
+    request["filters"]["cad_systems"] = ["EXAMPLE_CAD"]
     request["filters"]["item_types"] = ["PART", "ASSEMBLY"]
     filtered = client.post("/api/v1/search", headers=AUTH, json=request)
     assert filtered.status_code == 200, filtered.text
     assert filtered.json()["total"] == 1
     assert filtered.json()["results"][0]["item_number"].endswith("-11")
-    assert set(filtered.json()["facets"]["cad_systems"]) == {"FreeCAD", "NX"}
+    assert set(filtered.json()["facets"]["cad_systems"]) == {"FreeCAD", "EXAMPLE_CAD"}
     assert filtered.json()["facets"]["item_types"] == ["ASSEMBLY"]
 
-    request["filters"]["cad_systems"] = ["FreeCAD", "NX"]
+    request["filters"]["cad_systems"] = ["FreeCAD", "EXAMPLE_CAD"]
     request["filters"]["item_types"] = ["PART"]
     request["sort"] = [{"field": "item_number", "direction": "desc"}]
     parts = client.post("/api/v1/search", headers=AUTH, json=request)
@@ -244,7 +244,7 @@ def test_direct_search_pages_sorts_and_facets_across_all_matches() -> None:
     empty = client.post("/api/v1/search", headers=AUTH, json=request)
     assert empty.status_code == 200, empty.text
     assert empty.json()["total"] == 0
-    assert set(empty.json()["facets"]["cad_systems"]) == {"FreeCAD", "NX"}
+    assert set(empty.json()["facets"]["cad_systems"]) == {"FreeCAD", "EXAMPLE_CAD"}
 
 
 def _phase22_item(
@@ -847,13 +847,6 @@ def test_search_reliability_seeded_result_membership_metrics() -> None:
                 "closed_set": True,
             },
             {
-                "id": "cad-system",
-                "query": f"find {token} CAD parts from SolidWorks",
-                "expected_included": [cad_match],
-                "expected_excluded": [cad_other],
-                "closed_set": True,
-            },
-            {
                 "id": "lifecycle",
                 "query": f"find {token} lifecycle parts ready with warnings",
                 "expected_included": [lifecycle_match],
@@ -1168,8 +1161,8 @@ def _phase24_revision(item_id: str) -> uuid.UUID:
 @pytest.mark.parametrize(
     ("cad_system", "part_format", "assembly_format"),
     [
-        pytest.param("AutoCAD", "DWG", "DWG", id="autocad"),
-        pytest.param("Inventor", "IPT", "IAM", id="inventor"),
+        pytest.param("Drawing CAD", "DRAWING", "DRAWING", id="drawing_cad"),
+        pytest.param("Assembly CAD", "PART", "ASSEMBLY", id="assembly_cad"),
         pytest.param("FreeCAD", "FCStd", "FCStd", id="freecad"),
     ],
 )

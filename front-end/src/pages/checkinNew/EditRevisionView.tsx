@@ -441,7 +441,6 @@ export function EditRevisionView({ controller }: { controller: CheckinController
                       type="file"
                       hidden
                       disabled={editBusy}
-                      accept=".FCStd,.fcstd,.dwg,.DWG,.dxf,.DXF,.ipt,.IPT,.iam,.IAM,.idw,.IDW,.step,.stp"
                       onChange={(event) => {
                         const file = event.target.files?.[0];
                         if (file) void checkinChildFile(editOccurrenceMenu.occurrence, file);
@@ -479,7 +478,6 @@ export function EditRevisionView({ controller }: { controller: CheckinController
                 type="file"
                 hidden
                 disabled={editBusy}
-                accept=".FCStd,.fcstd,.dwg,.DWG,.dxf,.DXF,.ipt,.IPT,.iam,.IAM,.idw,.IDW,.step,.stp"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   if (file) void addEditFile(file);

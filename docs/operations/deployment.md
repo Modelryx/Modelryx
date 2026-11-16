@@ -1,7 +1,7 @@
 # Deploying Modelryx
 
 Use [compose.yaml](../../compose.yaml) as the actual service definition. The frontend is hosted
-separately; Autodesk workers are independent Windows services. See [development](../../DEVELOPMENT.md)
+separately; additional CAD workers are independently deployed services. See [development](../../DEVELOPMENT.md)
 for local setup.
 
 ## Environment and data
@@ -49,9 +49,7 @@ Starting a service does not register it.
 For `.FCStd`, one enabled matching registration takes precedence. Without one, the dedicated
 FreeCAD worker URL applies if configured, otherwise the embedded role handles conversion.
 External failure does not automatically retry through embedded FreeCAD. CAD sessions retain
-the embedded runtime. STEP retains its built-in service path. Inventor/AutoCAD register
-independently; users select the CAD-system filter for shared DWG/DXF extensions.
-
+the embedded runtime. STEP retains its built-in service path. 
 ## Frontend and networking
 
 In `front-end/`, run `npm ci` and `npm run build`; serve `dist/` with SPA fallback to `index.html`.

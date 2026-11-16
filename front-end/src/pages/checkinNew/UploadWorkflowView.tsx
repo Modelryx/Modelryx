@@ -55,7 +55,6 @@ export function UploadWorkflowView({ controller }: { controller: CheckinControll
     readyCount,
     duplicateCount,
     completeCount,
-    inventorMainCandidates,
     assemblyMainCandidates,
     renderEntryStatus,
     renderProperties,
@@ -651,11 +650,7 @@ export function UploadWorkflowView({ controller }: { controller: CheckinControll
                       </option>
                     ))}
                   </select>
-                  <span>
-                    {inventorMainCandidates.length > 0
-                      ? 'The document selected from the folder is listed first.'
-                      : 'Choose the root part or assembly for this upload.'}
-                  </span>
+                  <span>Choose the root part or assembly for this upload.</span>
                 </label>
                 <div className="assembly-file-list" role="listbox" aria-label="Assembly files">
                   <div className="assembly-file-list-header" aria-hidden="true">

@@ -655,7 +655,7 @@ def _bom_changes(
         # Repeated component/reference pairs are not declared ambiguous yet.
         # A stronger native occurrence-ID match may still resolve them below.
 
-    # AutoCAD grouped BOM rows retain the source occurrence IDs even when a
+    # Worker grouped BOM rows retain the source occurrence IDs even when a
     # block definition, hierarchy path, or display label is renamed. Match an
     # exact ID set only when it is unique on both sides so repeated components
     # can be resolved without guessing.
@@ -678,7 +678,7 @@ def _bom_changes(
             consumed_old.add(old_row["occurrence_key"])
             consumed_new.add(new_row["occurrence_key"])
 
-    # Inventor commonly derives an occurrence/reference name from the component
+    # A CAD worker commonly derives an occurrence/reference name from the component
     # filename.  A renamed or relocated definition can therefore change both the
     # occurrence key and reference designator even though it is still the same
     # Modelryx component.  Match by component only when it is unique on both

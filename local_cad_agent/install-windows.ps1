@@ -3,12 +3,7 @@ param(
     [string]$Runtime = "win-x64",
     [string[]]$AllowedOrigins = @(),
     [string]$FreeCadCommand = "",
-    [Alias("BuildAdaptersFromSource")]
-    [switch]$BuildPreprocessorsFromSource,
-    [string]$AutoCadTargetFramework = "net10.0-windows",
-    [string]$AutoCadSdkDir = "",
-    [string]$NxDirectory = 'C:\Program Files\Siemens\NX2506',
-    [switch]$BuildNxPreprocessorFromSource
+    [switch]$BuildFromSource
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,9 +11,7 @@ $Project = Join-Path $PSScriptRoot "Modelryx.LocalCad.Agent\Modelryx.LocalCad.Ag
 $Publish = Join-Path $InstallDirectory "app"
 New-Item -ItemType Directory -Force -Path $Publish | Out-Null
 $Prebuilt = Join-Path $PSScriptRoot "artifacts\$Runtime\Modelryx.LocalCad.Agent.exe"
-$sourceInstall = $BuildPreprocessorsFromSource -or $BuildNxPreprocessorFromSource -or
-    -not (Test-Path -LiteralPath $Prebuilt)
-if ($BuildPreprocessorsFromSource -or $BuildNxPreprocessorFromSource) {
+if ($BuildFromSource) {
     if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
         throw "Building the Local CAD Agent from source requires the .NET SDK."
     }
@@ -77,72 +70,6 @@ $legacyFreeCadMetadata = Join-Path $Preprocessors "freecad\modelryx_freecad_meta
 if (Test-Path -LiteralPath $legacyFreeCadMetadata) {
     Remove-Item -Force -LiteralPath $legacyFreeCadMetadata
 }
-$autoCadDirectory = Join-Path $Publish "preprocessors\autocad"
-$autoCadProject = Join-Path $PSScriptRoot "..\autocad_worker\src\Modelryx.AutoCAD.Preprocessor\Modelryx.AutoCAD.Preprocessor.csproj"
-$autoCadOutput = Join-Path $PSScriptRoot "..\autocad_worker\src\Modelryx.AutoCAD.Preprocessor\bin\Release\$AutoCadTargetFramework"
-$autoCadPreprocessor = Join-Path $autoCadDirectory "Modelryx.AutoCAD.Preprocessor.dll"
-if ($BuildPreprocessorsFromSource -and -not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
-    throw "Building CAD preprocessors from source requires the matching .NET SDK. Install a release package for SDK-free installation."
-}
-if ($BuildPreprocessorsFromSource -and (Test-Path -LiteralPath $autoCadProject)) {
-    $buildArguments = @(
-        "build", $autoCadProject, "-c", "Release",
-        "/p:AutoCadTargetFramework=$AutoCadTargetFramework"
-    )
-    if (-not [string]::IsNullOrWhiteSpace($AutoCadSdkDir)) {
-        $buildArguments += "/p:AutoCadSdkDir=$AutoCadSdkDir"
-    }
-    & dotnet @buildArguments
-    if ($LASTEXITCODE) { throw "AutoCAD preprocessor build failed." }
-}
-New-Item -ItemType Directory -Force -Path $autoCadDirectory | Out-Null
-if ($BuildPreprocessorsFromSource) {
-    foreach ($source in Get-ChildItem -LiteralPath $autoCadOutput -File | Where-Object {
-        $_.Extension -in @(".dll", ".json")
-    }) {
-        Copy-Item -Force -LiteralPath $source.FullName -Destination $autoCadDirectory
-    }
-}
-if (-not (Test-Path -LiteralPath $autoCadPreprocessor)) { $autoCadPreprocessor = $null }
-$inventorDirectory = Join-Path $Publish "preprocessors\inventor"
-$inventorPreprocessor = Join-Path $inventorDirectory "Modelryx.Inventor.Preprocessor.exe"
-$inventorProject = Join-Path $PSScriptRoot "..\inventor_worker\src\Modelryx.Inventor.Preprocessor\Modelryx.Inventor.Preprocessor.csproj"
-if ($BuildPreprocessorsFromSource -and (Test-Path -LiteralPath $inventorProject)) {
-    New-Item -ItemType Directory -Force -Path $inventorDirectory | Out-Null
-    dotnet publish $inventorProject -c Release -r $Runtime --self-contained true `
-        -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $inventorDirectory
-    if ($LASTEXITCODE) { throw "Inventor preprocessor publish failed." }
-}
-if (-not (Test-Path -LiteralPath $inventorPreprocessor)) { $inventorPreprocessor = $null }
-
-$nxPreprocessorDirectory = Join-Path $Publish 'preprocessors\nx'
-$nxPreprocessor = Join-Path $nxPreprocessorDirectory 'Modelryx.NX.Preprocessor.exe'
-$nxProject = Join-Path $PSScriptRoot '..\nx_worker\src\Modelryx.NX.Preprocessor\Modelryx.NX.Preprocessor.csproj'
-$nxManaged = Join-Path $NxDirectory 'NXBIN\managed_core'
-$nxInstalled = (Test-Path -LiteralPath (Join-Path $nxManaged 'NXOpen.dll')) -and
-    (Test-Path -LiteralPath (Join-Path $nxManaged 'NXOpen.UF.dll')) -and
-    (Test-Path -LiteralPath (Join-Path $NxDirectory 'NXBIN\libufun.dll'))
-if ($BuildNxPreprocessorFromSource -or (($BuildPreprocessorsFromSource -or $sourceInstall) -and $nxInstalled)) {
-    if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) { throw 'Building the NX preprocessor requires the .NET 8 SDK.' }
-    if (-not $nxInstalled) { throw "A complete NX installation was not found: $NxDirectory" }
-    Write-Host "Building the local NX preprocessor for $NxDirectory"
-    New-Item -ItemType Directory -Force -Path $nxPreprocessorDirectory | Out-Null
-    dotnet publish $nxProject -c Release -r $Runtime --self-contained true `
-        -p:PublishSingleFile=false "-p:NxOpenDirectory=$nxManaged" -o $nxPreprocessorDirectory
-    if ($LASTEXITCODE) { throw 'NX preprocessor publish failed.' }
-}
-if (-not (Test-Path -LiteralPath $nxPreprocessor)) { $nxPreprocessor = $null }
-
-if (-not $autoCadPreprocessor) {
-    Write-Warning "The release package does not contain an AutoCAD preprocessor. AutoCAD files will be unavailable. Developers can rerun with -BuildPreprocessorsFromSource and the SDK required by their AutoCAD release."
-}
-if (-not $inventorPreprocessor) {
-    Write-Warning "The release package does not contain an Inventor preprocessor. Inventor files will be unavailable. Developers can rerun with -BuildPreprocessorsFromSource."
-}
-if (-not $nxPreprocessor) {
-    Write-Warning 'The release package does not contain an NX preprocessor. NX files will be unavailable. Developers can build it with -BuildNxPreprocessorFromSource -NxDirectory <installed NX directory>.'
-}
-
 $settingsPath = Join-Path $Publish "settings.json"
 $previousSettings = $null
 if (Test-Path -LiteralPath $settingsPath) {
@@ -160,13 +87,9 @@ if (-not $PSBoundParameters.ContainsKey('AllowedOrigins') -and $previousSettings
     }
 }
 $settings = [ordered]@{
-    InventorPreprocessorExecutable = $inventorPreprocessor
     FreeCadCommand = $FreeCadCommand
     FreeCadPreprocessorScript = $freeCadScript
     FreeCadConverterScript = $freeCadConverter
-    AutoCadPreprocessorDll = $autoCadPreprocessor
-    NxDirectory = $NxDirectory
-    NxPreprocessorExecutable = $nxPreprocessor
     ExternalPreprocessors = @($previousSettings.ExternalPreprocessors | Where-Object { $null -ne $_ })
     AllowedOrigins = $effectiveAllowedOrigins
 }

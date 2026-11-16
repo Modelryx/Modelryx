@@ -2,19 +2,18 @@
   "schema": "modelryx.part-metadata",
   "schema_version": "1.0",
   "source": {
-    "system": "siemens_nx",
-    "system_version": "unlicensed-sdk-free-fixture",
-    "nxopen_version": null,
-    "worker": "modelryx-nx-worker",
+    "system": "example_cad",
+    "system_version": "synthetic-fixture",
+    "worker": "example-worker",
     "worker_version": "1.0.0.0",
     "extracted_at": "2026-10-28T20:05:18.0312042\u002B00:00"
   },
   "identity": {
     "name": "Fixture Assembly",
     "display_name": "Fixture Assembly",
-    "description": "Synthetic fixture for NX worker development without Siemens NX",
+    "description": "Synthetic assembly for external worker contract testing",
     "kind": "assembly",
-    "part_number": "NX-FIXTURE-001",
+    "part_number": "EXAMPLE-FIXTURE-001",
     "revision": "A"
   },
   "geometry": {
@@ -88,7 +87,7 @@
         "reference_set": "MODEL",
         "native_prototype_id": "prototype:component",
         "dependency_status": "resolved",
-        "dependency_document": "components/component.prt",
+        "dependency_document": "components/component.native",
         "dependency_external": false,
         "material": null,
         "mass_kg": null
@@ -109,7 +108,7 @@
         "reference_set": "MODEL",
         "native_prototype_id": "prototype:repeated-component",
         "dependency_status": "resolved",
-        "dependency_document": "components/repeated.prt",
+        "dependency_document": "components/repeated.native",
         "dependency_external": false,
         "material": null,
         "mass_kg": null
@@ -130,7 +129,7 @@
         "reference_set": "EMPTY",
         "native_prototype_id": "prototype:repeated-component",
         "dependency_status": "resolved",
-        "dependency_document": "components/repeated.prt",
+        "dependency_document": "components/repeated.native",
         "dependency_external": false,
         "material": null,
         "mass_kg": null
@@ -151,17 +150,17 @@
         "reference_set": "MODEL",
         "native_prototype_id": "prototype:missing",
         "dependency_status": "missing",
-        "dependency_document": "components/missing.prt",
+        "dependency_document": "components/missing.native",
         "dependency_external": false,
         "material": null,
         "mass_kg": null
       }
     ],
     "component_groups": [
-      { "parent_occurrence_id": null, "native_prototype_id": "prototype:component", "prototype_path": "components/component.prt", "part_number": null, "revision": null, "reference_set": "MODEL", "configuration": "Default", "load_state": "loaded", "suppressed": false, "visible": true, "reference": false, "substitute": false, "document_kind": "subassembly", "representation_mode": null, "position_status": null, "quantity": 1, "occurrence_ids": ["occurrence:1"] },
-      { "parent_occurrence_id": "occurrence:1", "native_prototype_id": "prototype:repeated-component", "prototype_path": "components/repeated.prt", "part_number": "REPEAT-001", "revision": "A", "reference_set": "MODEL", "configuration": "Default", "load_state": "loaded", "suppressed": false, "visible": true, "reference": false, "substitute": false, "document_kind": "part", "representation_mode": null, "position_status": null, "quantity": 1, "occurrence_ids": ["occurrence:1/component:1"] },
-      { "parent_occurrence_id": "occurrence:1", "native_prototype_id": "prototype:repeated-component", "prototype_path": "components/repeated.prt", "part_number": "REPEAT-001", "revision": "A", "reference_set": "EMPTY", "configuration": "Service", "load_state": "loaded", "suppressed": true, "visible": false, "reference": false, "substitute": false, "document_kind": "part", "representation_mode": null, "position_status": null, "quantity": 1, "occurrence_ids": ["occurrence:1/component:2"] },
-      { "parent_occurrence_id": null, "native_prototype_id": "prototype:missing", "prototype_path": "components/missing.prt", "part_number": null, "revision": null, "reference_set": "MODEL", "configuration": "Default", "load_state": "missing", "suppressed": false, "visible": false, "reference": false, "substitute": false, "document_kind": "part", "representation_mode": null, "position_status": null, "quantity": 1, "occurrence_ids": ["occurrence:missing"] }
+      { "parent_occurrence_id": null, "native_prototype_id": "prototype:component", "prototype_path": "components/component.native", "part_number": null, "revision": null, "reference_set": "MODEL", "configuration": "Default", "load_state": "loaded", "suppressed": false, "visible": true, "reference": false, "substitute": false, "document_kind": "subassembly", "representation_mode": null, "position_status": null, "quantity": 1, "occurrence_ids": ["occurrence:1"] },
+      { "parent_occurrence_id": "occurrence:1", "native_prototype_id": "prototype:repeated-component", "prototype_path": "components/repeated.native", "part_number": "REPEAT-001", "revision": "A", "reference_set": "MODEL", "configuration": "Default", "load_state": "loaded", "suppressed": false, "visible": true, "reference": false, "substitute": false, "document_kind": "part", "representation_mode": null, "position_status": null, "quantity": 1, "occurrence_ids": ["occurrence:1/component:1"] },
+      { "parent_occurrence_id": "occurrence:1", "native_prototype_id": "prototype:repeated-component", "prototype_path": "components/repeated.native", "part_number": "REPEAT-001", "revision": "A", "reference_set": "EMPTY", "configuration": "Service", "load_state": "loaded", "suppressed": true, "visible": false, "reference": false, "substitute": false, "document_kind": "part", "representation_mode": null, "position_status": null, "quantity": 1, "occurrence_ids": ["occurrence:1/component:2"] },
+      { "parent_occurrence_id": null, "native_prototype_id": "prototype:missing", "prototype_path": "components/missing.native", "part_number": null, "revision": null, "reference_set": "MODEL", "configuration": "Default", "load_state": "missing", "suppressed": false, "visible": false, "reference": false, "substitute": false, "document_kind": "part", "representation_mode": null, "position_status": null, "quantity": 1, "occurrence_ids": ["occurrence:missing"] }
     ]
   },
   "properties": {
@@ -170,7 +169,7 @@
     "active_reference_set": "MODEL",
     "active_arrangement": "Default",
     "fixture": true,
-    "DB_PART_NO": "NX-FIXTURE-001",
+    "DB_PART_NO": "EXAMPLE-FIXTURE-001",
     "RELEASED": false
   },
   "quality": {
@@ -180,16 +179,15 @@
     "assembly": "partial",
     "metadata": "complete",
     "warnings": [
-      "1 NX occurrence(s) have an unresolved or unloaded prototype."
+      "1 EXAMPLE occurrence(s) have an unresolved or unloaded prototype."
     ]
   },
   "native": {
     "document_type": "assembly",
-    "nxopen_version": null,
     "active_reference_set": "MODEL",
     "active_arrangement": "Default",
-    "work_part": "fixture-assembly.prt",
-    "display_part": "fixture-assembly.prt",
+    "work_part": "fixture-assembly.native",
+    "display_part": "fixture-assembly.native",
     "root_attributes": {
       "fixture": true
     },
@@ -197,7 +195,7 @@
       {
         "title": "DB_PART_NO",
         "value_type": "string",
-        "string_value": "NX-FIXTURE-001",
+        "string_value": "EXAMPLE-FIXTURE-001",
         "number_value": null,
         "integer_value": null,
         "boolean_value": null,
@@ -264,7 +262,7 @@
         "name": "Component 1",
         "prototype_id": "prototype:component",
         "parent_id": null,
-        "prototype_path": "components/component.prt",
+        "prototype_path": "components/component.native",
         "document_kind": "subassembly",
         "transform": [
           1,
@@ -298,7 +296,7 @@
         "name": "Repeated Component 1",
         "prototype_id": "prototype:repeated-component",
         "parent_id": "occurrence:1",
-        "prototype_path": "components/repeated.prt",
+        "prototype_path": "components/repeated.native",
         "document_kind": "part",
         "transform": [
           1,
@@ -332,7 +330,7 @@
         "name": "Repeated Component 2",
         "prototype_id": "prototype:repeated-component",
         "parent_id": "occurrence:1",
-        "prototype_path": "components/repeated.prt",
+        "prototype_path": "components/repeated.native",
         "document_kind": "part",
         "transform": [
           1,
@@ -366,7 +364,7 @@
         "name": "Missing Component",
         "prototype_id": "prototype:missing",
         "parent_id": null,
-        "prototype_path": "components/missing.prt",
+        "prototype_path": "components/missing.native",
         "document_kind": "part",
         "transform": [
           1,

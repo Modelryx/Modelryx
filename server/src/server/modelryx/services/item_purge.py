@@ -7,7 +7,7 @@ from pathlib import Path
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from modelryx.models import Item, Revision
+from modelryx.models import Item
 
 
 @dataclass(frozen=True)
@@ -21,20 +21,14 @@ class ItemPurgePreview:
 
 
 @dataclass(frozen=True)
-class LegacyCascadePlan:
+class CascadePlan:
     deletable_items: list[Item]
     protected_items: list[Item]
     external_item_numbers: list[str]
 
 
-def legacy_cascade_plan(db: Session, item_id: uuid.UUID) -> LegacyCascadePlan:
+def cascade_plan(db: Session, item_id: uuid.UUID) -> CascadePlan:
     """Classify referenced child Items that may be explicitly cascade-deleted."""
-    source_revision_ids = {
-        str(value) for value in db.scalars(select(Revision.id).where(Revision.part_id == item_id))
-    }
-    # Older generated components can retain a sourceRevisionId from a revision that was
-    # replaced during reprocessing. The committed BOM is the authoritative current
-    # ownership graph, so include marked Inventor components reachable from the root.
     descendant_item_ids = set(
         db.scalars(
             text(
@@ -58,30 +52,14 @@ def legacy_cascade_plan(db: Session, item_id: uuid.UUID) -> LegacyCascadePlan:
             {"root_id": item_id},
         )
     )
-    rows = db.execute(
-        select(Item, Revision)
-        .join(Revision, Revision.part_id == Item.id)
-        .where(Revision.derived_metadata_json.has_key("inventorComponent"))
-        .order_by(Item.part_number)
-    ).all()
     candidates: dict[uuid.UUID, Item] = {}
-    # Current assembly relationships are authoritative regardless of how the child Item was
-    # created. Restricting this list to the old inventorComponent marker caused ordinary BOM
-    # references to disappear from the permanent-deletion preview.
     if descendant_item_ids:
         for descendant in db.scalars(
             select(Item).where(Item.id.in_(descendant_item_ids), Item.id != item_id)
         ):
             candidates[descendant.id] = descendant
-    for item, revision in rows:
-        component = (revision.derived_metadata_json or {}).get("inventorComponent") or {}
-        if (
-            str(component.get("sourceRevisionId") or "") in source_revision_ids
-            or item.id in descendant_item_ids
-        ):
-            candidates[item.id] = item
     if not candidates:
-        return LegacyCascadePlan([], [], [])
+        return CascadePlan([], [], [])
 
     candidate_ids = list(candidates)
     neighbors = db.execute(
@@ -134,7 +112,7 @@ def legacy_cascade_plan(db: Session, item_id: uuid.UUID) -> LegacyCascadePlan:
     deletable = [item for item in candidates.values() if item.id not in blocked_ids]
     protected = [item for item in candidates.values() if item.id in blocked_ids]
     external = sorted({str(row[1]) for row in neighbors})
-    return LegacyCascadePlan(deletable, protected, external)
+    return CascadePlan(deletable, protected, external)
 
 
 def preview_item_purge(db: Session, item_id: uuid.UUID) -> ItemPurgePreview:

@@ -3,7 +3,7 @@
 import pytest
 from fastapi import HTTPException
 from modelryx.api.artifact_commits import _native_processing_type
-from modelryx.api.previews import _licensed_processing_type
+from modelryx.api.previews import _native_processing_type as preview_processing_type
 from modelryx.api.staging import _external_assembly_worker
 from modelryx.api.worker_health import external_formats
 from modelryx.services import external_workers
@@ -38,7 +38,7 @@ def test_freecad_registration_selects_external_or_embedded(monkeypatch, enabled)
     }
     monkeypatch.setattr(external_workers, "registered_workers", lambda _db: [worker])
     expected = external_workers.JOB_TYPE if enabled else "FCSTD_TO_MODELRYX"
-    for route in (_native_processing_type, _licensed_processing_type):
+    for route in (_native_processing_type, preview_processing_type):
         assert route("Root.FCStd", "FreeCAD", object()) == expected
         assert route("Root.FCStd", "FreeCAD") == "FCSTD_TO_MODELRYX"
         assert route("Root.step", "FreeCAD", object()) == "STEP_TO_MODELRYX"
@@ -63,7 +63,7 @@ def test_freecad_conflicts_do_not_silently_use_embedded(monkeypatch):
         for name in ("one", "two")
     ]
     monkeypatch.setattr(external_workers, "registered_workers", lambda _db: workers)
-    for route in (_native_processing_type, _licensed_processing_type, _external_assembly_worker):
+    for route in (_native_processing_type, preview_processing_type, _external_assembly_worker):
         with pytest.raises(HTTPException) as error:
             route_args = (
                 (object(), "Root.FCStd", "FreeCAD")

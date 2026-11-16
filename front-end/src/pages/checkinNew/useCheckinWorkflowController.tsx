@@ -149,13 +149,8 @@ export function useCheckinWorkflowController({
   const stagedMainFileName = resumeStage?.files.length
     ? [...resumeStage.files].sort((left, right) => {
         const depth = (path: string) => (path.match(/[\\/]/g) ?? []).length;
-        const priority = (filename: string) => {
-          const extension = filename.slice(filename.lastIndexOf('.')).toLowerCase();
-          return extension === '.iam' ? 0 : extension === '.ipt' ? 1 : 2;
-        };
         return (
           depth(left.logical_path) - depth(right.logical_path) ||
-          priority(left.filename) - priority(right.filename) ||
           left.logical_path.localeCompare(right.logical_path)
         );
       })[0].filename
@@ -383,14 +378,7 @@ export function useCheckinWorkflowController({
     itemType: string
   ): Promise<StagingResult> => {
     const extension = file.name.split('.').pop()?.toLowerCase();
-    if (
-      !extension ||
-      !['fcstd', 'dwg', 'dxf', 'ipt', 'iam', 'idw', 'step', 'stp'].includes(extension)
-    ) {
-      throw new Error(
-        'Revision editing accepts CAD files only (.FCStd, .dwg, .dxf, .ipt, .iam, .idw, .step, or .stp).'
-      );
-    }
+    if (!extension) throw new Error('Choose a CAD file with a file extension.');
     const sha256 = await fileSha256(file);
     let staging = await api<StagingResult>(`/staging/${original.id}/files`, 'POST', {
       expected_snapshot_version: original.snapshot_version,
@@ -412,27 +400,16 @@ export function useCheckinWorkflowController({
     });
     if (!upload.ok) throw new Error(`Upload failed (${upload.status}).`);
     staging = (await upload.json()) as StagingResult;
-    const artifactType = ['fcstd', 'dwg', 'dxf', 'ipt', 'iam', 'idw'].includes(extension)
-      ? itemType === 'ASSEMBLY' || extension === 'iam'
-        ? 'CAD_ASSEMBLY'
-        : 'CAD_MODEL'
-      : 'STEP';
-    const revision =
-      extension === 'dwg' || extension === 'dxf'
-        ? {
-            ...original.proposal.revision,
-            cad_system: 'AutoCAD',
-            native_format: extension.toUpperCase(),
-          }
-        : extension === 'fcstd'
-          ? { ...original.proposal.revision, cad_system: 'FreeCAD', native_format: 'FCStd' }
-          : ['ipt', 'iam', 'idw'].includes(extension)
-            ? {
-                ...original.proposal.revision,
-                cad_system: 'Inventor',
-                native_format: extension.toUpperCase(),
-              }
-            : original.proposal.revision;
+    const profile = cadProfile(file.name, itemType === 'ASSEMBLY' ? 'ASSEMBLY' : 'PART');
+    const artifactType = profile.artifactType;
+    const revision = {
+      ...original.proposal.revision,
+      cad_system:
+        profile.cadSystem === 'Unknown'
+          ? original.proposal.revision?.cad_system
+          : profile.cadSystem,
+      native_format: profile.nativeFormat,
+    };
     const retained = (staging.proposal?.artifacts ?? original.proposal?.artifacts ?? []).filter(
       (artifact: any) => !artifact.is_primary
     );
@@ -617,42 +594,21 @@ export function useCheckinWorkflowController({
     setWorkerWarning('');
     setDependencyReport(null);
     const selected = Array.from(selectedFiles);
-    const inventorPackage = Boolean(
-      packagedMain && packagedReport?.files.length && /\.(iam|ipt)$/i.test(packagedMain)
-    );
-    const nxPackage = Boolean(packagedMain && /\.prt$/i.test(packagedMain));
-    const effectiveMode = forceFolder
-      ? 'folder'
-      : packagedMain
-        ? (inventorPackage || nxPackage) && packagedReport?.document_type === 'ASSEMBLY'
-          ? 'folder'
-          : 'single'
+    const effectiveMode =
+      forceFolder || (packagedMain && packagedReport?.document_type === 'ASSEMBLY')
+        ? 'folder'
         : 'single';
     setUploadMode(effectiveMode);
-    const hasInventorAssembly = selected.some((file) => /\.iam$/i.test(file.name));
-    const hasInventorPart = selected.some((file) => /\.ipt$/i.test(file.name));
-    const hasNx = selected.some((file) => /\.prt$/i.test(file.name));
     const hasFreeCad = selected.some((file) => /\.fcstd$/i.test(file.name));
-    if (
-      effectiveMode === 'folder' &&
-      !hasInventorAssembly &&
-      !hasInventorPart &&
-      !hasNx &&
-      !hasFreeCad &&
-      !externalCadSystem
-    ) {
+    if (effectiveMode === 'folder' && !hasFreeCad && !externalCadSystem) {
       setFiles([]);
       setMainFileName('');
       setFileSelectionError(
-        hasInventorPart
-          ? 'This folder contains Inventor part files but no .iam assembly. Choose Single File (Part) and select the main .ipt file.'
-          : 'No supported assembly file was found. Choose a folder containing an NX .prt, Inventor .iam, or FreeCAD .FCStd file.'
+        'Choose a FreeCAD assembly or a format supported by a registered external worker.'
       );
       if (!Array.isArray(event)) event.target.value = '';
       return;
     }
-    const nativePackageFolder =
-      effectiveMode === 'folder' && (hasInventorAssembly || hasInventorPart || hasNx);
     const chosenFiles = selected.filter((file) => {
       const logicalPath = file.webkitRelativePath || file.name;
       const packagedType = packagedReport?.files.find(
@@ -660,7 +616,7 @@ export function useCheckinWorkflowController({
       )?.document_type;
       if (externalCadSystem) return true;
       if (isProcessingSupport(logicalPath, packagedType)) return false;
-      return effectiveMode !== 'folder' || nativePackageFolder || /\.fcstd$/i.test(file.name);
+      return effectiveMode !== 'folder' || /\.fcstd$/i.test(file.name);
     });
     if (chosenFiles.length === 0) return;
     const entries: FileEntry[] = chosenFiles.map((file) => ({
@@ -679,7 +635,7 @@ export function useCheckinWorkflowController({
       status: 'pending' as const,
       isDuplicate: false,
       itemNumber: '',
-      itemName: targetItemName || file.name.replace(/\.(prt|fcstd|dwg|dxf|ipt|iam|idw)$/i, ''),
+      itemName: targetItemName || file.name.replace(/\.[^.]+$/, ''),
       description: '',
       revision: targetRevision,
       category: '',
@@ -691,54 +647,19 @@ export function useCheckinWorkflowController({
         entry.itemName = targetItemName;
       });
     }
-    const inventorMain = entries
-      .filter((entry) => /\.(iam|ipt)$/i.test(entry.file.name))
-      .sort(
-        (left, right) =>
-          logicalPathDepth(left.logicalPath) - logicalPathDepth(right.logicalPath) ||
-          left.logicalPath.localeCompare(right.logicalPath)
-      )[0];
-    const initialMain = packagedMain ?? (inventorMain ?? entries[0])?.logicalPath ?? '';
+    const initialMain = packagedMain ?? entries[0]?.logicalPath ?? '';
     setMainFileName(initialMain);
     setSelectedAssemblyPath(initialMain);
 
     setFiles(entries);
     const extension = initialMain.split('.').pop()?.toLowerCase();
-    const sharedDrawing = extension === 'dwg' || extension === 'dxf';
     const requiredWorker =
       extension === 'fcstd'
         ? 'FREECAD'
-        : extension === 'ipt' || extension === 'iam' || extension === 'idw'
-          ? 'INVENTOR'
-          : extension === 'step' || extension === 'stp'
-            ? 'STEP'
-            : null;
-    if (!externalCadSystem && extension === 'prt') {
-      setWorkerWarning(
-        'NX processing requires a qualified worker, or an explicitly enabled development worker. Preview generation also requires a compatible STEP service.'
-      );
-    }
-    if (!externalCadSystem && sharedDrawing) {
-      try {
-        const [inventor, autocad] = await Promise.all([
-          api<WorkerPreflight>('/workers/preflight?worker_type=INVENTOR'),
-          api<WorkerPreflight>('/workers/preflight?worker_type=AUTOCAD'),
-        ]);
-        const usable = [inventor, autocad].filter(
-          (worker) => worker.available && worker.compatible && worker.status !== 'DEGRADED'
-        );
-        if (usable.length === 0) {
-          const message =
-            'DWG/DXF cannot be processed because neither a compatible Inventor nor AutoCAD worker is online.';
-          setWorkerWarning(message);
-          setFiles(entries.map((entry) => ({ ...entry, formError: message })));
-        }
-      } catch {
-        setWorkerWarning(
-          'Unable to verify Inventor or AutoCAD worker availability. You may continue staging, but processing could be delayed.'
-        );
-      }
-    } else if (!externalCadSystem && requiredWorker) {
+        : extension === 'step' || extension === 'stp'
+          ? 'STEP'
+          : null;
+    if (!externalCadSystem && requiredWorker) {
       try {
         const preflight = await api<WorkerPreflight>(
           `/workers/preflight?worker_type=${requiredWorker}`
@@ -917,10 +838,7 @@ export function useCheckinWorkflowController({
               '/staging/item-numbers/generate',
               'POST',
               {
-                item_type:
-                  /\.iam$/i.test(entries[i].file.name) || entries[i].documentType === 'ASSEMBLY'
-                    ? 'ASSEMBLY'
-                    : 'PART',
+                item_type: entries[i].documentType === 'ASSEMBLY' ? 'ASSEMBLY' : 'PART',
                 template_id: selectedNumberTemplateId || null,
               }
             );
@@ -1008,7 +926,7 @@ export function useCheckinWorkflowController({
         .sort(
           (left, right) =>
             logicalPathDepth(left.logical_path) - logicalPathDepth(right.logical_path) ||
-            (/\.iam$/i.test(left.filename) ? -1 : 1)
+            left.logical_path.localeCompare(right.logical_path)
         )[0] ??
       stage.files[0];
     setResumeStage(stage);
@@ -1312,10 +1230,7 @@ export function useCheckinWorkflowController({
           const analyzedFile = dependencyReport?.files.find(
             (file) => file.logical_path === childPath
           );
-          const itemType =
-            analyzedFile?.document_type === 'ASSEMBLY' || /\.iam$/i.test(childPath)
-              ? 'ASSEMBLY'
-              : 'PART';
+          const itemType = analyzedFile?.document_type === 'ASSEMBLY' ? 'ASSEMBLY' : 'PART';
           const generated = await api<GeneratedItemNumber>(
             '/staging/item-numbers/generate',
             'POST',
@@ -1564,7 +1479,7 @@ export function useCheckinWorkflowController({
         if (statusUrl.origin !== agentBase)
           throw new Error('The Local CAD Agent returned an unsafe status address.');
         setCadSelectionStatus('Analyzing references with the installed CAD system…');
-        // Large legacy assemblies can spend several minutes inside a single native Inventor
+        // Large legacy assemblies can spend several minutes inside a single native CAD
         // open/resolve call. Keep this slightly longer than the agent's bounded 15-minute limit.
         for (let attempt = 0; attempt < 1860; attempt++) {
           await new Promise((resolve) => window.setTimeout(resolve, 500));
@@ -1651,9 +1566,7 @@ export function useCheckinWorkflowController({
         selectedFiles,
         report.root_logical_path,
         report,
-        /\.prt$/i.test(report.root_logical_path)
-          ? report.document_type === 'ASSEMBLY'
-          : selectedFiles.length > 1,
+        report.document_type === 'ASSEMBLY',
         selectedWorker?.cadSystem
       );
       setDependencyReport(report);
@@ -1790,10 +1703,7 @@ export function useCheckinWorkflowController({
     if (choice === 'CREATE_NEW' && !generatedItemNumber) {
       try {
         const generated = await api<GeneratedItemNumber>('/staging/item-numbers/generate', 'POST', {
-          item_type:
-            /\.iam$/i.test(entry.file.name) || entry.documentType === 'ASSEMBLY'
-              ? 'ASSEMBLY'
-              : 'PART',
+          item_type: entry.documentType === 'ASSEMBLY' ? 'ASSEMBLY' : 'PART',
           template_id: selectedNumberTemplateId || null,
         });
         generatedItemNumber = generated.item_number;
@@ -1917,7 +1827,7 @@ export function useCheckinWorkflowController({
     const remaining = files.filter((_, i) => i !== index);
     setFiles(remaining);
     if (removedPath === mainFileName) {
-      const validMainFiles = remaining.filter((entry) => /\.iam$/i.test(entry.file.name));
+      const validMainFiles = remaining.filter((entry) => entry.documentType === 'ASSEMBLY');
       const candidates =
         validMainFiles.length > 0
           ? validMainFiles
@@ -1954,8 +1864,7 @@ export function useCheckinWorkflowController({
         }
         return;
       }
-      if (/\.(iam|ipt)$/i.test(mainFileName)) await uploadInventorPackage();
-      else await uploadAssembly();
+      await uploadAssembly();
       return;
     }
     for (let i = 0; i < files.length; i++) {
@@ -1988,10 +1897,7 @@ export function useCheckinWorkflowController({
         if (!row) throw new Error(`${entry.file.name} is missing from staging.`);
         return row;
       };
-      const relatedDrawings =
-        main.externalCadSystem?.toLowerCase() === 'inventor'
-          ? files.filter((entry) => entry !== main && isDrawing(entry))
-          : [];
+      const relatedDrawings = files.filter((entry) => entry !== main && isDrawing(entry));
       staging = await api<StagingResult>(`/staging/${stagingId}/proposal`, 'PUT', {
         expected_snapshot_version: staging.snapshot_version,
         operation: targetItemId ? 'CREATE_REVISION' : 'CREATE_ITEM',
@@ -2228,7 +2134,7 @@ export function useCheckinWorkflowController({
     }
   };
 
-  const { uploadAssembly, uploadInventorPackage } = createAssemblyUploadActions({
+  const { uploadAssembly } = createAssemblyUploadActions({
     files,
     mainFileName,
     updateEntry,
@@ -2248,12 +2154,11 @@ export function useCheckinWorkflowController({
   const readyCount = files.filter((f) => f.status === 'ready').length;
   const duplicateCount = files.filter((f) => f.duplicates?.length).length;
   const completeCount = files.filter((f) => f.status === 'complete').length;
-  const inventorMainCandidates = files.filter((entry) => /\.iam$/i.test(entry.file.name));
   const assemblyMainCandidates = files
     .filter((entry) =>
       entry.externalCadSystem
         ? entry.logicalPath === mainFileName
-        : /\.(prt|iam|ipt|fcstd|dwg|dxf|step|stp)$/i.test(entry.file.name)
+        : /\.(fcstd|step|stp)$/i.test(entry.file.name)
     )
     .sort(
       (left, right) =>
@@ -2571,7 +2476,6 @@ export function useCheckinWorkflowController({
     readyCount,
     duplicateCount,
     completeCount,
-    inventorMainCandidates,
     assemblyMainCandidates,
     renderEntryStatus,
     renderProperties,

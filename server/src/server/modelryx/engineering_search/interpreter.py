@@ -408,6 +408,15 @@ def deterministic_interpret(
         query,
         re.IGNORECASE,
     )
+    if cad_match is None:
+        # Explicit system filters accept independently registered CAD system names.
+        cad_match = re.search(r'\bcad system\s+"([^"\n]{1,64})"', query, re.IGNORECASE)
+        if cad_match is None:
+            cad_match = re.search(
+                r"\bcad system\s+([A-Za-z0-9][A-Za-z0-9_.-]{0,63})\b",
+                query,
+                re.IGNORECASE,
+            )
     format_aliases = cad_configuration["format_aliases"]
     format_terms = _phrase_pattern(list(format_aliases))
     artifact_format_match = re.search(

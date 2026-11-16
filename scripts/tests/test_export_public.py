@@ -16,10 +16,10 @@ def exporter():
     return module
 
 
-def test_export_excludes_private_workers_and_git_history(
+def test_export_copies_tracked_files_without_git_history(
     exporter, monkeypatch, tmp_path
 ):
-    paths = b"LICENSE\0worker-sdk/README.md\0nx_worker/README.md\0"
+    paths = b"LICENSE\0worker-sdk/README.md\0"
     monkeypatch.setattr(
         exporter.subprocess, "run", lambda *a, **kw: SimpleNamespace(stdout=paths)
     )
@@ -28,7 +28,6 @@ def test_export_excludes_private_workers_and_git_history(
     exporter.main()
     assert (destination / "LICENSE").is_file()
     assert (destination / "worker-sdk/README.md").is_file()
-    assert not (destination / "nx_worker").exists()
     assert not (destination / ".git").exists()
 
 

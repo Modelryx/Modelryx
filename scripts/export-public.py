@@ -10,10 +10,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-EXCLUDED_ROOTS = {"autocad_worker", "inventor_worker", "nx_worker"}
-EXCLUDED_FILES = {".github/workflows/autocad-native.yml"}
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("destination", type=Path, help="New, empty export directory")
@@ -48,8 +44,6 @@ def main():
         if (
             relative.is_absolute()
             or ".." in relative.parts
-            or relative.parts[0] in EXCLUDED_ROOTS
-            or relative.as_posix() in EXCLUDED_FILES
         ):
             continue
         source = root / relative

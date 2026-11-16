@@ -66,13 +66,10 @@ export type WorkerStatus = {
 export type CadWorkerSettings = {
   freecad_url: string | null;
   freecad_analyzer_url: string | null;
-  autocad_url: string | null;
-  inventor_url: string | null;
-  nx_url: string | null;
 };
 
 export type CadWorkerConnectionStatus = {
-  cad_system: 'autocad' | 'inventor' | 'siemens_nx' | 'freecad' | 'freecad_analyzer';
+  cad_system: 'freecad' | 'freecad_analyzer';
   url: string | null;
   availability: 'ONLINE' | 'OFFLINE' | 'NOT_CONFIGURED';
   configuration_source:
@@ -88,9 +85,6 @@ export type CadWorkerConnectionStatus = {
 export type CadWorkerStatus = {
   freecad: CadWorkerConnectionStatus;
   freecad_analyzer: CadWorkerConnectionStatus;
-  autocad: CadWorkerConnectionStatus;
-  inventor: CadWorkerConnectionStatus;
-  nx: CadWorkerConnectionStatus;
 };
 
 export type AuditEntry = {

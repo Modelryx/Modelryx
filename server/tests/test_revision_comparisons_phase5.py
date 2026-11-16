@@ -417,7 +417,7 @@ def test_phase54_compares_authoritative_bom_occurrences() -> None:
         renamed_a = Revision(
             part_id=renamed_component.id,
             revision_code="A",
-            cad_system="Inventor",
+            cad_system="Example CAD",
             native_format="IPT",
             metadata_json={},
             state="READY",
@@ -427,7 +427,7 @@ def test_phase54_compares_authoritative_bom_occurrences() -> None:
         renamed_b = Revision(
             part_id=renamed_component.id,
             revision_code="B",
-            cad_system="Inventor",
+            cad_system="Example CAD",
             native_format="IPT",
             metadata_json={},
             state="READY",
@@ -437,7 +437,7 @@ def test_phase54_compares_authoritative_bom_occurrences() -> None:
         repeated_a = Revision(
             part_id=repeated_component.id,
             revision_code="A",
-            cad_system="AutoCAD",
+            cad_system="Example CAD",
             native_format="DWG",
             metadata_json={},
             state="READY",
@@ -447,7 +447,7 @@ def test_phase54_compares_authoritative_bom_occurrences() -> None:
         repeated_b = Revision(
             part_id=repeated_component.id,
             revision_code="B",
-            cad_system="AutoCAD",
+            cad_system="Example CAD",
             native_format="DWG",
             metadata_json={},
             state="READY",

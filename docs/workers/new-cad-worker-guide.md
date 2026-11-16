@@ -37,9 +37,7 @@ name/version, document kinds, extensions and output roles. Generic registration 
 `native-snapshot`, `part-metadata` and `model-preview`.
 
 Selection matches enabled registrations, source extension and CAD system. Multiple matches
-are errors; readiness does not arbitrarily choose between registrations. The Local CAD Agent's
-CAD-system filter distinguishes Inventor DWG from AutoCAD DWG, allowing both services to remain
-enabled. A failed selected external worker is not automatically retried through another system.
+are errors; readiness does not arbitrarily choose between registrations.A failed selected external worker is not automatically retried through another system.
 
 FreeCAD registration overrides new FCStd conversion routing. Without a matching registration,
 its dedicated standalone URL or embedded role remains available. FreeCAD CAD sessions still use
@@ -73,8 +71,6 @@ HTTP `POST /analyze` is a separate optional capability. Advertise `dependencyAna
 when it is implemented. Modelryx forwards an authenticated ZIP plus UTF-8 root path encoded in
 `X-Modelryx-Root-Path-B64`; the response provides files, reference edges and missing references.
 This enables assembly replacement review/reconciliation, not automatic Item creation.
-Local discovery does not imply HTTP analyzer support; current Inventor/AutoCAD workers advertise
-that HTTP capability as false. The SDK documents both report contracts.
 
 ## Native snapshot and normalized metadata
 

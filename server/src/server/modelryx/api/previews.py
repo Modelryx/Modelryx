@@ -61,7 +61,7 @@ def _require_processing_control(db: Session, revision: Revision, principal: Prin
         )
 
 
-def _licensed_processing_type(
+def _native_processing_type(
     filename: str, cad_system: str, db: Session | None = None
 ) -> str | None:
     extension = Path(filename).suffix.casefold()
@@ -77,17 +77,6 @@ def _licensed_processing_type(
                 return JOB_TYPE
         except AmbiguousWorkerError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
-    if extension == ".prt" and cad_system.casefold() == "siemens nx":
-        return "NX_TO_MODELRYX"
-    if extension in {".dwg", ".dxf"}:
-        system = cad_system.casefold()
-        if system == "autocad":
-            return "AUTOCAD_TO_MODELRYX"
-        if system == "inventor":
-            return "INVENTOR_TO_MODELRYX"
-        return None
-    if extension in {".ipt", ".iam", ".idw", ".ipn"}:
-        return "INVENTOR_TO_MODELRYX"
     if extension == ".fcstd":
         return "FCSTD_TO_MODELRYX"
     if extension in {".step", ".stp"}:
@@ -275,19 +264,11 @@ def reprocess_revision_preview(
     snapshot_id = latest_content_snapshot_id(db, revision.id)
     if snapshot_id is None:
         raise HTTPException(status_code=409, detail="Revision has no published content snapshot")
-    if revision.cad_system.casefold().startswith("autocad mechanical"):
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                "AutoCAD Mechanical native regeneration is not supported. "
-                "Use a standard AutoCAD DWG/DXF source or regenerate it outside Modelryx."
-            ),
-        )
     candidates = [
         (file, processing_type)
         for file in current_artifact_files(db, revision.id)
         if (
-            processing_type := _licensed_processing_type(
+            processing_type := _native_processing_type(
                 file.original_filename, revision.cad_system, db
             )
         )

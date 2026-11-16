@@ -88,16 +88,16 @@ def test_worker_heartbeat_is_authenticated_and_reported() -> None:
     assert preflight.json()["compatible"] is True
 
 
-def test_licensed_worker_heartbeats_are_accepted_and_preflight_uses_server_url() -> None:
+def test_external_worker_heartbeats_report_incompatible_runtime() -> None:
     payload = {
-        "worker_type": "AUTOCAD",
-        "machine_name": "incompatible-autocad-host",
+        "worker_type": "EXAMPLE_CAD",
+        "machine_name": "incompatible-example_cad-host",
         "worker_version": "1.0.0",
-        "application_version": "AutoCAD 2016",
+        "application_version": "Example CAD 2016",
         "compatibility_state": "INCOMPATIBLE",
         "capabilities": {"pdf_export": False},
         "status": "DEGRADED",
-        "detail": "AutoCAD version is outside the supported range.",
+        "detail": "Example CAD version is outside the supported range.",
     }
     accepted = client.put(
         "/api/v1/workers/heartbeat",
@@ -106,10 +106,10 @@ def test_licensed_worker_heartbeats_are_accepted_and_preflight_uses_server_url()
     )
     assert accepted.status_code == 204
     preflight = client.get(
-        "/api/v1/workers/preflight?worker_type=AUTOCAD", headers=AUTH
+        "/api/v1/workers/preflight?worker_type=EXAMPLE_CAD", headers=AUTH
     )
     assert preflight.status_code == 200
-    assert preflight.json()["available"] is False
+    assert preflight.json()["available"] is True
     assert preflight.json()["compatible"] is False
 
 

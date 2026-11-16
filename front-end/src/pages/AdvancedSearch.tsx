@@ -30,17 +30,7 @@ const libraryFilterDefaults: LibraryFilterSelection = {
   createdBy: '',
   checkedOutBy: '',
 };
-const libraryCadSystems = [
-  'STEP',
-  'FreeCAD',
-  'AutoCAD',
-  'Inventor',
-  'SOLIDWORKS',
-  'Fusion',
-  'Creo',
-  'CATIA',
-  'NX',
-];
+const libraryCadSystems = ['STEP', 'FreeCAD'];
 
 function libraryFilterStorageKey(): string {
   const username = localStorage.getItem('modelryx-username')?.trim() || 'anonymous';
@@ -60,7 +50,7 @@ function loadLibraryFilters(): LibraryFilterSelection {
       itemNumberPattern:
         typeof stored.itemNumberPattern === 'string' ? stored.itemNumberPattern : '',
       namePattern: typeof stored.namePattern === 'string' ? stored.namePattern : '',
-      cadSystem: libraryCadSystems.includes(stored.cadSystem ?? '') ? stored.cadSystem! : '',
+      cadSystem: typeof stored.cadSystem === 'string' ? stored.cadSystem : '',
       createdBy: typeof stored.createdBy === 'string' ? stored.createdBy : '',
       checkedOutBy: typeof stored.checkedOutBy === 'string' ? stored.checkedOutBy : '',
     };
@@ -88,13 +78,6 @@ function cadSystemLabel(value?: string | null): string {
   if (!normalized) return '—';
   if (normalized === 'step') return 'STEP';
   if (normalized.includes('freecad')) return 'FreeCAD';
-  if (normalized.includes('autocad')) return 'AutoCAD';
-  if (normalized.includes('inventor')) return 'Inventor';
-  if (normalized.includes('solidworks')) return 'SOLIDWORKS';
-  if (normalized.includes('fusion')) return 'Fusion';
-  if (normalized.includes('creo')) return 'Creo';
-  if (normalized.includes('catia')) return 'CATIA';
-  if (normalized.includes('nx')) return 'NX';
   return value?.trim() || '—';
 }
 
@@ -247,6 +230,13 @@ export function AdvancedSearch() {
   const [checkedOutBy, setCheckedOutBy] = useState(initialFilters.checkedOutBy);
   const [users, setUsers] = useState<LibraryUser[]>([]);
   const [response, setResponse] = useState<EngineeringSearchResponse>();
+  const cadSystemSuggestions = [
+    ...new Set([
+      ...libraryCadSystems,
+      ...((response?.results ?? []).map((row) => row.cad_system).filter(Boolean) as string[]),
+      ...(cadSystem ? [cadSystem] : []),
+    ]),
+  ].sort();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [feedbackState, setFeedbackState] = useState<'idle' | 'sending' | 'sent'>('idle');
@@ -588,14 +578,19 @@ export function AdvancedSearch() {
         </label>
         <label>
           <span>CAD System</span>
-          <select value={cadSystem} onChange={(event) => setCadSystem(event.target.value)}>
-            <option value="">All systems</option>
-            {libraryCadSystems.map((system) => (
+          <input
+            list="library-cad-systems"
+            value={cadSystem}
+            placeholder="All systems"
+            onChange={(event) => setCadSystem(event.target.value)}
+          />
+          <datalist id="library-cad-systems">
+            {cadSystemSuggestions.map((system) => (
               <option key={system} value={system}>
                 {system}
               </option>
             ))}
-          </select>
+          </datalist>
         </label>
         <button
           type="button"

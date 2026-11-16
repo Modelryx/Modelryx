@@ -1,200 +1,61 @@
-# Modelryx Local CAD Agent
+# Local CAD Agent
 
-This standalone application owns the native **Open CAD File** dialog and dependency analysis.
-The browser selects one root document only. The agent opens it read-only through the installed CAD
-system, follows native references, and exposes a minimal package on loopback for one download.
+The agent opens a native file dialog, runs dependency analysis on the user's computer,
+and returns an isolated CAD package to the browser. It listens on `127.0.0.1:47832`.
+FreeCAD preprocessing is included. Other CAD systems use independently installed preprocessors
+registered against an external worker ID; this repository contains no vendor SDK integration.
 
-The application targets Windows and Linux and is published self-contained, so end users do not
-need to install .NET or a Rust toolchain.
+## Installation
 
-Release packages include the local agent and version-matched local preprocessors. The
-installer does not compile source code and does not require a .NET SDK on the user's machine.
+On Windows, run `./local_cad_agent/install-windows.ps1`. A release package uses its prebuilt,
+self-contained executable. Source installations require the .NET 8 SDK; `-BuildFromSource`
+forces rebuilding the agent. Set `-AllowedOrigins` to your frontend's origins and
+`-FreeCadCommand` to the FreeCAD executable if it is not found automatically.
 
-## Install
+On Linux, use `./local_cad_agent/install-linux.sh`. Install FreeCAD and a supported native
+file dialog utility as described by that script. Windows-only external runtimes must be
+installed and supported by their own preprocessor distributions.
 
-External workers are registered separately in Modelryx administration and on each user's machine.
-After installing the agent, run the worker's preprocessor registration script with the same worker
-ID used in administration. It copies the preprocessor into the agent's `app/preprocessors` folder
-and records its executable and extensions in `app/settings.json`. The Open CAD File dialog uses the
-server's registered formats and dispatches to the corresponding locally installed preprocessor.
+The installer preserves `ExternalPreprocessors` and `AllowedOrigins` in `app/settings.json`
+on reinstall. Additional preprocessors are not built or discovered automatically.
 
-The file-type list has one entry per CAD system, such as **FreeCAD (*.FCStd)**,
-**Inventor (*.iam;*.idw;*.ipn;*.ipt;*.dwg;*.dxf)** and **AutoCAD (*.dwg;*.dxf)**.
-The extensions come from enabled worker capabilities. There is no combined CAD-format or
-All files entry. Select the originating CAD system for a shared DWG/DXF extension; the agent
-keeps that choice for preprocessing and the server receives the selected worker's CAD system.
-FreeCAD remains available through its built-in local path without an external registration.
-Duplicate matching registrations within the selected CAD system still report a conflict.
-On Linux, choose the CAD system before its file dialog because the native picker does not
-return its selected filter.
+## External preprocessors
 
-Windows (per-user installation and `modelryx-cad://` protocol registration):
+First register the remote worker in **Administrator > External CAD Workers**. The worker
+advertises its CAD system, source extensions, document kinds, and output roles. The local
+file dialog uses those declarations, including when multiple systems share an extension.
 
-```powershell
-.\install-windows.ps1
-```
+Use the installed `app/register-preprocessor.ps1` with `WorkerId`, `CadSystem`, `Version`,
+`Extensions`, `SourceDirectory`, and `Executable`. Copy the complete executable distribution.
+The worker ID, CAD system, and extension must match the server registration.
 
-When run from a source checkout without a prebuilt agent, this command builds the agent and
-automatically builds the NX preprocessor if the configured NX installation is present. It does not
-automatically build Autodesk preprocessors. A prebuilt release installation still requires no SDK.
+The executable receives two arguments: `<absolute-source-path> <output-directory>`.
+It owns native runtime discovery, environment setup, reference resolution, package isolation,
+and cleanup of native processes. It returns the neutral dependency-report contract documented
+in the [worker SDK](../worker-sdk/README.md).
 
-Repository developers can explicitly rebuild the CAD preprocessors during installation:
+The agent validates the package and refuses unsupported formats or ambiguous registrations.
+A process cancelled by the agent is terminated with its child process tree. External runtime
+processes started independently of that tree remain the preprocessor's responsibility.
 
-```powershell
-.\install-windows.ps1 -BuildPreprocessorsFromSource
-```
+## Configuration
 
-To build the updated agent and only the NX preprocessor from this checkout (without building the
-Autodesk preprocessors), use the .NET 8 SDK and the installed NX2506 managed API:
+`settings.json` is loaded from the application directory or the per-user configuration directory.
+Supported settings are `FreeCadCommand`, `FreeCadPreprocessorScript`, `FreeCadConverterScript`,
+`ExternalPreprocessors`, and `AllowedOrigins`. FreeCAD paths can also be configured with
+`MODELRYX_FREECAD_CMD`, `MODELRYX_FREECAD_PREPROCESSOR`, and `MODELRYX_FREECAD_CONVERTER`.
+`MODELRYX_ALLOWED_ORIGINS` overrides configured web origins.
 
-```powershell
-.\install-windows.ps1 -BuildNxPreprocessorFromSource `
-  -NxDirectory 'C:\Program Files\Siemens\NX2506'
-```
+## Security and verification
 
-Release installs consume a prebuilt `preprocessors\nx\Modelryx.NX.Preprocessor.exe` and its runtime
-files when included in the package. A release without that preprocessor reports NX as unavailable;
-it does not silently run an SDK-free discovery substitute.
-
-To pin a non-standard FreeCAD installation, pass its bundled Python executable:
+Only configured web origins and origin-free local clients can use the loopback API. File
+selection requires the native dialog; packages must stay inside the agent workspace and
+pass isolation and path validation. Packages are removed after download or on expiry.
 
 ```powershell
-.\install-windows.ps1 `
-  -FreeCadCommand "D:\Apps\FreeCAD\bin\python.exe"
+dotnet run --project local_cad_agent/tests/Modelryx.LocalCad.Agent.Tests
+./local_cad_agent/tests/Test-WindowsInstaller.ps1
 ```
 
-This developer-only mode requires the SDK used by the installed CAD release. In particular,
-AutoCAD 2027 preprocessors target `net10.0-windows` and require the .NET 10 SDK. This requirement does
-not apply when installing a prebuilt release package. The AutoCAD framework and SDK directory can
-be selected explicitly for a different supported release:
-
-```powershell
-.\install-windows.ps1 -BuildPreprocessorsFromSource `
-  -AutoCadTargetFramework net8.0-windows `
-  -AutoCadSdkDir "C:\Program Files\Autodesk\AutoCAD 2026"
-```
-
-Linux (per-user desktop/protocol registration):
-
-```sh
-chmod +x ./install-linux.sh
-./install-linux.sh
-```
-
-Linux requires `zenity` or `kdialog` for the desktop-native file picker. The picker is launched as
-a modal top-level application. Windows creates an invisible topmost owner window and passes it to
-the native `IFileOpenDialog`, preventing the dialog from opening behind the browser.
-
-## CAD analyzer configuration
-
-The agent routes by the selected root extension:
-
-| Root format | Platform | Analyzer |
-|---|---|---|
-| `.FCStd` | Windows/Linux | Installed FreeCAD plus `modelryx_freecad_preprocessor.py` |
-| `.iam`, `.ipt`, `.idw`, `.ipn` | Windows | Installed Inventor plus `Modelryx.Inventor.Preprocessor` |
-| `.dwg`, `.dxf` | Windows | Installed AutoCAD plus `Modelryx.AutoCAD.Preprocessor` |
-| `.prt` | Windows | Installed NX2506 plus native `Modelryx.NX.Preprocessor`; local analysis/package support |
-
-FreeCAD executable discovery covers common Windows and Linux locations. Inventor and AutoCAD are
-Windows-only vendor applications; selecting those formats on Linux returns a clear unsupported
-platform error. AutoCAD analysis launches its installed Core Console, loads the local preprocessor,
-extracts its Xref manifest, and packages only resolved Xrefs. The preprocessors expose the same
-neutral `cad-package.zip` and dependency-report contract.
-
-NX parts and assemblies use the existing worker preprocessor for native dependency discovery. The
-agent configures `UGII_BASE_DIR`, `NXBIN`, `managed_core` and a private diagnostic directory only in
-its child processes. A second, fresh NX process opens an extracted package using package-local
-search directories and checks the loaded inventory and occurrence-reference graph. Source documents
-are never saved. Nested assemblies and repeated references remain explicit; child CAD documents are
-reported as `PART` or `ASSEMBLY`, rather than processing-only support.
-
-Configure `NxDirectory` and `NxPreprocessorExecutable` in the installed `settings.json`, or use
-`MODELRYX_NX_DIRECTORY` and `MODELRYX_NX_PREPROCESSOR_EXE`. The default installation probe is
-`C:\Program Files\Siemens\NX2506`. Drawing references, incomplete discovery, ambiguous resolution
-and packages that resolve outside their isolated workspace are refused. The preprocessor does not
-rewrite references in the original documents.
-
-This adds NX analysis to the agent's CLI and loopback selection/package API. The browser can stage
-and commit an isolated NX part or assembly package as authoritative `Siemens NX`/`PRT` source,
-preserving package-relative dependencies and reference/BOM evidence. Processing is queued after
-commit and requires a qualified NX worker or the explicit development-only server opt-in described
-in `nx_worker/README.md`. GLB previews also require a compatible STEP service.
-
-Local preprocessors discover, rebind, and package references on the CAD user's workstation. The
-Inventor and AutoCAD preprocessors reuse their server adapter/normalizer libraries. The FreeCAD
-installation includes the server converter in metadata-only mode, so local preflight and worker
-processing share the same traversal and PartMetadata normalizer without creating a GLB locally.
-The report binds that metadata to the root document's SHA-256; Modelryx rejects it if the staged
-manifest names different bytes. Server workers still regenerate authoritative metadata and
-representations after commit.
-
-The installer writes `settings.json` beside the application. Environment variables with the names
-previously documented remain supported as explicit administrative overrides. Use the Windows
-installer's `-AllowedOrigins` argument for deployed Modelryx web origins.
-
-When the browser is served from another machine, allow the browser's exact origin (scheme, host,
-and port) during installation. This is the frontend address, not the API address:
-
-```powershell
-.\install-windows.ps1 -AllowedOrigins 'http://192.168.50.53:5173'
-```
-
-The installer preserves existing allowed origins when it is rerun without `-AllowedOrigins`. To
-replace them deliberately, pass the argument again with the complete approved list. The loopback
-agent never listens on the network; this setting only permits that website to call the local agent.
-
-For Inventor dependency analysis, the agent activates the nearest unambiguous `.ipj` found beside
-the selected file or in one of its parent directories before opening the document. Set
-`MODELRYX_INVENTOR_PROJECT` to an absolute `.ipj` path when a directory contains multiple projects
-or the project is stored elsewhere. Inventor's resolved descriptor paths are used to collect files
-from project workspaces, workgroups, libraries, and Content Center locations; external files are
-copied into isolated `externalN` package directories.
-
-Analysis is non-interactive by default so a hidden Resolve Link dialog cannot stall the agent. As a
-diagnostic fallback, set `MODELRYX_INVENTOR_INTERACTIVE_RESOLUTION=1` to show the document and allow
-Inventor to prompt for unresolved references. Save corrected references in Inventor, then remove the
-override and run the analysis again.
-
-## Local transport and security
-
-- Listens only on `127.0.0.1:47832`. Port `47831` is reserved for the Inventor-specific agent.
-- Allows configured Modelryx/localhost origins only.
-- Accepts no filesystem path from the browser; every selection requires a native user gesture.
-- Returns packages through unguessable one-use identifiers.
-- Cancels and cleans up an abandoned analysis when the user starts a new selection after refresh.
-- Reports native analysis stages and stops an analyzer with an actionable error if it does not
-  finish within the bounded fifteen-minute window required by large legacy assemblies.
-- Rejects unsafe ZIP paths, duplicate paths, excessive entries, and packages over 2 GB.
-- Deletes downloaded packages and prunes abandoned workspaces after 24 hours.
-
-Additional deployed web origins can be supplied as a comma-separated `MODELRYX_ALLOWED_ORIGINS`
-value before starting the application.
-
-## NX verification
-
-Run the SDK-free agent integration tests from the project root:
-
-```powershell
-dotnet run --project local_cad_agent/tests/Modelryx.LocalCad.Agent.Tests -c Release
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File local_cad_agent/tests/Test-WindowsInstaller.ps1
-```
-
-The installer checks use isolated folders and substitute publishing/protocol registration. They
-cover source installs with/without NX and prebuilt releases with/without a bundled NX preprocessor.
-
-For an installed-NX check, first build the preprocessor with `NxOpenDirectory` pointing to
-`NXBIN\managed_core`, then run with a fresh output workspace:
-
-```powershell
-$env:MODELRYX_NX_DIRECTORY = 'C:\Program Files\Siemens\NX2506'
-$env:MODELRYX_NX_PREPROCESSOR_EXE = (Resolve-Path 'nx_worker/src/Modelryx.NX.Preprocessor/bin/Release/net8.0/Modelryx.NX.Preprocessor.exe').Path
-dotnet run --project local_cad_agent/Modelryx.LocalCad.Agent -c Release -- --analyze `
-  'C:\Program Files\Siemens\NX2506\UGOPEN\SampleNXOpenApplications\Java\parts\toycar_assy.prt' `
-  'local_cad_agent/artifacts/nx-manual-check'
-```
-
-The response should identify `ASSEMBLY`, five native documents, ten reference edges and
-`isolated_reopen_validated: true`. The standalone vendor `Selection_UIStyler\Block.prt` should
-identify `PART` with one document and no references. The Windows installer and native file dialog
-still need manual installation/UI verification; automated native checks use `--analyze`.
+These checks exercise generic system routing, shared extensions, ambiguous registrations,
+external executable dispatch, source installation, bundled releases, and reinstall settings.

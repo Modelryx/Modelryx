@@ -71,14 +71,14 @@ const limitationDetail = (diagnostic: string): LimitationDetail => {
       [
         /parameters? (?:unavailable|incomplete|could not be read)/i,
         () => ({
-          title: 'Inventor parameters',
+          title: 'Native parameters',
           affectedData: ['Native → parameters', 'Engineering properties derived from parameters'],
         }),
       ],
       [
         /iProperties incomplete/i,
         () => ({
-          title: 'Inventor iProperties',
+          title: 'Native properties',
           affectedData: [
             'Identity → part number, revision and description',
             'Engineering properties → iProperties',
@@ -707,7 +707,7 @@ export function PropertiesSection({
                     ['Displayed text', entity.text],
                     ['Space', entityProperties.space],
                     ['Layer', entityProperties.layer],
-                    ['AutoCAD type', entityProperties.autocad_type],
+                    ['Native type', entityProperties.native_type ?? entityProperties.entity_type],
                   ])}
                 />
               </article>
@@ -786,7 +786,7 @@ export function PropertiesSection({
                     ['Page', entity.page],
                     ['Space', entityProperties.space],
                     ['Layer', entityProperties.layer],
-                    ['AutoCAD type', entityProperties.autocad_type],
+                    ['Native type', entityProperties.native_type ?? entityProperties.entity_type],
                   ])}
                 />
               </article>
@@ -834,7 +834,7 @@ export function PropertiesSection({
           {rawTitleBlockRows.length > 0 && (
             <section>
               <h4>Source fields</h4>
-              <p className="muted">Original AutoCAD attribute tags retained for traceability.</p>
+              <p className="muted">Original native attribute tags retained for traceability.</p>
               <PropertyTable values={rawTitleBlockRows} />
             </section>
           )}

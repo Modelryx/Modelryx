@@ -189,7 +189,7 @@ export type EditWhereUsed = {
   warnings: string[];
 };
 export type WorkerPreflight = {
-  worker_type: 'FREECAD' | 'AUTOCAD' | 'INVENTOR' | 'STEP';
+  worker_type: string;
   available: boolean;
   compatible: boolean;
   status: 'IDLE' | 'BUSY' | 'DEGRADED' | null;
@@ -271,9 +271,9 @@ export type CadDependencyReport = {
   }>;
 };
 
-// NX can report the same display name for repeated occurrences of one prototype.
+// Workers can report the same display name for repeated occurrences of one prototype.
 // Allocate unique proposal keys within each parent without treating these keys as native IDs.
-export const nxBomInstanceNames = (
+export const bomInstanceNames = (
   references: NonNullable<CadDependencyReport['references']>
 ): string[] => {
   const names = references.map((reference) =>
@@ -334,32 +334,6 @@ export type CadBundleManifest = {
 
 export const cadProfile = (filename: string, documentType?: FileEntry['documentType']) => {
   const extension = filename.split('.').pop()?.toLowerCase();
-  if (extension === 'prt') {
-    const assembly = documentType === 'ASSEMBLY';
-    return {
-      cadSystem: 'Siemens NX',
-      nativeFormat: 'PRT',
-      artifactType: assembly ? 'CAD_ASSEMBLY' : 'CAD_MODEL',
-      itemType: assembly ? 'ASSEMBLY' : 'PART',
-    };
-  }
-  if (extension === 'dwg' || extension === 'dxf') {
-    return {
-      cadSystem: 'AutoCAD',
-      nativeFormat: extension.toUpperCase(),
-      artifactType: 'CAD_MODEL',
-      itemType: 'PART',
-    };
-  }
-  if (['ipt', 'iam', 'idw'].includes(extension ?? '')) {
-    return {
-      cadSystem: 'Inventor',
-      nativeFormat: extension!.toUpperCase(),
-      artifactType:
-        extension === 'iam' ? 'CAD_ASSEMBLY' : extension === 'idw' ? 'DRAWING' : 'CAD_MODEL',
-      itemType: extension === 'iam' ? 'ASSEMBLY' : 'PART',
-    };
-  }
   if (extension === 'step' || extension === 'stp') {
     return { cadSystem: 'STEP', nativeFormat: 'STEP', artifactType: 'STEP', itemType: 'PART' };
   }
@@ -379,9 +353,7 @@ export const cadProfile = (filename: string, documentType?: FileEntry['documentT
 export const logicalPathDepth = (path: string) => path.split(/[\\/]/).length - 1;
 
 export const isManagedCadDefinition = (entry: FileEntry) =>
-  /\.(iam|ipt)$/i.test(entry.file.name) ||
-  entry.documentType === 'ASSEMBLY' ||
-  entry.documentType === 'PART';
+  entry.documentType === 'ASSEMBLY' || entry.documentType === 'PART';
 
 export const createsManagedItem = (
   entry: FileEntry,
@@ -391,11 +363,10 @@ export const createsManagedItem = (
     ? false
     : isManagedCadDefinition(entry) || !report || entry.logicalPath === report.root_logical_path;
 
-export const isProcessingSupport = (path: string, documentType?: string) =>
-  /\.ipj$/i.test(path) || documentType === 'PROJECT' || documentType === 'SUPPORTING';
+export const isProcessingSupport = (_path: string, documentType?: string) =>
+  documentType === 'PROJECT' || documentType === 'SUPPORTING';
 
-export const isDrawing = (entry: FileEntry) =>
-  /\.(idw|dwg|dxf)$/i.test(entry.file.name) || entry.documentType === 'DRAWING';
+export const isDrawing = (entry: FileEntry) => entry.documentType === 'DRAWING';
 
 export const relatedSupportPaths = (
   ownerPath: string,
@@ -430,16 +401,7 @@ export const withoutProcessingSupport = (report: CadDependencyReport): CadDepend
   );
   const missingSupporting = report.missing_references.filter((entry) => {
     if (entry.kind?.toLocaleLowerCase() === 'linked-resource') return true;
-    const extension = entry.reference
-      ?.replace(/\\/g, '/')
-      .split('/')
-      .pop()
-      ?.match(/\.[^.]+$/)?.[0]
-      ?.toLocaleLowerCase();
-    return Boolean(
-      extension &&
-      !['.prt', '.iam', '.ipt', '.idw', '.ipn', '.dwg', '.dxf', '.fcstd'].includes(extension)
-    );
+    return false;
   });
   const missingCad = report.missing_references.filter(
     (entry) => !missingSupporting.includes(entry)
@@ -458,30 +420,6 @@ export const withoutProcessingSupport = (report: CadDependencyReport): CadDepend
       ...missingSupporting,
     ],
   };
-};
-
-export const inventorBomInstanceNames = (entries: FileEntry[]): Map<string, string> => {
-  const normalized = entries.map((entry) => ({
-    entry,
-    base: entry.logicalPath.replace(/\\/g, '/').replace(/\.(ipt|iam)$/i, ''),
-    kind: /\.iam$/i.test(entry.logicalPath) ? 'Assembly' : 'Part',
-  }));
-  const counts = new Map<string, number>();
-  normalized.forEach(({ base }) =>
-    counts.set(base.toLocaleLowerCase(), (counts.get(base.toLocaleLowerCase()) ?? 0) + 1)
-  );
-  const used = new Set<string>();
-  return new Map(
-    normalized.map(({ entry, base, kind }) => {
-      const needsKind = (counts.get(base.toLocaleLowerCase()) ?? 0) > 1;
-      const initial = needsKind ? `${base} [${kind}]` : base;
-      let candidate = initial;
-      let sequence = 2;
-      while (used.has(candidate.toLocaleLowerCase())) candidate = `${initial} ${sequence++}`;
-      used.add(candidate.toLocaleLowerCase());
-      return [entry.logicalPath, candidate];
-    })
-  );
 };
 
 export type EditOccurrence = {
@@ -515,13 +453,11 @@ export const retainedFileOccurrence = (
   file: { reference_name: string | null; filename: string },
   occurrences: EditOccurrence[]
 ): EditOccurrence | undefined => {
-  if (!/\.(?:iam|ipt)$/i.test(file.filename)) return undefined;
   const flattened = flattenEditOccurrences(occurrences).map(({ occurrence }) => occurrence);
   const reference = normalizedCadReference(file.reference_name);
   const filename = normalizedCadReference(file.filename);
   const fileBasename = filename.split('/').at(-1) ?? '';
   const stemIdentity = fileBasename.replace(/\.[^.]+$/, '').replace(/[^a-z0-9]+/g, '');
-  const expectedType = /\.iam$/i.test(file.filename) ? 'ASSEMBLY' : 'PART';
   return flattened
     .map((occurrence) => {
       const source = normalizedCadReference(occurrence.source_reference);
@@ -539,7 +475,6 @@ export const retainedFileOccurrence = (
       else if (sourceBasename === fileBasename) score = 90;
       else if (stemIdentity === nameIdentity) score = 80;
       else if (stemIdentity === numberIdentity) score = 75;
-      if (occurrence.child_item.item_type !== expectedType) score = 0;
       return { occurrence, score };
     })
     .filter((candidate) => candidate.score > 0)

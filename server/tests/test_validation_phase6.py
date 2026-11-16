@@ -16,8 +16,8 @@ from modelryx.validation.service import (
 )
 
 
-def test_supported_cad_extensions_include_autodesk_native_formats() -> None:
-    assert {".dwg", ".dxf", ".ipt", ".iam", ".idw"} <= SUPPORTED_CAD_EXTENSIONS
+def test_supported_cad_extensions_include_builtin_formats() -> None:
+    assert {".fcstd", ".step", ".stp"} <= SUPPORTED_CAD_EXTENSIONS
 
 
 def finding(*, severity: str = "WARNING", blocking: bool = False) -> FindingInput:

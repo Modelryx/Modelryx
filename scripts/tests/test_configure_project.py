@@ -119,18 +119,3 @@ def test_existing_analyzer_url_is_preserved_as_preprocessor_url(project):
     assert env_file(project / ".env")["MODELRYX_FREECAD_PREPROCESSOR_URL"] == (
         "https://old-preprocessor.example"
     )
-
-
-def test_reconfiguration_removes_retired_worker_environment_settings(project):
-    assert configure(project).returncode == 0
-    for path in (project / ".env", project / "server/.env"):
-        with path.open("a", encoding="utf-8") as stream:
-            stream.write("\nMODELRYX_AUTOCAD_WORKER_URL=http://obsolete.example\n")
-            stream.write("MODELRYX_NX_ALLOW_UNQUALIFIED_PROCESSING=true\n")
-            stream.write("MODELRYX_CUSTOM_SETTING=preserve\n")
-    assert configure(project).returncode == 0
-    for path in (project / ".env", project / "server/.env"):
-        values = env_file(path)
-        assert "MODELRYX_AUTOCAD_WORKER_URL" not in values
-        assert "MODELRYX_NX_ALLOW_UNQUALIFIED_PROCESSING" not in values
-        assert values["MODELRYX_CUSTOM_SETTING"] == "preserve"

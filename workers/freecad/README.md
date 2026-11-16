@@ -164,7 +164,7 @@ and the committed child revision reference.
 
 This image runs the dedicated `freecad` processing role. It shares the server's PostgreSQL
 `ProcessingJob` queue and object storage, but claims only `FCSTD_TO_MODELRYX` work and
-FreeCAD-targeted CAD sessions. Generic staging, STEP, AutoCAD, Inventor, and bundle jobs are
+FreeCAD-targeted CAD sessions. Generic staging, STEP, external CAD, and bundle jobs are
 handled by the lightweight server `general-worker` service.
 
 Standalone FreeCAD runtime for Modelryx. It retains the rich direct FCStd-to-GLB/PFG path and

@@ -3,14 +3,9 @@ using System.Text.Json;
 namespace Modelryx.LocalCad.Agent;
 
 internal sealed record AgentSettings(
-    string? InventorPreprocessorExecutable = null,
     string? FreeCadCommand = null,
     string? FreeCadPreprocessorScript = null,
     string? FreeCadConverterScript = null,
-    string? AutoCadCoreConsole = null,
-    string? AutoCadPreprocessorDll = null,
-    string? NxDirectory = null,
-    string? NxPreprocessorExecutable = null,
     ExternalPreprocessor[]? ExternalPreprocessors = null,
     string[]? AllowedOrigins = null);
 
@@ -46,11 +41,6 @@ internal sealed class AgentConfiguration
         return new AgentConfiguration(new AgentSettings());
     }
 
-    public string RequireInventorPreprocessor() => RequireFile(
-        "MODELRYX_INVENTOR_PREPROCESSOR_EXE", _settings.InventorPreprocessorExecutable,
-        Candidate("preprocessors", "inventor", "Modelryx.Inventor.Preprocessor.exe"),
-        Candidate("inventor_worker", "src", "Modelryx.Inventor.Preprocessor", "bin", "Release", "net8.0-windows", "Modelryx.Inventor.Preprocessor.exe"));
-
     public string RequireFreeCadPreprocessor() => RequireFile(
         "MODELRYX_FREECAD_PREPROCESSOR", _settings.FreeCadPreprocessorScript,
         Candidate("preprocessors", "freecad", "modelryx_freecad_preprocessor.py"),
@@ -74,18 +64,6 @@ internal sealed class AgentConfiguration
         OperatingSystem.IsWindows() ? @"C:\Program Files\FreeCAD 0.21\bin\FreeCADCmd.exe" : null,
         "/usr/bin/freecadcmd", "/usr/local/bin/freecadcmd", "/usr/bin/FreeCADCmd");
 
-    public string? FindAutoCadCoreConsole() => FirstExistingFile(
-        new[]
-        {
-            Environment.GetEnvironmentVariable("MODELRYX_AUTOCAD_CORE_CONSOLE"),
-            _settings.AutoCadCoreConsole,
-        }.Concat(AutoCadInstallCandidates("accoreconsole.exe")));
-
-    public string RequireAutoCadPreprocessor() => RequireFile(
-        "MODELRYX_AUTOCAD_PREPROCESSOR_DLL", _settings.AutoCadPreprocessorDll,
-        Candidate("preprocessors", "autocad", "Modelryx.AutoCAD.Preprocessor.dll"),
-        Candidate("autocad_worker", "src", "Modelryx.AutoCAD.Preprocessor", "bin", "Release", "net10.0-windows", "Modelryx.AutoCAD.Preprocessor.dll"));
-
     public IEnumerable<string> AllowedOrigins => _settings.AllowedOrigins ?? [];
 
     public ExternalPreprocessor? FindExternal(string id, string system, string extension)
@@ -103,23 +81,6 @@ internal sealed class AgentConfiguration
         FirstExistingFile(worker.Executable)
         ?? throw new InvalidOperationException($"Local preprocessor '{worker.Id}' is not installed. Install it and try again.");
 
-    public string RequireNxPreprocessor() => RequireFile(
-        "MODELRYX_NX_PREPROCESSOR_EXE", _settings.NxPreprocessorExecutable,
-        Candidate("preprocessors", "nx", "Modelryx.NX.Preprocessor.exe"));
-
-    public string RequireNxDirectory()
-    {
-        var candidates = new[] { Environment.GetEnvironmentVariable("MODELRYX_NX_DIRECTORY"),
-            _settings.NxDirectory, Environment.GetEnvironmentVariable("UGII_BASE_DIR"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Siemens", "NX2506") };
-        return candidates.Where(path => !string.IsNullOrWhiteSpace(path))
-            .Select(path => Path.GetFullPath(Environment.ExpandEnvironmentVariables(path!)))
-            .FirstOrDefault(path => File.Exists(Path.Combine(path, "NXBIN", "managed_core", "NXOpen.dll")) &&
-                File.Exists(Path.Combine(path, "NXBIN", "managed_core", "NXOpen.UF.dll")) &&
-                File.Exists(Path.Combine(path, "NXBIN", "libufun.dll")))
-            ?? throw new InvalidOperationException("NX2506 was not found. Install NX or configure MODELRYX_NX_DIRECTORY / NxDirectory in settings.json.");
-    }
-
     private string RequireFile(string environmentName, string? configured, params string?[] candidates) =>
         FirstExistingFile(new[] { Environment.GetEnvironmentVariable(environmentName), configured }.Concat(candidates))
         ?? throw new InvalidOperationException(
@@ -133,14 +94,6 @@ internal sealed class AgentConfiguration
         .Where(path => !string.IsNullOrWhiteSpace(path))
         .Select(path => Path.GetFullPath(Environment.ExpandEnvironmentVariables(path!)))
         .FirstOrDefault(File.Exists);
-
-    private static IEnumerable<string> AutoCadInstallCandidates(string filename)
-    {
-        if (!OperatingSystem.IsWindows()) yield break;
-        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-        for (var year = DateTime.UtcNow.Year + 2; year >= 2022; year--)
-            yield return Path.Combine(programFiles, "Autodesk", $"AutoCAD {year}", filename);
-    }
 
     private static IEnumerable<string> ConfigurationPaths()
     {

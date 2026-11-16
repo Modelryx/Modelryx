@@ -93,3 +93,53 @@ def provision_database_test_user(request):
             user.auth_version = 0
         db.commit()
     yield
+
+
+@pytest.fixture
+def example_worker():
+    """Register a fictional CAD worker for native commit integration scenarios."""
+    import json
+
+    from modelryx.models import ApplicationSetting
+    from modelryx.services.external_workers import validate_capabilities
+
+    key = f"external_worker.fixture_{uuid.uuid4().hex}"
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.external_subject == "local-development-user"))
+        db.add(
+            ApplicationSetting(
+                key=key,
+                updated_by=user.id,
+                value=json.dumps(
+                    {
+                        "url": "https://worker.example",
+                        "enabled": True,
+                        "capabilities": validate_capabilities(
+                            {
+                                "contractVersion": "1.0",
+                                "cadSystem": "Example CAD",
+                                "workerName": "Example CAD",
+                                "workerVersion": "1.0",
+                                "documentKinds": ["part", "assembly", "drawing"],
+                                "sourceExtensions": [".assembly", ".part", ".drawing", ".sheet"],
+                                "outputRoles": [
+                                    "native-snapshot",
+                                    "part-metadata",
+                                    "model-preview",
+                                ],
+                                "dependencyAnalysis": True,
+                            }
+                        ),
+                    }
+                ),
+            )
+        )
+        db.commit()
+    try:
+        yield
+    finally:
+        with SessionLocal() as db:
+            row = db.get(ApplicationSetting, key)
+            if row is not None:
+                db.delete(row)
+                db.commit()

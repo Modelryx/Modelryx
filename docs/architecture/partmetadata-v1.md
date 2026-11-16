@@ -24,10 +24,7 @@ The worker is responsible for converting CAD-specific information into `PartMeta
 
 ```text
 FreeCAD ─────┐
-NX ──────────┤
-SolidWorks ──┼──> CAD Worker ──> PartMetadata v1
-Creo ────────┤
-CATIA ───────┤
+External CAD ┼──> CAD Worker ──> PartMetadata v1
 STEP ────────┘
 ```
 
@@ -39,14 +36,13 @@ Consumers of `PartMetadata` must not need to understand the originating CAD syst
 
 ### 2.1 CAD Neutral
 
-No required field may depend on FreeCAD, NX, SolidWorks, Creo, CATIA, or another CAD-specific concept.
+No required field may depend on any CAD-specific concept.
 
 Avoid exposing:
 
 ```text
 PartDesign::Pad
-NXOpen.Features.Extrude
-SolidWorks Boss-Extrude
+VendorAPI.Features.Extrude
 ```
 
 as standard feature types.
@@ -189,12 +185,8 @@ Recommended `system` values:
 
 ```text
 freecad
-nx
-solidworks
-creo
-catia
+external_cad
 step
-iges
 other
 ```
 
@@ -1047,20 +1039,6 @@ PartMetadataNormalizer
 PartMetadata v1
 ```
 
-NX:
-
-```text
-PRT
- ↓
-NXOpen
- ↓
-NXMetadataExtractor
- ↓
-PartMetadataNormalizer
- ↓
-PartMetadata v1
-```
-
 STEP:
 
 ```text
@@ -1562,4 +1540,4 @@ The core Modelryx rule is:
 
 > **Workers understand CAD systems. Modelryx understands engineering metadata. AI understands Modelryx engineering/search data.**
 
-This separation allows a FreeCAD-generated part, an NX part, a SolidWorks part, and a STEP part representing essentially the same engineering geometry to participate in the same search and similarity pipeline without CAD-specific logic in the AI layer.
+This separation allows a FreeCAD-generated part, an external CAD part, and a STEP part representing essentially the same engineering geometry to participate in the same search and similarity pipeline without CAD-specific logic in the AI layer.

@@ -18,7 +18,7 @@ internal static class NativeFilePicker
                 worker.CadSystem.ToLowerInvariant(), "[^a-z0-9]", ""))
             .Select(group => new CadFileFilter(group.Key, group.Key switch
             {
-                "freecad" => "FreeCAD", "inventor" => "Inventor", "autocad" => "AutoCAD",
+                "freecad" => "FreeCAD",
                 _ => group.First().CadSystem,
             }, group.SelectMany(worker => worker.SourceExtensions)
                 .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(extension => extension, StringComparer.OrdinalIgnoreCase)
@@ -26,7 +26,7 @@ internal static class NativeFilePicker
         if (!filters.Any(filter => filter.CadSystem == "freecad"))
             filters.Add(new CadFileFilter("freecad", "FreeCAD", [".fcstd"], []));
         return filters.OrderBy(filter => filter.CadSystem switch
-            { "freecad" => 0, "inventor" => 1, "autocad" => 2, _ => 3 })
+            { "freecad" => 0, _ => 1 })
             .ThenBy(filter => filter.Name, StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
@@ -72,7 +72,7 @@ internal static class NativeFilePicker
             if (FindOnPath("zenity") is { } zenity)
             {
                 // Zenity's file selection output omits the active filter. Choose the system first
-                // so a shared DWG extension cannot silently select the wrong native adapter.
+                // so a shared extension cannot silently select the wrong native adapter.
                 var name = filters.Count == 1 ? filters[0].Label : Run(zenity,
                     new[] { "--list", "--title=Open CAD File", "--text=Select CAD system", "--column=CAD system" }
                         .Concat(filters.Select(filter => filter.Label)));

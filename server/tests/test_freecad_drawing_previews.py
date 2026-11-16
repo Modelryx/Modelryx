@@ -7,7 +7,7 @@ from modelryx.core.config import get_settings
 from modelryx.services.processing import (
     merge_related_drawing_metadata,
     read_freecad_drawing_previews,
-    read_licensed_drawing_representations,
+    read_worker_drawing_representations,
 )
 
 PNG_HEADER = b"\x89PNG\r\n\x1a\n"
@@ -41,7 +41,7 @@ def test_rejects_unsafe_freecad_drawing_preview_path(tmp_path: Path) -> None:
         read_freecad_drawing_previews(package_path, tmp_path, get_settings())
 
 
-def test_extracts_and_merges_inventor_related_drawing_metadata(tmp_path: Path) -> None:
+def test_extracts_and_merges_example_cad_related_drawing_metadata(tmp_path: Path) -> None:
     package_path = tmp_path / "drawing-representations.zip"
     with zipfile.ZipFile(package_path, "w") as package:
         package.writestr("drawing-0001.pdf", b"%PDF-1.7\nfixture")
@@ -59,7 +59,7 @@ def test_extracts_and_merges_inventor_related_drawing_metadata(tmp_path: Path) -
             "failures": [],
         }))
 
-    manifest, paths = read_licensed_drawing_representations(
+    manifest, paths = read_worker_drawing_representations(
         package_path, tmp_path, get_settings()
     )
     metadata = {"native": {}}

@@ -727,7 +727,7 @@ function Library({
             value={viewName}
             maxLength={50}
             onChange={(event) => setViewName(event.target.value)}
-            placeholder="e.g. Active Inventor parts"
+            placeholder="e.g. Active CAD parts"
           />
         </label>
         {isAdmin && (

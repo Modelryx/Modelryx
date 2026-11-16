@@ -251,3 +251,8 @@ def test_phase21_engineering_query_evaluation_corpus(case: dict) -> None:
             assert actual == expected
     if expected_warning := case.get("warning_contains"):
         assert any(expected_warning in warning for warning in warnings)
+
+
+@pytest.mark.parametrize("system", ["example_cad", "Example CAD"])
+def test_explicit_cad_system_filter_accepts_external_system_names(system: str) -> None:
+    assert interpret(f'parts cad system "{system}"').filters.cad_system == system

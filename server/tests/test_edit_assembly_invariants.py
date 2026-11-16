@@ -20,7 +20,11 @@ def _assembly_proposal(*, occurrence: str = "Bearing:1") -> StagingProposalUpdat
                 "base_snapshot_id": str(uuid.uuid4()),
             },
             "item": {"item_number": "ASM-1", "name": "Assembly", "item_type": "ASSEMBLY"},
-            "revision": {"revision_code": "A", "cad_system": "Inventor", "native_format": "IAM"},
+            "revision": {
+                "revision_code": "A",
+                "cad_system": "Example CAD",
+                "native_format": "ASSEMBLY",
+            },
             "artifacts": [
                 {
                     "client_artifact_id": str(uuid.uuid4()),
@@ -32,7 +36,7 @@ def _assembly_proposal(*, occurrence: str = "Bearing:1") -> StagingProposalUpdat
                     "files": [
                         {
                             "staged_file_id": str(root_file_id),
-                            "reference_name": "Assembly.iam",
+                            "reference_name": "Assembly.assembly",
                             "role": "PRIMARY",
                         }
                     ],
@@ -60,10 +64,10 @@ def _analysis(*, occurrence: str = "Bearing:1", snapshot_version: int = 7) -> di
     return {
         "snapshot_version": snapshot_version,
         "package_staged": True,
-        "report": {"root_logical_path": "Assembly.iam"},
+        "report": {"root_logical_path": "Assembly.assembly"},
         "reconciliation": [
             {
-                "parent_logical_path": "Assembly.iam",
+                "parent_logical_path": "Assembly.assembly",
                 "depth": 0,
                 "occurrence_key": occurrence,
                 "status": "UNCHANGED",

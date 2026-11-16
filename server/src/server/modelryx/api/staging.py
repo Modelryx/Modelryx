@@ -1280,72 +1280,9 @@ def update_staging_proposal(
         ):
             raise HTTPException(status_code=409, detail="The target Item revision changed")
 
-    proposed_cad_system = payload.revision.cad_system if payload.revision is not None else None
-    if proposed_cad_system is None and payload.destination is not None:
-        destination_revision = db.get(Revision, payload.destination.revision_id)
-        proposed_cad_system = (
-            destination_revision.cad_system if destination_revision is not None else None
-        )
-    if proposed_cad_system and proposed_cad_system.casefold().startswith("autocad mechanical"):
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "AutoCAD Mechanical uploads are not supported. "
-                "Convert the file to standard AutoCAD DWG/DXF before uploading."
-            ),
-        )
-
     staged_files = list(db.scalars(select(StagingFile).where(StagingFile.staging_id == staging.id)))
     staged_ids = {item.id for item in staged_files}
     staged_by_id = {item.id: item for item in staged_files}
-    inventor_proposal = bool(proposed_cad_system and proposed_cad_system.casefold() == "inventor")
-    project_files = [
-        item.logical_path for item in staged_files if item.logical_path.casefold().endswith(".ipj")
-    ]
-    if project_files:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "Inventor project files are processing-only and cannot be committed. "
-                f"Remove these files from staging: {sorted(project_files)}"
-            ),
-        )
-    if inventor_proposal:
-        drawing_suffixes = {".idw", ".dwg", ".dxf"}
-        root_identity_ids = {
-            decision.staged_file_id
-            for decision in payload.identity_decisions
-            if decision.decision == "CREATE_NEW" and decision.item is None
-        }
-        for decision in payload.identity_decisions:
-            staged_file = staged_by_id.get(decision.staged_file_id)
-            if (
-                staged_file is not None
-                and PurePosixPath(staged_file.filename).suffix.casefold() in drawing_suffixes
-                and decision.item is not None
-            ):
-                raise HTTPException(
-                    status_code=422,
-                    detail=(
-                        f"{staged_file.logical_path} is a related drawing and cannot create a "
-                        "dependency Item; attach it to its owning model as a DRAWING Artifact"
-                    ),
-                )
-        for artifact in payload.artifacts:
-            drawing_files = [
-                staged_by_id[item.staged_file_id]
-                for item in artifact.files
-                if item.staged_file_id in staged_by_id
-                and item.staged_file_id not in root_identity_ids
-                and PurePosixPath(staged_by_id[item.staged_file_id].filename).suffix.casefold()
-                in drawing_suffixes
-            ]
-            if drawing_files and artifact.artifact_type != "DRAWING":
-                names = sorted(item.logical_path for item in drawing_files)
-                raise HTTPException(
-                    status_code=422,
-                    detail=(f"Related Inventor drawing files must use a DRAWING Artifact: {names}"),
-                )
     proposed_ids = [
         item.staged_file_id for artifact in payload.artifacts for item in artifact.files
     ]
@@ -1372,20 +1309,8 @@ def update_staging_proposal(
     ]
     native_assembly_package = (
         payload.revision is not None
-        and (
-            (
-                payload.revision.cad_system.casefold() == "freecad"
-                and payload.revision.native_format.casefold() == "fcstd"
-            )
-            or (
-                payload.revision.cad_system.casefold() == "inventor"
-                and payload.revision.native_format.casefold() == "iam"
-            )
-            or (
-                payload.revision.cad_system.casefold() == "siemens nx"
-                and payload.revision.native_format.casefold() == "prt"
-            )
-        )
+        and payload.revision.cad_system.casefold() == "freecad"
+        and payload.revision.native_format.casefold() == "fcstd"
         and any(artifact.artifact_type == "CAD_ASSEMBLY" for artifact in payload.artifacts)
     )
     if not native_assembly_package and payload.revision is not None:
@@ -1705,13 +1630,7 @@ def mark_staging_ready(
                     if staged_file is not None
                     else str(line.child_revision_id or "unknown child")
                 )
-                suffix = (
-                    "Assembly"
-                    if source.casefold().endswith(".iam")
-                    else "Part"
-                    if source.casefold().endswith(".ipt")
-                    else "Component"
-                )
+                suffix = "Component"
                 base = line.instance_name[: max(1, 255 - len(suffix) - 3)]
                 candidate = f"{base} [{suffix}]"
                 sequence = 2
@@ -1900,7 +1819,7 @@ def save_assembly_analysis(
     reported_missing = [
         dict(entry) for entry in report.get("missing_references") or [] if isinstance(entry, dict)
     ]
-    cad_document_extensions = {".prt", ".iam", ".ipt", ".idw", ".ipn", ".dwg", ".dxf", ".fcstd"}
+    cad_document_extensions = {".fcstd"}
     external_worker = _external_assembly_worker(
         db,
         str(report.get("root_logical_path") or ""),
@@ -2853,10 +2772,7 @@ def stage_reconciled_assembly(
     proposal["bom"] = bom
     extension = PurePosixPath(root_path).suffix.casefold()
     revision = dict(proposal.get("revision") or {})
-    if extension == ".iam":
-        revision["cad_system"] = "Inventor"
-        revision["native_format"] = "IAM"
-    elif extension == ".fcstd":
+    if extension == ".fcstd":
         revision["cad_system"] = "FreeCAD"
         revision["native_format"] = "FCStd"
     else:

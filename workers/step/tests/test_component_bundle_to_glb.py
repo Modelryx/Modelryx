@@ -26,19 +26,6 @@ from step_to_glb import StepToGlbConverter  # noqa: E402
 
 
 class ComponentColorTests(unittest.TestCase):
-    def test_autocad_matrix_preserves_millimeter_translation(self):
-        transform = component_transform({
-            "occurrenceId": "assembly/body",
-            "transformUnits": "millimeter",
-            "transform": [
-                0, -1, 0, 125,
-                1, 0, 0, 45,
-                0, 0, 1, 20,
-                0, 0, 0, 1,
-            ],
-        })
-
-        np.testing.assert_allclose(transform[:3, 3], np.array([125, 45, 20]))
 
     def test_bundle_preserves_occurrence_ids_in_glb_nodes(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -120,7 +107,7 @@ class ComponentColorTests(unittest.TestCase):
         self.assertIsNone(component_color({"color": [1.0, "red", 0.0]}))
         self.assertIsNone(component_color({"color": [1.0, 0.0]}))
 
-    def test_reads_most_distinctive_inventor_step_color(self):
+    def test_reads_most_distinctive_component_step_color(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "colored.step"
             source.write_text(

@@ -320,7 +320,7 @@ def execute_search(
         conditions.append(func.lower(Item.category) == filters.classification.casefold())
     if filters.cad_system:
         # Treat the requested value as a CAD product family. For example, the
-        # AutoCAD filter must include revisions recorded as "AutoCAD Mechanical".
+        # A system filter must include qualified variants of the recorded name.
         conditions.append(func.lower(Revision.cad_system).contains(filters.cad_system.casefold()))
     if filters.artifact_format:
         format_extensions = {

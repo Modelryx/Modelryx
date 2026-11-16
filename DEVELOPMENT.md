@@ -2,7 +2,7 @@
 
 Commands run from the repository root unless stated otherwise. Use Docker Compose v2,
 Node.js 22.12+ for Vite 7, and Python 3.11+ for host Python development. Compose supplies
-PostgreSQL 17 with pgvector. Autodesk workers are separate Windows deployments.
+PostgreSQL 17 with pgvector. Additional CAD formats are provided by independently deployed external workers.
 
 ## Environment setup
 
@@ -104,3 +104,15 @@ allowed browser origins; see its [guide](local_cad_agent/README.md).
 
 Do not use `docker compose down -v` as troubleshooting: it deletes persistent volumes.
 Read [backup/recovery](docs/operations/backup-strategy.md) before database or storage changes.
+
+
+## External worker boundary
+
+Only FreeCAD and STEP have built-in processing paths. Additional native CAD formats require
+an enabled registration under **Administrator > External CAD Workers**. The platform matches
+CAD system and source extension against advertised capabilities; ambiguous registrations fail
+instead of selecting a fallback. Worker implementations, native SDKs, installers, and runtime
+qualification belong in their own repositories.
+
+The Local CAD Agent requires a matching external preprocessor registration. Native runtime
+discovery and installation are responsibilities of the external preprocessor.

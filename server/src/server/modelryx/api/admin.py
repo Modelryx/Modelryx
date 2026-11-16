@@ -26,8 +26,8 @@ from modelryx.services.checkout_notifications import (
 from modelryx.services.external_workers import PREFIX, registered_workers, validate_capabilities
 from modelryx.services.freecad_settings import FREECAD_ANALYZER_KEY, FREECAD_WORKER_KEY
 from modelryx.services.item_purge import (
+    cascade_plan,
     item_storage_keys,
-    legacy_cascade_plan,
     preview_item_purge,
     purge_item_records,
     remove_purged_files,
@@ -147,23 +147,17 @@ class ApprovalEscalationRunResponse(BaseModel):
 
 
 class CadWorkerSettingsResponse(BaseModel):
-    autocad_url: str | None = None
-    inventor_url: str | None = None
-    nx_url: str | None = None
     freecad_url: str | None = None
     freecad_analyzer_url: str | None = None
 
 
 class CadWorkerSettingsUpdate(BaseModel):
-    autocad_url: str | None = Field(default=None, max_length=2000)
-    inventor_url: str | None = Field(default=None, max_length=2000)
-    nx_url: str | None = Field(default=None, max_length=2000)
     freecad_url: str | None = Field(default=None, max_length=2000)
     freecad_analyzer_url: str | None = Field(default=None, max_length=2000)
 
 
 class CadWorkerConnectionStatus(BaseModel):
-    cad_system: Literal["autocad", "inventor", "siemens_nx", "freecad", "freecad_analyzer"]
+    cad_system: Literal["freecad", "freecad_analyzer"]
     url: str | None
     availability: Literal["ONLINE", "OFFLINE", "NOT_CONFIGURED"]
     configuration_source: CadWorkerConfigurationSource = "NOT_CONFIGURED"
@@ -176,17 +170,11 @@ class CadWorkerConnectionStatus(BaseModel):
 
 
 class CadWorkerStatusResponse(BaseModel):
-    autocad: CadWorkerConnectionStatus
-    inventor: CadWorkerConnectionStatus
-    nx: CadWorkerConnectionStatus
     freecad: CadWorkerConnectionStatus
     freecad_analyzer: CadWorkerConnectionStatus
 
 
 CAD_WORKER_SETTING_KEYS = {
-    "autocad_url": "cad.autocad.server_url",
-    "inventor_url": "cad.inventor.server_url",
-    "nx_url": "cad.siemens_nx.server_url",
     "freecad_url": FREECAD_WORKER_KEY,
     "freecad_analyzer_url": FREECAD_ANALYZER_KEY,
 }
@@ -224,9 +212,6 @@ def _cad_worker_configurations(
         )
     }
     defaults = {
-        "autocad_url": None,
-        "inventor_url": None,
-        "nx_url": None,
         "freecad_url": getattr(settings, "freecad_worker_url", None),
         "freecad_analyzer_url": getattr(settings, "freecad_preprocessor_url", None)
         or getattr(settings, "cad_analyzer_url", None),
@@ -251,125 +236,6 @@ def _cad_worker_urls(db: Session, settings: Settings | None = None) -> dict[str,
         field: configuration[0]
         for field, configuration in _cad_worker_configurations(db, settings).items()
     }
-
-
-async def _probe_cad_worker(
-    cad_system: Literal["autocad", "inventor", "siemens_nx"],
-    url: str | None,
-    worker_key: str | None,
-) -> CadWorkerConnectionStatus:
-    checked_at = datetime.now(UTC)
-    if url is None:
-        return CadWorkerConnectionStatus(
-            cad_system=cad_system,
-            url=None,
-            availability="NOT_CONFIGURED",
-            checked_at=checked_at,
-        )
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(3.0), follow_redirects=False) as client:
-            health = await client.get(f"{url.rstrip('/')}/health")
-            health.raise_for_status()
-            if not worker_key:
-                return CadWorkerConnectionStatus(
-                    cad_system=cad_system,
-                    url=url,
-                    availability="OFFLINE",
-                    checked_at=checked_at,
-                    detail="Health check passed, but the worker key is not configured.",
-                )
-            response = await client.get(
-                f"{url.rstrip('/')}/api/v1/capabilities",
-                headers={"X-Modelryx-Worker-Key": worker_key},
-            )
-            if not response.is_success:
-                return CadWorkerConnectionStatus(
-                    cad_system=cad_system,
-                    url=url,
-                    availability="OFFLINE",
-                    checked_at=checked_at,
-                    detail=(
-                        "Health check passed, but capabilities returned "
-                        f"HTTP {response.status_code}."
-                    ),
-                )
-            body = response.json()
-            capabilities = body if isinstance(body, dict) else {}
-            if capabilities.get("cadSystem") != cad_system:
-                return CadWorkerConnectionStatus(
-                    cad_system=cad_system,
-                    url=url,
-                    availability="OFFLINE",
-                    checked_at=checked_at,
-                    detail="The configured endpoint identifies as a different CAD system.",
-                    capabilities=capabilities,
-                )
-            if "1.0" not in capabilities.get("contractVersions", []):
-                return CadWorkerConnectionStatus(
-                    cad_system=cad_system,
-                    url=url,
-                    availability="OFFLINE",
-                    checked_at=checked_at,
-                    detail="The configured endpoint does not support worker contract 1.0.",
-                    capabilities=capabilities,
-                )
-            processing_readiness: ProcessingReadiness = "NOT_APPLICABLE"
-            readiness_code = None
-            readiness_detail = None
-            if cad_system == "siemens_nx":
-                try:
-                    readiness = await client.get(
-                        f"{url.rstrip('/')}/ready",
-                        headers={"X-Modelryx-Worker-Key": worker_key},
-                    )
-                    readiness_body = readiness.json()
-                    readiness_payload = readiness_body if isinstance(readiness_body, dict) else {}
-                    if readiness.status_code == 200 and readiness_payload.get("status") == "ready":
-                        processing_readiness = "READY"
-                    elif (
-                        readiness.status_code == 503
-                        and readiness_payload.get("status") == "not_ready"
-                    ):
-                        processing_readiness = "NOT_READY"
-                        reason_code = readiness_payload.get("reasonCode")
-                        readiness_code = reason_code if isinstance(reason_code, str) else None
-                        readiness_detail = str(
-                            readiness_payload.get("reason") or "The NX worker is not ready."
-                        )
-                    else:
-                        processing_readiness = "UNKNOWN"
-                        readiness_detail = (
-                            "The NX worker returned an unrecognized readiness response."
-                        )
-                except (httpx.RequestError, ValueError) as exc:
-                    processing_readiness = "UNKNOWN"
-                    readiness_detail = f"Readiness check failed: {exc}"
-            return CadWorkerConnectionStatus(
-                cad_system=cad_system,
-                url=url,
-                availability="ONLINE",
-                checked_at=checked_at,
-                capabilities=capabilities,
-                processing_readiness=processing_readiness,
-                readiness_code=readiness_code,
-                readiness_detail=readiness_detail,
-            )
-    except httpx.HTTPStatusError as exc:
-        return CadWorkerConnectionStatus(
-            cad_system=cad_system,
-            url=url,
-            availability="OFFLINE",
-            checked_at=checked_at,
-            detail=f"Health check returned HTTP {exc.response.status_code}.",
-        )
-    except (httpx.RequestError, ValueError) as exc:
-        return CadWorkerConnectionStatus(
-            cad_system=cad_system,
-            url=url,
-            availability="OFFLINE",
-            checked_at=checked_at,
-            detail=f"Health check failed: {exc}",
-        )
 
 
 async def _probe_freecad_worker(
@@ -451,14 +317,7 @@ async def get_cad_worker_status(
 ) -> CadWorkerStatusResponse:
     require_admin(principal)
     configurations = _cad_worker_configurations(db, settings)
-    autocad, inventor, nx, freecad, freecad_analyzer = await asyncio.gather(
-        _probe_cad_worker(
-            "autocad", configurations["autocad_url"][0], settings.internal_worker_key
-        ),
-        _probe_cad_worker(
-            "inventor", configurations["inventor_url"][0], settings.internal_worker_key
-        ),
-        _probe_cad_worker("siemens_nx", configurations["nx_url"][0], settings.internal_worker_key),
+    freecad, freecad_analyzer = await asyncio.gather(
         _probe_freecad_worker(
             "freecad", configurations["freecad_url"][0], settings.internal_worker_key
         ),
@@ -469,13 +328,6 @@ async def get_cad_worker_status(
         ),
     )
     return CadWorkerStatusResponse(
-        autocad=autocad.model_copy(
-            update={"configuration_source": configurations["autocad_url"][1]}
-        ),
-        inventor=inventor.model_copy(
-            update={"configuration_source": configurations["inventor_url"][1]}
-        ),
-        nx=nx.model_copy(update={"configuration_source": configurations["nx_url"][1]}),
         freecad=freecad.model_copy(
             update={"configuration_source": configurations["freecad_url"][1]}
         ),
@@ -493,9 +345,6 @@ def update_cad_worker_settings(
     actor = user_for_principal(db, principal)
     values = {}
     for field, label in (
-        ("autocad_url", "AutoCAD worker URL"),
-        ("inventor_url", "Inventor worker URL"),
-        ("nx_url", "Siemens NX worker URL"),
         ("freecad_url", "FreeCAD worker URL"),
         ("freecad_analyzer_url", "FreeCAD analyzer URL"),
     ):
@@ -980,7 +829,7 @@ def preview_item_deletion(item_id: uuid.UUID, db: Db, principal: Actor) -> ItemP
     if item is None:
         raise HTTPException(status_code=404, detail="Item not found")
     preview = preview_item_purge(db, item_id)
-    cascade = legacy_cascade_plan(db, item_id)
+    cascade = cascade_plan(db, item_id)
     candidate_numbers = {
         item.part_number for item in [*cascade.deletable_items, *cascade.protected_items]
     }
@@ -1098,7 +947,7 @@ def permanently_delete_item(
     if payload.item_number != item.part_number:
         raise HTTPException(status_code=422, detail="Item number confirmation does not match")
     preview = preview_item_purge(db, item_id)
-    cascade = legacy_cascade_plan(db, item_id)
+    cascade = cascade_plan(db, item_id)
     candidate_numbers = {
         item.part_number for item in [*cascade.deletable_items, *cascade.protected_items]
     }

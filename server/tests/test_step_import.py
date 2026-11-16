@@ -20,56 +20,56 @@ client = TestClient(app)
 
 
 def test_licensed_step_output_keeps_converter_compatible_extension() -> None:
-    assert processing.licensed_output_filename("step", "inventor", 2) == "model.step"
-    assert processing.licensed_output_filename("part-metadata", "inventor", 1) == (
+    assert processing.external_output_filename("step", "example_cad", 2) == "model.step"
+    assert processing.external_output_filename("part-metadata", "example_cad", 1) == (
         "part-metadata.json"
     )
-    assert processing.licensed_output_filename("xref-dependencies", "autocad", 3) == (
+    assert processing.external_output_filename("xref-dependencies", "example_cad", 3) == (
         "xref-dependencies.json"
     )
 
 
-def test_inventor_assembly_upload_preserves_dependency_paths(tmp_path: Path) -> None:
+def test_example_cad_assembly_upload_preserves_dependency_paths(tmp_path: Path) -> None:
     stored = tmp_path / "stored"
     stored.mkdir()
-    (stored / "root").write_bytes(b"iam")
-    (stored / "member").write_bytes(b"ipt")
+    (stored / "root").write_bytes(b"assembly")
+    (stored / "member").write_bytes(b"part")
     root = SimpleNamespace(
-        id=uuid.uuid4(), storage_key="root", original_filename="Frame.iam",
-        reference_name="Frame/Frame.iam", sha256="root-hash",
+        id=uuid.uuid4(), storage_key="root", original_filename="Frame.assembly",
+        reference_name="Frame/Frame.assembly", sha256="root-hash",
     )
     member = SimpleNamespace(
-        id=uuid.uuid4(), storage_key="member", original_filename="Member.ipt",
-        reference_name="Frame/Members/Member.ipt", sha256="member-hash",
+        id=uuid.uuid4(), storage_key="member", original_filename="Member.part",
+        reference_name="Frame/Members/Member.part", sha256="member-hash",
     )
     storage = SimpleNamespace(path_for=lambda key: stored / key)
 
-    package, root_path = processing.prepare_licensed_source_upload(
-        storage, root, [root, member], tmp_path, "inventor"
+    package, root_path = processing.prepare_external_source_upload(
+        storage, root, [root, member], tmp_path, "example_cad"
     )
 
-    assert root_path == "Frame/Frame.iam"
+    assert root_path == "Frame/Frame.assembly"
     with zipfile.ZipFile(package) as archive:
-        assert archive.read("Frame/Frame.iam") == b"iam"
-        assert archive.read("Frame/Members/Member.ipt") == b"ipt"
+        assert archive.read("Frame/Frame.assembly") == b"assembly"
+        assert archive.read("Frame/Members/Member.part") == b"part"
 
 
 def test_worker_model_preview_contract_rejects_broken_navigation() -> None:
     valid = {
         "schemaVersion": 1,
-        "rootOccurrenceId": "autocad-root",
+        "rootOccurrenceId": "example_cad-root",
         "items": [
             {
-                "occurrenceId": "autocad-root",
-                "partId": "autocad-root",
-                "name": "Assembly.dwg",
+                "occurrenceId": "example_cad-root",
+                "partId": "example_cad-root",
+                "name": "Assembly.sheet",
                 "parentOccurrenceId": None,
             },
             {
                 "occurrenceId": "model/10",
                 "partId": "definition-A",
                 "name": "Bracket",
-                "parentOccurrenceId": "autocad-root",
+                "parentOccurrenceId": "example_cad-root",
                 "renderOccurrenceIds": ["model/10/2A", "model/10/2B"],
             },
         ],

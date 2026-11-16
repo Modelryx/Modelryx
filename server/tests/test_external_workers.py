@@ -670,7 +670,7 @@ def test_external_worker_dispatch_validates_and_publishes(
         "documentKinds": ["assembly"] if package else ["part"],
     }
     metadata = (
-        Path(__file__).parent / "fixtures/nx/simple-assembly.part-metadata.json"
+        Path(__file__).parent / "fixtures/external-worker/assembly.part-metadata.json"
     ).read_bytes()
     preview = json.dumps(
         {

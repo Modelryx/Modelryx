@@ -246,10 +246,10 @@ export function OperationsPanel({
           </div>
         </section>
         <ExternalWorkers onChanged={refreshExternalStatuses} />
-        <section className="maintenance-card" aria-labelledby="licensed-cad-servers-title">
+        <section className="maintenance-card" aria-labelledby="cad-servers-title">
           <div className="maintenance-card-heading">
             <div>
-              <h3 id="licensed-cad-servers-title">CAD server settings</h3>
+              <h3 id="cad-servers-title">CAD server settings</h3>
               <p>
                 Configure FreeCAD worker and preprocessor URLs. Leave the worker URL empty to use
                 the embedded worker, or leave the preprocessor URL empty to disable server-side

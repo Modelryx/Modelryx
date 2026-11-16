@@ -49,8 +49,8 @@ def test_accepts_part_metadata_v1() -> None:
 
 def test_accepts_optional_metadata_quality_and_rejects_invalid_quality() -> None:
     metadata = valid_metadata()
-    metadata["source"]["system"] = "siemens_nx"
-    metadata["source"]["nxopen_version"] = "2506.0.0.0"
+    metadata["source"]["system"] = "example_cad"
+    metadata["source"]["system_version"] = "2506.0.0.0"
     metadata["quality"]["metadata"] = "partial"
     assert validate_part_metadata(metadata) is metadata
     metadata["quality"]["physical"] = "complete"
@@ -61,9 +61,9 @@ def test_accepts_optional_metadata_quality_and_rejects_invalid_quality() -> None
         validate_part_metadata(metadata)
 
 
-def test_accepts_nx_assembly_occurrences_and_groups() -> None:
+def test_accepts_external_assembly_occurrences_and_groups() -> None:
     metadata = valid_metadata()
-    metadata["source"]["system"] = "siemens_nx"
+    metadata["source"]["system"] = "example_cad"
     metadata["identity"]["kind"] = "assembly"
     component = {
         "occurrence_id": "occurrence:1",
@@ -103,7 +103,7 @@ def test_accepts_nx_assembly_occurrences_and_groups() -> None:
         validate_part_metadata(metadata)
 
 
-@pytest.mark.parametrize("source_system", ["freecad", "inventor", "autocad"])
+@pytest.mark.parametrize("source_system", ["freecad", "example_cad", "example_cad"])
 def test_enrichment_exposes_searchable_extraction_evidence_for_every_cad_path(
     source_system: str,
 ) -> None:

@@ -1,4 +1,4 @@
-export type DisplayProfileName = 'cad' | 'nx-like' | 'studio';
+export type DisplayProfileName = 'cad' | 'technical' | 'studio';
 export type RenderMode = 'shaded' | 'shaded-edges' | 'wireframe';
 export type StandardView = 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom' | 'iso';
 export type MeasurementUnit = 'mm' | 'cm' | 'm' | 'in';

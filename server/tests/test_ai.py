@@ -368,7 +368,7 @@ def test_search_metadata_promotes_cross_cad_properties_and_derived_facts() -> No
 
 
 def test_ai_chunks_cover_search_operations_across_cad_systems() -> None:
-    for cad_system in ("FreeCAD", "Inventor", "AutoCAD"):
+    for cad_system in ("FreeCAD", "Example CAD", "Other CAD"):
         item, revision = revision_with_bom()
         revision.cad_system = cad_system
         metadata = revision.derived_metadata_json["partMetadata"]

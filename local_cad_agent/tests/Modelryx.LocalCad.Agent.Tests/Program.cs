@@ -1,128 +1,92 @@
 using System.IO.Compression;
-using System.Security.Cryptography;
 using System.Text.Json;
 using Modelryx.LocalCad.Agent;
 
 static void Assert(bool condition, string message)
 { if (!condition) throw new InvalidDataException("Assertion failed: " + message); }
 
-// The test apphost also acts as a disposable CLI fixture. Actual NX is covered separately.
-if (args.Length > 0)
+// The test executable doubles as an independently installed preprocessor.
+if (args.Length == 2)
 {
-    var validate = args[0] == "--validate-package";
-    var package = args[1];
-    var output = Path.GetDirectoryName(package)!;
-    Assert(Environment.GetEnvironmentVariable("UGII_BASE_DIR") == Environment.GetEnvironmentVariable("MODELRYX_TEST_NX_DIRECTORY"),
-        "NX installation is scoped to the child");
-    Assert(Environment.GetEnvironmentVariable("MODELRYX_NXOPEN_DIR") ==
-        Path.Combine(Environment.GetEnvironmentVariable("UGII_BASE_DIR")!, "NXBIN", "managed_core"), "managed_core configured");
-    Assert(Environment.GetEnvironmentVariable("TEMP") == Path.Combine(output, "nx-diagnostics"), "diagnostics are isolated");
-    File.AppendAllText(Path.Combine(output, "invocations.log"), validate ? "validate\n" : "discover\n");
-    if (!validate)
+    var output = args[1];
+    var package = Path.Combine(output, "cad-package.zip");
+    using (var zip = ZipFile.Open(package, ZipArchiveMode.Create))
+        zip.CreateEntryFromFile(args[0], "root.example");
+    Console.WriteLine(JsonSerializer.Serialize(new
     {
-        Assert(args.Contains("--discover-references"), "agent requests native discovery");
-        using var zip = ZipFile.Open(package, ZipArchiveMode.Create);
-        zip.CreateEntryFromFile(args[0], "root.prt");
-        using var writer = new StreamWriter(zip.CreateEntry("child.prt").Open());
-        writer.Write("child CAD fixture");
-        Console.WriteLine("{}");
-    }
-    else
-    {
-        Console.WriteLine(JsonSerializer.Serialize(new
-        {
-            contract_version = "1.0", analyzer_version = "modelryx-nx-dependencies-1", document_type = "ASSEMBLY",
-            root_file = "root.prt", root_logical_path = "root.prt", package,
-            files = new[] { new { logical_path = "root.prt", is_root = true, document_type = "ASSEMBLY" },
-                new { logical_path = "child.prt", is_root = false, document_type = "PART" } },
-            references = new[] { new { parent_logical_path = "root.prt", child_logical_path = "child.prt", instance_name = "child:1" } },
-            missing_references = Array.Empty<object>(),
-            isolated_reopen_validated = Environment.GetEnvironmentVariable("MODELRYX_TEST_NX_INVALID") != "1"
-        }));
-    }
+        contract_version = "1.0", analyzer_version = "example-1", document_type = "PART",
+        root_file = "root.example", root_logical_path = "root.example", package,
+        files = new[] { new { logical_path = "root.example", is_root = true, document_type = "PART" } },
+        references = Array.Empty<object>(), missing_references = Array.Empty<object>(),
+        isolated_reopen_validated = true,
+    }));
     return;
 }
 
-// CAD-system filters retain the selected worker even when native extensions overlap.
-var inventorFormat = new WorkerFormat("inventor", "Inventor", "Autodesk Inventor", "1.0",
-    [".ipt", ".iam", ".idw", ".ipn", ".dwg", ".dxf"]);
-var autocadFormat = new WorkerFormat("autocad", "AutoCAD", "Autodesk AutoCAD", "1.0", [".dwg", ".dxf"]);
-var cadFilters = NativeFilePicker.BuildFilters([autocadFormat, inventorFormat]);
-Assert(cadFilters.Select(filter => filter.Name).SequenceEqual(new[] { "FreeCAD", "Inventor", "AutoCAD" }),
-    "only CAD-system file types are offered in the expected order");
-Assert(cadFilters[0].Label == "FreeCAD (*.FCStd)", "FreeCAD file type label");
-Assert(NativeFilePicker.SelectFile("drawing.DWG", cadFilters[1]).Worker?.Id == "inventor",
-    "Inventor filter routes shared DWG to Inventor");
-Assert(NativeFilePicker.SelectFile("drawing.dwg", cadFilters[2]).Worker?.Id == "autocad",
-    "AutoCAD filter routes shared DWG to AutoCAD");
-Assert(NativeFilePicker.SelectFile("part.FCStd", cadFilters[0]).Worker is null,
-    "FreeCAD retains built-in preprocessing without external registration");
-var freecadFormat = new WorkerFormat("external-freecad", "FreeCAD", "FreeCAD", "1.0", [".fcstd"]);
-var registeredFilters = NativeFilePicker.BuildFilters([freecadFormat, inventorFormat, autocadFormat]);
-Assert(registeredFilters.Count == 3 && NativeFilePicker.SelectFile("part.FCStd", registeredFilters[0]).Worker?.Id == "external-freecad",
-    "registered FreeCAD uses one filter and the external preprocessor");
+var assemblyFormat = new WorkerFormat("assembly", "Assembly CAD", "Assembly worker", "1.0",
+    [".assembly", ".part", ".drawing"]);
+var drawingFormat = new WorkerFormat("drawing", "Drawing CAD", "Drawing worker", "1.0", [".drawing"]);
+var filters = NativeFilePicker.BuildFilters([drawingFormat, assemblyFormat]);
+Assert(filters.Select(filter => filter.Name).SequenceEqual(new[] { "FreeCAD", "Assembly CAD", "Drawing CAD" }),
+    "built-in format first, registered systems sorted by name");
+Assert(filters[0].Label == "FreeCAD (*.FCStd)", "FreeCAD label");
+Assert(NativeFilePicker.SelectFile("shared.DRAWING", filters[1]).Worker?.Id == "assembly",
+    "selected system determines shared-extension routing");
+Assert(NativeFilePicker.SelectFile("shared.drawing", filters[2]).Worker?.Id == "drawing",
+    "shared extension preserves the selected worker");
+Assert(NativeFilePicker.SelectFile("part.FCStd", filters[0]).Worker is null,
+    "built-in FreeCAD preprocessing remains available");
+var freecad = new WorkerFormat("external-freecad", "FreeCAD", "FreeCAD", "1.0", [".fcstd"]);
+var registered = NativeFilePicker.BuildFilters([freecad, assemblyFormat, drawingFormat]);
+Assert(registered.Count == 3 && NativeFilePicker.SelectFile("part.FCStd", registered[0]).Worker?.Id == "external-freecad",
+    "registered FreeCAD uses the external preprocessor");
 try
 {
-    NativeFilePicker.SelectFile("part.ipt", cadFilters[2]);
-    throw new Exception("AutoCAD selection must reject Inventor-only extension.");
+    NativeFilePicker.SelectFile("model.part", filters[2]);
+    throw new Exception("Unsupported extension was accepted.");
 }
-catch (InvalidOperationException error) when (error.Message.Contains("AutoCAD file type")) { }
-var duplicateFilters = NativeFilePicker.BuildFilters([autocadFormat, autocadFormat with { Id = "other-autocad" }]);
+catch (InvalidOperationException error) when (error.Message.Contains("Drawing CAD file type")) { }
+var duplicates = NativeFilePicker.BuildFilters([drawingFormat, drawingFormat with { Id = "other" }]);
 try
 {
-    NativeFilePicker.SelectFile("drawing.dwg", duplicateFilters.Single(filter => filter.CadSystem == "autocad"));
-    throw new Exception("Duplicate registrations within one CAD system must remain ambiguous.");
+    NativeFilePicker.SelectFile("shared.drawing", duplicates.Single(filter => filter.CadSystem == "drawingcad"));
+    throw new Exception("Ambiguous registrations were accepted.");
 }
-catch (InvalidOperationException error) when (error.Message.Contains("More than one registered AutoCAD")) { }
-Console.WriteLine("All CAD file picker routing tests passed.");
+catch (InvalidOperationException error) when (error.Message.Contains("More than one registered")) { }
+try
+{
+    await CadAnalyzer.AnalyzeAsync("unregistered.example", Path.GetTempPath(), CancellationToken.None);
+    throw new Exception("Unregistered format was accepted.");
+}
+catch (NotSupportedException) { }
 
-if (!OperatingSystem.IsWindows())
-{
-    try { await CadAnalyzer.AnalyzeAsync("root.prt", Path.GetTempPath(), CancellationToken.None); }
-    catch (PlatformNotSupportedException) { Console.WriteLine("PASS: NX reports unsupported platform."); return; }
-    throw new Exception("NX should require Windows.");
-}
-var directory = Path.Combine(Path.GetTempPath(), "modelryx-local-nx-tests-" + Guid.NewGuid().ToString("N"));
+var directory = Path.Combine(Path.GetTempPath(), "modelryx-agent-tests-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(directory);
-var names = new[] { "MODELRYX_NX_PREPROCESSOR_EXE", "MODELRYX_NX_DIRECTORY", "MODELRYX_TEST_NX_DIRECTORY", "MODELRYX_TEST_NX_INVALID" };
-var saved = names.ToDictionary(name => name, Environment.GetEnvironmentVariable);
-var originalNxBase = Environment.GetEnvironmentVariable("UGII_BASE_DIR");
+var settingsPath = Path.Combine(AppContext.BaseDirectory, "settings.json");
+var previousSettings = File.Exists(settingsPath) ? File.ReadAllBytes(settingsPath) : null;
 try
 {
-    var nx = Path.Combine(directory, "fake-NX2506");
-    foreach (var relative in new[] { "NXBIN/managed_core/NXOpen.dll", "NXBIN/managed_core/NXOpen.UF.dll", "NXBIN/libufun.dll" })
+    var executable = Path.Combine(AppContext.BaseDirectory,
+        OperatingSystem.IsWindows() ? "Modelryx.LocalCad.Agent.Tests.exe" : "Modelryx.LocalCad.Agent.Tests");
+    File.WriteAllText(settingsPath, JsonSerializer.Serialize(new
     {
-        var path = Path.Combine(nx, relative); Directory.CreateDirectory(Path.GetDirectoryName(path)!); File.WriteAllText(path, "runtime marker");
-    }
-    Environment.SetEnvironmentVariable("MODELRYX_NX_DIRECTORY", nx);
-    Environment.SetEnvironmentVariable("MODELRYX_TEST_NX_DIRECTORY", nx);
-    Environment.SetEnvironmentVariable("MODELRYX_NX_PREPROCESSOR_EXE", Path.Combine(AppContext.BaseDirectory, "Modelryx.LocalCad.Agent.Tests.exe"));
-    var configuration = AgentConfiguration.Load();
-    Assert(configuration.RequireNxDirectory() == nx, "configured NX installation detected");
-    var root = Path.Combine(directory, "root.prt"); File.WriteAllText(root, "source CAD fixture");
-    var hash = SHA256.HashData(File.ReadAllBytes(root));
-    var output = Path.Combine(directory, "success"); Directory.CreateDirectory(output);
-    var result = await CadAnalyzer.AnalyzeAsync(root, output, CancellationToken.None);
-    Assert(result.Report.DocumentType == "ASSEMBLY" && result.Report.IsolatedReopenValidated && result.Report.Files.Count == 2,
-        "NX neutral report integrates with the agent");
-    Assert(result.Report.References!.Single().InstanceName == "child:1", "occurrence reference retained");
-    Assert(result.Report.Files[1].DocumentType == "PART", "native child modeling files are not processing-only support");
-    Assert(File.ReadAllLines(Path.Combine(output, "invocations.log")).SequenceEqual(new[] { "discover", "validate" }),
-        "agent uses two independent native processes");
-    Assert(SHA256.HashData(File.ReadAllBytes(root)).SequenceEqual(hash), "source untouched");
-    Assert(Environment.GetEnvironmentVariable("UGII_BASE_DIR") == originalNxBase, "parent NX environment unchanged");
-    Environment.SetEnvironmentVariable("MODELRYX_TEST_NX_INVALID", "1");
-    var invalidOutput = Path.Combine(directory, "invalid"); Directory.CreateDirectory(invalidOutput);
-    try
-    {
-        await CadAnalyzer.AnalyzeAsync(root, invalidOutput, CancellationToken.None);
-        throw new Exception("Unvalidated NX package should fail.");
-    }
-    catch (InvalidDataException error) when (error.Message.Contains("reopens in isolation")) { }
-    Console.WriteLine("All local CAD agent NX integration tests passed.");
+        ExternalPreprocessors = new[] { new { Id = "example", CadSystem = "Example CAD", Version = "1.0",
+            Executable = executable, Extensions = new[] { ".example" } } },
+    }));
+    var root = Path.Combine(directory, "root.example");
+    File.WriteAllText(root, "native source");
+    var output = Path.Combine(directory, "output");
+    Directory.CreateDirectory(output);
+    var worker = new WorkerFormat("example", "Example CAD", "Example worker", "1.0", [".example"]);
+    var result = await CadAnalyzer.AnalyzeAsync(root, output, CancellationToken.None, worker);
+    Assert(result.Report.IsolatedReopenValidated && result.Report.Files.Count == 1,
+        "registered executable returns a validated neutral package");
+    Assert(File.ReadAllText(root) == "native source", "source remains unchanged");
 }
 finally
 {
-    foreach (var (name, value) in saved) Environment.SetEnvironmentVariable(name, value);
+    if (previousSettings is null) File.Delete(settingsPath);
+    else File.WriteAllBytes(settingsPath, previousSettings);
     Directory.Delete(directory, true);
 }
+Console.WriteLine("All local CAD agent contract tests passed.");

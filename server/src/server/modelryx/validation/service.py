@@ -32,13 +32,6 @@ SOURCE = {"validator": "phase6_staging_validator", "version": POLICY_VERSION}
 SUPPORTED_CAD_EXTENSIONS = frozenset(
     {
         ".fcstd",
-        ".dwg",
-        ".dxf",
-        ".ipt",
-        ".iam",
-        ".idw",
-        ".ipn",
-        ".ide",
         ".step",
         ".stp",
         ".iges",
@@ -299,6 +292,14 @@ class ValidationService:
             for decision in proposal.get("identity_decisions", [])
             if decision.get("decision") == "USE_EXISTING"
         }
+        from modelryx.services.external_workers import registered_workers
+
+        supported_extensions = SUPPORTED_CAD_EXTENSIONS | {
+            extension
+            for worker in registered_workers(self.db)
+            if worker["enabled"]
+            for extension in worker["capabilities"]["sourceExtensions"]
+        }
         for item in files:
             location = {"staging_file_id": str(item.id), "file_name": item.filename}
             if item.byte_size == 0:
@@ -334,7 +335,7 @@ class ValidationService:
             extension = (
                 "." + item.filename.rsplit(".", 1)[-1].lower() if "." in item.filename else ""
             )
-            if extension not in SUPPORTED_CAD_EXTENSIONS:
+            if extension not in supported_extensions:
                 findings.append(
                     FindingInput(
                         code="FILE_UNSUPPORTED",

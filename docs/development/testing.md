@@ -76,7 +76,7 @@ dotnet local_cad_agent/tests/Modelryx.LocalCad.Agent.Tests/bin/Release/net8.0/Mo
 ```
 
 These check CAD-system routing and package/native integration seams. Real vendor SDK and licensing
-checks remain separate. Inventor/AutoCAD workers maintain their own harnesses outside this repository.
+checks remain separate.
 
 ## External qualification
 
@@ -88,3 +88,18 @@ recovery, native accuracy, source immutability, nested/repeated references and m
 Useful server regressions include `test_external_workers.py`, `test_freecad_worker_routing.py`,
 `test_admin_cad_workers.py` and `test_operations.py`. A working worker API does not prove the server
 accepts every advertised optional output role.
+
+
+## Neutral native-upload contract
+
+`npm --prefix front-end run test:upload` checks upload proposals using fictional CAD formats.
+It verifies managed Item identities, occurrence names, drawing Artifacts, and package support
+files without a native SDK or browser runtime. The local agent has its own SDK-free checks:
+
+```powershell
+dotnet run --project local_cad_agent/tests/Modelryx.LocalCad.Agent.Tests
+./local_cad_agent/tests/Test-WindowsInstaller.ps1
+```
+
+External adapter implementations and native application qualification belong in the worker's
+repository. The platform tests the shared protocol and artifact publication boundary.

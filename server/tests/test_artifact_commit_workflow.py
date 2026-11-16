@@ -61,12 +61,14 @@ def item_exists(item_number: str) -> bool:
         return db.scalar(select(Item.id).where(Item.part_number == item_number)) is not None
 
 
-def test_inventor_part_commit_attaches_related_drawings_without_creating_items() -> None:
-    item_number = f"INVENTOR-DRAWING-{uuid.uuid4().hex}"
+def test_external_part_commit_attaches_related_drawings_without_creating_items(
+    example_worker,
+) -> None:
+    item_number = f"EXAMPLE_CAD-DRAWING-{uuid.uuid4().hex}"
     files = {
-        "Oil Pan.ipt": b"inventor-part",
-        "Oil Pan.idw": b"inventor-idw",
-        "Oil Pan.dwg": b"inventor-dwg",
+        "Oil Pan.part": b"example_cad-part",
+        "Oil Pan.drawing": b"example_cad-idw",
+        "Oil Pan.sheet": b"example_cad-dwg",
     }
     created = client.post(
         "/api/v1/staging",
@@ -105,7 +107,9 @@ def test_inventor_part_commit_attaches_related_drawings_without_creating_items()
             "operation": "CREATE_ITEM",
             "item": {"item_number": item_number, "name": "Oil Pan", "item_type": "PART"},
             "revision": {
-                "revision_code": "A", "cad_system": "Inventor", "native_format": "IPT"
+                "revision_code": "A",
+                "cad_system": "Example CAD",
+                "native_format": "PART",
             },
             "artifacts": [
                 {
@@ -115,11 +119,13 @@ def test_inventor_part_commit_attaches_related_drawings_without_creating_items()
                     "classification": "AUTHORITATIVE",
                     "relation_type": "SPECIFICATION",
                     "is_primary": True,
-                    "files": [{
-                        "staged_file_id": staged["Oil Pan.ipt"]["id"],
-                        "reference_name": "Oil Pan.ipt",
-                        "role": "PRIMARY",
-                    }],
+                    "files": [
+                        {
+                            "staged_file_id": staged["Oil Pan.part"]["id"],
+                            "reference_name": "Oil Pan.part",
+                            "role": "PRIMARY",
+                        }
+                    ],
                 },
                 *[
                     {
@@ -129,18 +135,20 @@ def test_inventor_part_commit_attaches_related_drawings_without_creating_items()
                         "classification": "AUTHORITATIVE",
                         "relation_type": "DRAWING",
                         "is_primary": False,
-                        "files": [{
-                            "staged_file_id": staged[path]["id"],
-                            "reference_name": path,
-                            "role": "PRIMARY",
-                        }],
+                        "files": [
+                            {
+                                "staged_file_id": staged[path]["id"],
+                                "reference_name": path,
+                                "role": "PRIMARY",
+                            }
+                        ],
                     }
-                    for path in ("Oil Pan.idw", "Oil Pan.dwg")
+                    for path in ("Oil Pan.drawing", "Oil Pan.sheet")
                 ],
             ],
-            "identity_decisions": [{
-                "staged_file_id": staged["Oil Pan.ipt"]["id"], "decision": "CREATE_NEW"
-            }],
+            "identity_decisions": [
+                {"staged_file_id": staged["Oil Pan.part"]["id"], "decision": "CREATE_NEW"}
+            ],
             "bom": [],
         },
     )
@@ -166,9 +174,7 @@ def test_inventor_part_commit_attaches_related_drawings_without_creating_items()
     committed_result = committed.json()
     listed = client.get("/api/v1/staging?state=all&limit=100", headers=AUTH)
     assert listed.status_code == 200, listed.text
-    stage_summary = next(
-        row for row in listed.json()["items"] if row["id"] == staging["id"]
-    )
+    stage_summary = next(row for row in listed.json()["items"] if row["id"] == staging["id"])
     assert set(stage_summary["created_revision_ids"]) == set(
         committed_result["created_revision_ids"]
     )
@@ -176,70 +182,23 @@ def test_inventor_part_commit_attaches_related_drawings_without_creating_items()
     with SessionLocal() as db:
         item = db.scalar(select(Item).where(Item.part_number == item_number))
         assert item is not None
-        assert db.scalar(select(func.count()).select_from(Item).where(
-            Item.part_number.like(f"{item_number}%")
-        )) == 1
-        artifact_types = list(db.scalars(
-            select(Artifact.artifact_type)
-            .join(RevisionArtifactRelation, RevisionArtifactRelation.artifact_id == Artifact.id)
-            .where(RevisionArtifactRelation.revision_id == committed.json()["revision_id"])
-        ))
+        assert (
+            db.scalar(
+                select(func.count())
+                .select_from(Item)
+                .where(Item.part_number.like(f"{item_number}%"))
+            )
+            == 1
+        )
+        artifact_types = list(
+            db.scalars(
+                select(Artifact.artifact_type)
+                .join(RevisionArtifactRelation, RevisionArtifactRelation.artifact_id == Artifact.id)
+                .where(RevisionArtifactRelation.revision_id == committed.json()["revision_id"])
+            )
+        )
         assert artifact_types.count("CAD_MODEL") == 1
         assert artifact_types.count("DRAWING") == 2
-
-
-def test_inventor_project_file_is_rejected_from_commit_proposal() -> None:
-    files = {"Oil Pan.ipt": b"part", "external1/Default.ipj": b"project"}
-    created = client.post(
-        "/api/v1/staging",
-        headers=AUTH,
-        json={
-            "client_staging_id": str(uuid.uuid4()),
-            "files": [{
-                "logical_path": path,
-                "filename": path.rsplit("/", 1)[-1],
-                "mime_type": "application/octet-stream",
-                "byte_size": len(content),
-                "sha256": hashlib.sha256(content).hexdigest(),
-            } for path, content in files.items()],
-        },
-    )
-    assert created.status_code == 201, created.text
-    staging = created.json()
-    staged = {row["logical_path"]: row for row in staging["files"]}
-    proposed = client.put(
-        f"/api/v1/staging/{staging['id']}/proposal",
-        headers=AUTH,
-        json={
-            "expected_snapshot_version": staging["snapshot_version"],
-            "operation": "CREATE_ITEM",
-            "item": {
-                "item_number": f"IPJ-{uuid.uuid4().hex}",
-                "name": "Oil Pan",
-                "item_type": "PART",
-            },
-            "revision": {"revision_code": "A", "cad_system": "Inventor", "native_format": "IPT"},
-            "artifacts": [{
-                "client_artifact_id": str(uuid.uuid4()),
-                "artifact_type": "CAD_MODEL",
-                "name": "Oil Pan",
-                "classification": "AUTHORITATIVE",
-                "relation_type": "SPECIFICATION",
-                "is_primary": True,
-                "files": [{
-                    "staged_file_id": staged["Oil Pan.ipt"]["id"],
-                    "reference_name": "Oil Pan.ipt",
-                    "role": "PRIMARY",
-                }],
-            }],
-            "identity_decisions": [{
-                "staged_file_id": staged["Oil Pan.ipt"]["id"], "decision": "CREATE_NEW"
-            }],
-            "bom": [],
-        },
-    )
-    assert proposed.status_code == 422
-    assert "processing-only" in proposed.json()["detail"]
 
 
 def test_create_revision_uses_atomic_artifact_staging():
@@ -863,10 +822,22 @@ def test_atomic_assembly_commit_creates_components_and_reuses_duplicate_revision
                     "source_reference": "components/new.FCStd",
                     "reference_designator": "NewComponent001",
                     "transform": [
-                        1, 0, 0, 12,
-                        0, 1, 0, 34,
-                        0, 0, 1, 56,
-                        0, 0, 0, 1,
+                        1,
+                        0,
+                        0,
+                        12,
+                        0,
+                        1,
+                        0,
+                        34,
+                        0,
+                        0,
+                        1,
+                        56,
+                        0,
+                        0,
+                        0,
+                        1,
                     ],
                     "is_suppressed": True,
                     "is_visible": False,
@@ -1034,13 +1005,15 @@ def test_atomic_assembly_commit_creates_components_and_reuses_duplicate_revision
         )
 
 
-def test_nested_inventor_assembly_commit_preserves_bom_and_package_ownership() -> None:
+def test_nested_external_assembly_commit_preserves_bom_and_package_ownership(
+    example_worker,
+) -> None:
     suffix = uuid.uuid4().hex
     contents = {
-        "Suspension.iam": f"root-{suffix}".encode(),
-        "Components/front Upper Arm.iam": f"nested-{suffix}".encode(),
-        "Components/Front Upper Arm.ipt": f"arm-{suffix}".encode(),
-        "Components/Pillow Ball.ipt": f"ball-{suffix}".encode(),
+        "Suspension.assembly": f"root-{suffix}".encode(),
+        "Components/front Upper Arm.assembly": f"nested-{suffix}".encode(),
+        "Components/Front Upper Arm.part": f"arm-{suffix}".encode(),
+        "Components/Pillow Ball.part": f"ball-{suffix}".encode(),
     }
     created = client.post(
         "/api/v1/staging",
@@ -1071,9 +1044,9 @@ def test_nested_inventor_assembly_commit_preserves_bom_and_package_ownership() -
         )
         assert uploaded.status_code == 200, uploaded.text
 
-    root_path = "Suspension.iam"
-    nested_path = "Components/front Upper Arm.iam"
-    part_paths = ["Components/Front Upper Arm.ipt", "Components/Pillow Ball.ipt"]
+    root_path = "Suspension.assembly"
+    nested_path = "Components/front Upper Arm.assembly"
+    part_paths = ["Components/Front Upper Arm.part", "Components/Pillow Ball.part"]
     root_number = f"ASM-ROOT-{suffix}"
     nested_number = f"ASM-NESTED-{suffix}"
     part_numbers = [f"PRT-ARM-{suffix}", f"PRT-BALL-{suffix}"]
@@ -1090,8 +1063,8 @@ def test_nested_inventor_assembly_commit_preserves_bom_and_package_ownership() -
             },
             "revision": {
                 "revision_code": "A",
-                "cad_system": "Inventor",
-                "native_format": "iam",
+                "cad_system": "Example CAD",
+                "native_format": "assembly",
             },
             "artifacts": [
                 {
@@ -1160,8 +1133,8 @@ def test_nested_inventor_assembly_commit_preserves_bom_and_package_ownership() -
                     },
                     "revision": {
                         "revision_code": "A",
-                        "cad_system": "Inventor",
-                        "native_format": "iam",
+                        "cad_system": "Example CAD",
+                        "native_format": "assembly",
                     },
                 },
                 *[
@@ -1175,8 +1148,8 @@ def test_nested_inventor_assembly_commit_preserves_bom_and_package_ownership() -
                         },
                         "revision": {
                             "revision_code": "A",
-                            "cad_system": "Inventor",
-                            "native_format": "ipt",
+                            "cad_system": "Example CAD",
+                            "native_format": "part",
                         },
                     }
                     for path, number in zip(part_paths, part_numbers, strict=True)
@@ -1239,8 +1212,8 @@ def test_nested_inventor_assembly_commit_preserves_bom_and_package_ownership() -
         )
         assert [line.child_revision_id for line in root_lines] == [nested_item.current_revision_id]
         assert {line.occurrence_key for line in nested_lines} == {
-            "Front Upper Arm.ipt:1",
-            "Pillow Ball.ipt:1",
+            "Front Upper Arm.part:1",
+            "Pillow Ball.part:1",
         }
         nested_files = set(
             db.scalars(
@@ -1250,7 +1223,7 @@ def test_nested_inventor_assembly_commit_preserves_bom_and_package_ownership() -
             )
         )
         assert nested_files == {
-            "front Upper Arm.iam",
-            "Front Upper Arm.ipt",
-            "Pillow Ball.ipt",
+            "front Upper Arm.assembly",
+            "Front Upper Arm.part",
+            "Pillow Ball.part",
         }

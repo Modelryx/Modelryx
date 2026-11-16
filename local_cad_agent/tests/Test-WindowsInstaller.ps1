@@ -38,13 +38,14 @@ function New-ItemProperty {
 }
 
 try {
-    foreach ($case in @('source-nx', 'source-no-nx', 'release-no-nx', 'release-nx')) {
+    foreach ($case in @('source', 'release')) {
         $state.Calls.Clear(); $state.RegistryCalls = 0
         $directory = Join-Path $testRoot $case
         $agentSource = Join-Path $directory 'source/local_cad_agent'
         [IO.Directory]::CreateDirectory($agentSource) | Out-Null
         [IO.File]::Copy($originalInstaller, (Join-Path $agentSource 'install-windows.ps1'))
-        if ($case.StartsWith('source-')) {
+        Copy-Item -LiteralPath (Join-Path (Split-Path $originalInstaller) 'register-preprocessor.ps1') -Destination $agentSource
+        if ($case -eq 'source') {
             foreach ($relative in @(
                 'preprocessor/modelryx_freecad_preprocessor.py',
                 'shared/modelryx_freecad_shared.py',
@@ -58,18 +59,7 @@ try {
                 Copy-Item -LiteralPath $source.FullName -Destination (Join-Path $directory "source/workers/freecad/converter/$($source.Name)") -Force
             }
         }
-        $nxProject = Join-Path $directory 'source/nx_worker/src/Modelryx.NX.Preprocessor/Modelryx.NX.Preprocessor.csproj'
-        [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($nxProject)) | Out-Null
-        [IO.File]::WriteAllText($nxProject, '<Project />')
-        $nx = Join-Path $directory 'NX2506'
-        if ($case -in @('source-nx', 'release-nx')) {
-            foreach ($relative in @('NXBIN/managed_core/NXOpen.dll', 'NXBIN/managed_core/NXOpen.UF.dll', 'NXBIN/libufun.dll')) {
-                $path = Join-Path $nx $relative
-                [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($path)) | Out-Null
-                [IO.File]::WriteAllText($path, 'runtime marker')
-            }
-        }
-        if ($case.StartsWith('release-')) {
+        if ($case -eq 'release') {
             $release = Join-Path $agentSource 'artifacts/win-x64'
             [IO.Directory]::CreateDirectory($release) | Out-Null
             [IO.File]::WriteAllText((Join-Path $release 'Modelryx.LocalCad.Agent.exe'), 'prebuilt marker')
@@ -80,14 +70,9 @@ try {
             }
             [IO.File]::WriteAllText((Join-Path $prebuiltFreeCad 'modelryx_freecad_preprocessor.py'), 'preprocessor marker')
             [IO.File]::WriteAllText((Join-Path $prebuiltFreeCad 'modelryx_freecad_shared.py'), 'shared marker')
-            if ($case -eq 'release-nx') {
-                $prebuiltNx = Join-Path $release 'preprocessors/nx'
-                [IO.Directory]::CreateDirectory($prebuiltNx) | Out-Null
-                [IO.File]::WriteAllText((Join-Path $prebuiltNx 'Modelryx.NX.Preprocessor.exe'), 'prebuilt marker')
-            }
         }
         $install = Join-Path $directory 'install'
-        & (Join-Path $agentSource 'install-windows.ps1') -InstallDirectory $install -NxDirectory $nx
+        & (Join-Path $agentSource 'install-windows.ps1') -InstallDirectory $install
         foreach ($source in $converterFiles) {
             $installed = Join-Path $install "app/preprocessors/freecad/$($source.Name)"
             if (-not (Test-Path -LiteralPath $installed) -or
@@ -100,31 +85,21 @@ try {
             -not (Test-Path -LiteralPath $settings.FreeCadConverterScript)) {
             throw "FreeCAD paths are missing from settings for $case."
         }
-        $expectedBuilds = if ($case -eq 'source-nx') { 2 } elseif ($case -eq 'source-no-nx') { 1 } else { 0 }
+        $expectedBuilds = if ($case -eq 'source') { 1 } else { 0 }
         if ($state.Calls.Count -ne $expectedBuilds) { throw "Unexpected publish count for $case" }
-        $expectsNx = $case -in @('source-nx', 'release-nx')
-        if ($expectsNx -ne (-not [string]::IsNullOrWhiteSpace($settings.NxPreprocessorExecutable))) {
-            throw "Unexpected NX availability for $case"
-        }
-        if ($expectsNx -and -not (Test-Path -LiteralPath $settings.NxPreprocessorExecutable)) { throw 'Configured NX executable is missing.' }
-        if ($case -eq 'source-nx') {
-            if ($state.Calls[1].Project -ne 'Modelryx.NX.Preprocessor' -or
-                $state.Calls[1].Arguments -notcontains '--self-contained' -or
-                $state.Calls[1].Arguments -notcontains "-p:NxOpenDirectory=$(Join-Path $nx 'NXBIN\managed_core')") {
-                throw 'The default source install did not publish the native NX preprocessor.'
-            }
-        }
         if ($state.RegistryCalls -eq 0) { throw 'Protocol registration was not exercised.' }
-        if ($case -eq 'source-nx') {
+        if ($case -eq 'source') {
+            $settings.ExternalPreprocessors = @([pscustomobject]@{ Id = 'example'; Executable = 'example.exe' })
             $settings.AllowedOrigins = @('http://192.168.50.53:5173')
             $settings | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $install 'app/settings.json') -Encoding UTF8
-            & (Join-Path $agentSource 'install-windows.ps1') -InstallDirectory $install -NxDirectory $nx
+            & (Join-Path $agentSource 'install-windows.ps1') -InstallDirectory $install
             $reinstalledSettings = Get-Content -LiteralPath (Join-Path $install 'app/settings.json') -Raw | ConvertFrom-Json
+            if (@($reinstalledSettings.ExternalPreprocessors)[0].Id -ne 'example') { throw 'External registration was not preserved.' }
             if (@($reinstalledSettings.AllowedOrigins) -notcontains 'http://192.168.50.53:5173') {
                 throw 'The installer did not preserve the configured web origin.'
             }
         }
-        Write-Output "PASS: $case ($expectedBuilds publishes; NX available=$expectsNx)"
+        Write-Output "PASS: $case ($expectedBuilds publishes)"
     }
 }
 finally {

@@ -126,20 +126,10 @@ def _native_processing_type(
                 return JOB_TYPE
         except AmbiguousWorkerError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
-    if extension == ".prt" and cad_system.casefold() == "siemens nx":
-        return "NX_TO_MODELRYX"
     if extension == ".fcstd":
         return "FCSTD_TO_MODELRYX"
     if extension in {".step", ".stp"}:
         return "STEP_TO_MODELRYX"
-    if extension in {".ipt", ".iam", ".idw", ".ipn"}:
-        return "INVENTOR_TO_MODELRYX"
-    if extension in {".dwg", ".dxf"}:
-        system = cad_system.casefold()
-        if system == "autocad":
-            return "AUTOCAD_TO_MODELRYX"
-        if system == "inventor":
-            return "INVENTOR_TO_MODELRYX"
     return None
 
 

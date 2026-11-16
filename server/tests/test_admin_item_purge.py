@@ -220,9 +220,7 @@ def test_admin_revision_deletion_protects_released_history() -> None:
 def test_admin_revision_deletion_protects_active_attachment_edit() -> None:
     item, _ = _item_with_file()
     revision_id = item["current_revision_id"]
-    edit_endpoint = (
-        f"/api/v1/items/{item['id']}/revisions/{revision_id}/attachment-edit"
-    )
+    edit_endpoint = f"/api/v1/items/{item['id']}/revisions/{revision_id}/attachment-edit"
     started = client.post(edit_endpoint, headers=AUTH)
     assert started.status_code == 201, started.text
 
@@ -297,7 +295,7 @@ def test_purge_deletes_owned_derived_artifacts_before_their_source() -> None:
         assert db.get(Artifact, derived_id) is None
 
 
-def test_purge_promotes_a_retained_legacy_child_artifact() -> None:
+def test_purge_promotes_a_retained_child_artifact() -> None:
     root, root_file_id = _item_with_file()
     child, child_file_id = _item_with_file()
     with SessionLocal() as db:
@@ -306,9 +304,29 @@ def test_purge_promotes_a_retained_legacy_child_artifact() -> None:
         root_item = db.get(Item, uuid.UUID(root["id"]))
         child_file = db.get(ArtifactFile, uuid.UUID(child_file_id))
         child_revision = db.get(Revision, child_file.revision_id)
-        child_revision.derived_metadata_json = {
-            "inventorComponent": {"sourceRevisionId": str(root_file.revision_id)}
-        }
+        root_snapshot = db.scalar(
+            select(RevisionContentSnapshot)
+            .where(RevisionContentSnapshot.revision_id == root_file.revision_id)
+            .order_by(RevisionContentSnapshot.sequence.desc())
+        )
+        root_view = BomViewRevision(
+            revision_id=root_file.revision_id,
+            snapshot_id=root_snapshot.id,
+            sequence=1,
+            created_by=root_item.created_by,
+        )
+        db.add(root_view)
+        db.flush()
+        db.add(
+            BomLine(
+                bom_view_revision_id=root_view.id,
+                parent_revision_id=root_file.revision_id,
+                child_revision_id=child_revision.id,
+                occurrence_key="child:1",
+                quantity=1,
+                sequence=0,
+            )
+        )
         retained = Artifact(
             artifact_type="GLB",
             name="Retained component preview",
@@ -442,7 +460,7 @@ def test_current_bom_child_without_legacy_metadata_is_offered_for_cascade_deleti
     assert preview.json()["protected_legacy_item_numbers"] == []
 
 
-def test_nested_inventor_components_with_stale_source_are_offered_for_cascade_deletion() -> None:
+def test_nested_bom_components_are_offered_for_cascade_deletion() -> None:
     root, _ = _item_with_file()
     with SessionLocal() as db:
         root_item = db.get(Item, uuid.UUID(root["id"]))
@@ -455,14 +473,14 @@ def test_nested_inventor_components_with_stale_source_are_offered_for_cascade_de
         subassembly = Item(
             part_number=f"SUB-{uuid.uuid4().hex}",
             name="Generated nested assembly",
-            category="Inventor Component",
+            category="Example CAD Component",
             part_type="ASSEMBLY",
             created_by=root_item.created_by,
         )
         part = Item(
             part_number=f"PART-{uuid.uuid4().hex}",
             name="Generated nested part",
-            category="Inventor Component",
+            category="Example CAD Component",
             part_type="PART",
             created_by=root_item.created_by,
         )
@@ -472,24 +490,20 @@ def test_nested_inventor_components_with_stale_source_are_offered_for_cascade_de
         subassembly_revision = Revision(
             part_id=subassembly.id,
             revision_code="A-PF1",
-            cad_system="Inventor",
-            native_format="IAM",
+            cad_system="Example CAD",
+            native_format="ASSEMBLY",
             metadata_json={},
-            derived_metadata_json={
-                "inventorComponent": {"sourceRevisionId": str(uuid.uuid4())}
-            },
+            derived_metadata_json={},
             state="READY",
             created_by=root_item.created_by,
         )
         part_revision = Revision(
             part_id=part.id,
             revision_code="A-PF1",
-            cad_system="Inventor",
-            native_format="IPT",
+            cad_system="Example CAD",
+            native_format="PART",
             metadata_json={},
-            derived_metadata_json={
-                "inventorComponent": {"sourceRevisionId": str(uuid.uuid4())}
-            },
+            derived_metadata_json={},
             state="READY",
             created_by=root_item.created_by,
         )

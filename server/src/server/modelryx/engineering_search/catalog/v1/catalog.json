@@ -158,11 +158,11 @@
       "id": "CAD-FORMAT", "version": 1, "status": "published", "priority": "P0",
       "entities": ["item", "part", "assembly"], "operation": "engineering_search",
       "capabilities": ["cad_system", "artifact_format"], "owner": "engineering-search",
-      "canonical_example": "find STEP parts", "paraphrases": ["parts with STEP files", "models from FreeCAD", "STP components", "IGES models", "items created in SolidWorks"],
+      "canonical_example": "find STEP parts", "paraphrases": ["parts with STEP files", "models from FreeCAD", "STP components", "IGES models"],
       "negative_examples": ["step through parts", "free CAD training"],
       "example_request": {"entity_type": "part", "filters": {"artifact_format": "step"}},
       "configuration": {
-        "cad_systems": ["STEP", "FreeCAD", "AutoCAD", "SolidWorks", "Inventor", "Fusion", "NX", "Creo", "CATIA"],
+        "cad_systems": ["STEP", "FreeCAD"],
         "format_aliases": {"fcstd": "fcstd", "step": "step", "stp": "step", "iges": "iges", "igs": "iges", "stl": "stl", "obj": "obj", "glb": "glb", "pdf": "pdf", "dxf": "dxf", "dwg": "dwg"}
       }
     },

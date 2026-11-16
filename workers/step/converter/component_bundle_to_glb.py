@@ -32,7 +32,7 @@ _STEP_COLOR = re.compile(
 
 
 def step_file_color(path):
-    """Return the most distinctive color embedded in an Inventor STEP part."""
+    """Return the most distinctive color embedded in an component STEP part."""
     try:
         text = Path(path).read_text(encoding="latin-1")
     except OSError:
@@ -56,7 +56,7 @@ def component_transform(component, by_id=None, resolved=None):
         return resolved[occurrence_id]
     raw = component.get("transform")
     if isinstance(raw, list) and len(raw) == 16 and all(isinstance(value, (int, float)) for value in raw):
-        # Inventor serializes matrix cells row-by-row and stores translations in cm.
+        # The bundle contract serializes matrix cells row-by-row and stores translations in cm.
         transform = np.array(raw, dtype=float).reshape((4, 4))
         if component.get("transformUnits") == "centimeter":
             transform[:3, 3] *= 10.0
@@ -66,7 +66,7 @@ def component_transform(component, by_id=None, resolved=None):
                 and all(isinstance(value, (int, float)) for value in translation)):
             raise ValueError(f"component transform is invalid: {component.get('file', '')}")
         transform = trimesh.transformations.translation_matrix(translation)
-    # Inventor returns every ComponentOccurrence transform in root-assembly space.
+    # The bundle stores every occurrence transform in root-assembly space.
     # parentId describes navigation only and must not be multiplied into geometry.
     resolved[occurrence_id] = transform
     return transform

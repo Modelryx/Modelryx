@@ -17,7 +17,7 @@ def test_retry_rejects_obsolete_snapshot_without_changing_revision(monkeypatch, 
         revision_id=uuid.uuid4(),
         snapshot_id=snapshot_id,
         state="FAILED",
-        type="INVENTOR_TO_MODELRYX",
+        type="EXTERNAL_CAD_TO_MODELRYX",
     )
     revision = SimpleNamespace(id=previous.revision_id, state="READY")
     db = Mock()

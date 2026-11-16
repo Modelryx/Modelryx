@@ -45,7 +45,7 @@ def test_workspace_includes_active_upload_progress() -> None:
             },
             "revision": {
                 "revision_code": "A",
-                "cad_system": "Inventor",
+                "cad_system": "Example CAD",
                 "native_format": "IAM",
             },
             "artifacts": [{

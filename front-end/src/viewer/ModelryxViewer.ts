@@ -944,7 +944,7 @@ export class ModelryxViewer {
     });
 
     // Some native CAD formats expose logical component occurrences in the BOM
-    // while attaching renderable solids below those occurrences. AutoCAD, for
+    // while attaching renderable solids below those occurrences. CAD workers, for
     // example, can navigate with `model/335/328` and render its AcDb3dSolid as
     // `model/335/328/2F4`. Bind the component to every indexed descendant so
     // tree selection, visibility, isolation, and fit-selection operate on its

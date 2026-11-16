@@ -86,7 +86,7 @@ Source format and available workers determine the processing route:
 Starting an external HTTP service does not register it. Re-register after capability changes.
 Multiple matches are errors; a selected external failure is not retried on embedded FreeCAD.
 FreeCAD CAD sessions keep using the embedded runtime. The Local CAD Agent retains the selected
-CAD-system filter so Inventor and AutoCAD can share DWG/DXF extensions.
+CAD-system filter.
 
 Worker selection is a server decision. Clients identify source content and configuration context;
 they do not choose arbitrary worker endpoints.

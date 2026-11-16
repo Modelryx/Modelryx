@@ -74,7 +74,7 @@ registration before submitting new work to restore the existing path. FreeCAD CA
 using the embedded runtime. STEP/STP processing retains its built-in path.
 
 The in-repository [FreeCAD worker](../workers/freecad/README.md#reference-external-worker) is the
-reference implementation. Inventor and AutoCAD follow the same registration, multipart submission,
+reference implementation. External workers follow the same registration, multipart submission,
 manifest and separate local-preprocessor boundaries; vendor runtimes, supported formats and
 optional output roles remain specific to each worker.
 
@@ -215,7 +215,7 @@ Install the Local CAD Agent, then call its `app/register-preprocessor.ps1` with 
 `CadSystem`, `Version`, `Extensions`, `SourceDirectory` and `Executable`. Copy the complete
 executable distribution, not just the apphost. The registered worker ID must match administration.
 The dialog groups advertised extensions by CAD system and retains the selected system filter,
-so Inventor and AutoCAD can both advertise DWG without selecting an arbitrary preprocessor.
+so multiple workers can advertise the same extension without selecting an arbitrary preprocessor.
 A matching local registration is required
 when an external worker is selected. FreeCAD's built-in local path remains available without one.
 

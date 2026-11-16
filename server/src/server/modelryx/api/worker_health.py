@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from modelryx.core.auth import Principal, current_principal
 from modelryx.core.config import Settings, get_settings
 from modelryx.core.db import get_db
-from modelryx.models import ApplicationSetting, WorkerHeartbeat
+from modelryx.models import WorkerHeartbeat
 
 router = APIRouter(prefix="/api/v1/workers", tags=["worker-health"])
 Db = Annotated[Session, Depends(get_db)]
@@ -206,35 +206,6 @@ async def worker_preflight(
                 adapter_version=connection.capabilities.get("adapterVersion"),
                 capabilities=connection.capabilities,
             )
-    # Remote Windows CAD adapters pre-date heartbeat registration. Keep their
-    # compatibility probe while allowing every other adapter to use the common
-    # heartbeat protocol without a server-side product whitelist.
-    if worker_type in {"AUTOCAD", "INVENTOR"}:
-        from modelryx.api.admin import _probe_cad_worker
-
-        cad_system = worker_type.casefold()
-        url = db.scalar(
-            select(ApplicationSetting.value).where(
-                ApplicationSetting.key == f"cad.{cad_system}.server_url"
-            )
-        )
-        connection = await _probe_cad_worker(cad_system, url, settings.internal_worker_key)
-        available = connection.availability == "ONLINE"
-        capabilities = connection.capabilities
-        return WorkerPreflightResponse(
-            worker_type=worker_type,
-            available=available,
-            compatible=available,
-            status="IDLE" if available else None,
-            message=(
-                f"{worker_type} server is online and compatible."
-                if available
-                else connection.detail
-                or f"{worker_type} processing server is not configured or offline."
-            ),
-            adapter_version=capabilities.get("adapterVersion"),
-            capabilities=capabilities,
-        )
     heartbeat, available = _best_heartbeat(db, worker_type, settings)
     compatible = bool(available and heartbeat and heartbeat.compatibility_state != "INCOMPATIBLE")
     if not available:

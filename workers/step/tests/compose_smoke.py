@@ -130,7 +130,7 @@ assert np.any((colors[:, 0] > 200) & (colors[:, 1] < 40) & (colors[:, 2] < 40)),
 assert np.any((colors[:, 2] > 200) & (colors[:, 0] < 40) & (colors[:, 1] < 40)), "blue body missing"
 print("STEP color smoke passed: body color and face override retained in GLB")
 
-# Exercise the same shared-prototype STEP bundle contract emitted by the NX adapter.
+# Exercise the same shared-prototype STEP bundle contract emitted by external adapters.
 components = [
     {"file": "shared.step", "partId": "box", "occurrenceId": identity, "nodeType": "part",
      "transformUnits": "millimeter", "transform": transform}
