@@ -69,6 +69,24 @@ def submit(committed: dict):
     )
 
 
+def test_revision_actions_use_creator_and_review_assignment() -> None:
+    committed = ready_item()
+    base = f"/api/v1/items/{committed['item_id']}/revisions/{committed['revision_id']}"
+    reviewer, _ = role_identity("reviewer")
+    other, _ = role_identity("engineer")
+    creator_actions = client.get(f"{base}/action-availability", headers=AUTH)
+    assert creator_actions.status_code == 200, creator_actions.text
+    assert creator_actions.json()["is_creator"] is True
+    assert creator_actions.json()["worker_configured"] is True
+    assert client.get(f"{base}/action-availability", headers=reviewer).json()["can_review"] is False
+    assert client.post(f"{base}/approval-requests", headers=other, json={}).status_code == 403
+    assert submit(committed).status_code == 201
+    actions = client.get(f"{base}/action-availability", headers=reviewer).json()
+    assert actions["is_assigned_reviewer"] is True
+    assert actions["can_review"] is True
+    assert actions["can_release"] is True
+
+
 def test_snapshot_bound_approval_enables_enforced_release(monkeypatch) -> None:
     committed = ready_item()
     settings = get_settings()
@@ -380,6 +398,12 @@ def test_named_group_snapshots_membership_and_restricts_routing() -> None:
     approval = requested.json()
     assert approval["reviewer_group_name"].startswith("Mechanical Review")
     assert approval["policy"]["eligible_user_ids"] == [str(assigned_id)]
+    action_url = (
+        f"/api/v1/items/{committed['item_id']}/revisions/"
+        f"{committed['revision_id']}/action-availability"
+    )
+    assert client.get(action_url, headers=assigned_headers).json()["can_review"] is True
+    assert client.get(action_url, headers=unassigned_headers).json()["can_review"] is False
 
     unassigned_inbox = client.get(
         "/api/v1/approval-requests/inbox", headers=unassigned_headers

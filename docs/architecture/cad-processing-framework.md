@@ -8,7 +8,7 @@ installation, and troubleshooting belong in each worker's integration guide.
 Modelryx uses two deployment models:
 
 1. **Embedded processing** for technology shipped and operated with Modelryx, including the
-   FreeCAD adapter and STEP geometry service.
+   FreeCAD adapter and STEP geometry service (a separate durable HTTP service).
 2. **Custom CAD workers** can be deployed as independently scalable HTTP services following the
    [worker integration guide](../workers/new-cad-worker-guide.md).
 
@@ -37,7 +37,7 @@ Browser, upload client, or CAD plugin
         |                     |               |
         v                     v               v
   FreeCAD adapter       STEP service    Custom CAD workers
-  and analyzer          (stateless)     (HTTP services)
+  and analyzer          (durable jobs)     (HTTP services)
                                         (FreeCAD, etc.)
 ```
 
@@ -49,7 +49,7 @@ controlled.
 
 Modelryx is authoritative for:
 
-- authentication, authorization, tenant boundaries, and worker credentials;
+- authentication, authorization, engineering-record access and worker credentials;
 - Items, Revisions, source and content snapshots, checkout, lifecycle, and approvals;
 - processing-job orchestration and user-visible status;
 - Artifact ownership, lineage, retention, and immutable publication;
@@ -79,9 +79,14 @@ Source format and available workers determine the processing route:
 
 | Input | Primary route |
 | --- | --- |
-| `.fcstd` | FreeCAD adapter |
+| `.fcstd` | Enabled matching external registration; otherwise dedicated FreeCAD URL or embedded adapter |
 | `.step`, `.stp` | STEP service |
-| Other formats | Custom workers (deploy following integration guide) |
+| Other native formats | Enabled external worker matched by CAD system and extension; legacy dedicated routes remain where supported |
+
+Starting an external HTTP service does not register it. Re-register after capability changes.
+Multiple matches are errors; a selected external failure is not retried on embedded FreeCAD.
+FreeCAD CAD sessions keep using the embedded runtime. The Local CAD Agent retains the selected
+CAD-system filter so Inventor and AutoCAD can share DWG/DXF extensions.
 
 Worker selection is a server decision. Clients identify source content and configuration context;
 they do not choose arbitrary worker endpoints.
@@ -105,7 +110,7 @@ not successful publication until Modelryx validation and commit finish.
 ## Worker contracts
 
 Standalone services use versioned HTTP job contracts under `/api/v1`. These contracts are defined
-in the [CAD worker integration guide](../workers/new-cad-worker-guide.md) and share validation,
+in the [worker SDK](../../worker-sdk/README.md) and share validation,
 security, and ownership invariants.
 
 When custom CAD workers are deployed, Modelryx dispatches submissions based on file type and
@@ -130,7 +135,7 @@ UTF-8 Base64 in `X-Modelryx-Root-Path-B64` so it does not depend on HTTP header 
 
 ### STEP service
 
-The STEP geometry worker is a stateless authenticated conversion service rather than a
+The STEP geometry worker is an authenticated conversion service with durable job state rather than a
 `CADWorkerAdapter`. It accepts STEP input and returns geometry, preview, metadata, and diagnostic
 outputs for Modelryx to validate and publish.
 
@@ -218,3 +223,15 @@ product model. Refer to the worker SDK documentation for adding custom worker im
 ## Related documents
 
 - [PartMetadata v1](partmetadata-v1.md)
+
+## Generic external publication limits
+
+Native extraction evidence is separate from managed BOM identity. The generic external path warns
+about unmatched components and supports operator-resolved relationships; it does not automatically
+create generated component Items/revisions. Embedded/legacy paths can have different publication
+behavior.
+
+The current generic result allowlist accepts native snapshot, PartMetadata, model preview, GLB and
+drawing PDF. Preferred-output selection can also request component geometry/related-drawing bundles,
+which generic validation currently rejects if returned. Advertised worker support alone is not
+end-to-end publication support. See the SDK and qualify the intended output profile.

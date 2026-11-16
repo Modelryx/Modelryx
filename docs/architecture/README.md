@@ -25,8 +25,8 @@ React Frontend ←→ FastAPI Server ←→ PostgreSQL + pgvector
 Modelryx's core entities:
 
 - **Item** — Unique product identifier with versioning and lifecycle management
-- **Revision** — Immutable snapshot of an Item at a point in time
-- **Artifact** — CAD files, metadata, previews, and attachments
+- **Revision** — Lifecycle-controlled engineering revision with immutable content snapshots
+- **Artifact** — Classified content container linked to files and revision snapshots
 - **PartMetadata** — Normalized, CAD-system-neutral engineering data (schema, features, properties)
 
 ### Processing Pipeline

@@ -57,16 +57,14 @@ def assert_nx_publication(db, revision_id, monkeypatch):
         def get(self, url, *, headers):
             assert headers["X-Modelryx-Worker-Key"] == "test-nx-key"
             if url.endswith("/ready"):
-                return httpx.Response(503, request=httpx.Request("GET", url))
+                return httpx.Response(200, request=httpx.Request("GET", url))
             return self.response(
                 url,
                 {
                     "cadSystem": "siemens_nx",
-                    "development": {
-                        "enabled": True,
-                        "documentKinds": ["part", "assembly"],
-                        "capabilities": ["metadata-v1", "model-preview-v1"],
-                    },
+                    "nativeProcessingQualified": True,
+                    "documentKinds": ["part", "assembly"],
+                    "capabilities": ["metadata-v1", "model-preview-v1"],
                 },
             )
 
@@ -126,7 +124,7 @@ def assert_nx_publication(db, revision_id, monkeypatch):
     monkeypatch.setattr(processing, "index_ai_best_effort", lambda *_args: None)
     monkeypatch.setattr(processing, "duplicate_check_best_effort", lambda *_args: None)
     settings = get_settings().model_copy(
-        update={"internal_worker_key": "test-nx-key", "nx_allow_unqualified_processing": True}
+        update={"internal_worker_key": "test-nx-key"}
     )
     source_snapshot = job.snapshot_id
     job.state = "RUNNING"

@@ -76,7 +76,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
       - run: pip install "pytest>=8.3,<9" "pydantic-settings>=2.7,<3" "boto3>=1.35,<2" './worker-sdk[conformance]'
-      - run: python -m pytest -q worker-sdk/tests scripts/tests/test_export_public.py scripts/tests/test_production_settings.py scripts/tests/test_s3_storage.py
+      - run: python -m pytest -q worker-sdk/tests scripts/tests/test_export_public.py scripts/tests/test_configure_project.py scripts/tests/test_production_settings.py scripts/tests/test_s3_storage.py
   freecad-worker:
     name: FreeCAD worker
     runs-on: ubuntu-24.04

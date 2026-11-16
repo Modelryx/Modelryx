@@ -1,6 +1,7 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+This file retains historical release notes. For the current implemented contract and deployment
+instructions, use the README, component guides and running OpenAPI schema.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -11,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (Planned features and improvements go here)
 
 ### Changed
-- (Changes to existing functionality)
+- Reviewed setup, API, security, database and worker documentation against current source;
+  corrected external/embedded routing and removed obsolete protocol and migration examples.
 
 ### Deprecated
 - (Soon-to-be removed features)
@@ -124,7 +126,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for:
 
 ## Security
 
-See [security-policy.md](./security-policy.md) for information on:
+See [security-policy.md](./SECURITY_POLICY.md) for information on:
 - How to report security vulnerabilities responsibly
 - Security best practices for deploying Modelryx
 - Known security considerations and mitigations

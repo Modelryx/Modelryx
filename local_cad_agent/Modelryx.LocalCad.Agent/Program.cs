@@ -100,6 +100,30 @@ internal static class Program
 
     private static async Task SelectAsync(HttpListenerContext context)
     {
+        if (context.Request.ContentLength64 > 65536)
+        {
+            await JsonAsync(context, 413, new { error = "The worker format list is too large." });
+            return;
+        }
+        WorkerFormat[] formats = [];
+        if (context.Request.HasEntityBody)
+        {
+            using var buffer = new MemoryStream();
+            var chunk = new byte[4096];
+            int count;
+            while ((count = await context.Request.InputStream.ReadAsync(chunk)) > 0)
+            {
+                if (buffer.Length + count > 65536) throw new InvalidDataException("The worker format list is too large.");
+                buffer.Write(chunk, 0, count);
+            }
+            var body = Encoding.UTF8.GetString(buffer.ToArray());
+            formats = JsonSerializer.Deserialize<WorkerFormat[]>(body, JsonOptions) ?? [];
+            if (formats.Length > 100 || formats.Any(worker => worker is null ||
+                string.IsNullOrWhiteSpace(worker.Id) || string.IsNullOrWhiteSpace(worker.CadSystem) ||
+                worker.SourceExtensions is null || worker.SourceExtensions.Length > 32 ||
+                worker.SourceExtensions.Any(extension => !System.Text.RegularExpressions.Regex.IsMatch(extension ?? "", @"^\.[A-Za-z0-9]{1,16}$"))))
+                throw new InvalidDataException("The registered worker format list is invalid.");
+        }
         if (!await SelectionLock.WaitAsync(0))
         {
             await JsonAsync(context, 409, new { error = "A CAD selection request is already starting." });
@@ -137,19 +161,21 @@ internal static class Program
                 }
             }
 
-            var root = await NativeFilePicker.PickCadFileAsync();
-            if (root is null)
+            var selectedFile = await NativeFilePicker.PickCadFileAsync(formats);
+            if (selectedFile is null)
             {
                 await JsonAsync(context, 200, new { cancelled = true });
                 return;
             }
             var id = Guid.NewGuid();
+            var root = selectedFile.Path;
+            var worker = selectedFile.Worker;
             var workspace = Path.Combine(DataRoot, id.ToString("N"));
             Directory.CreateDirectory(workspace);
             var cancellation = new CancellationTokenSource();
-            var analysis = AnalyzeSelectionAsync(root, workspace, cancellation.Token);
+            var analysis = AnalyzeSelectionAsync(root, workspace, cancellation.Token, worker);
             Selections[id] = new SelectionJob(
-                id, DateTimeOffset.UtcNow, workspace, cancellation, analysis);
+                id, DateTimeOffset.UtcNow, workspace, cancellation, analysis, worker);
             await JsonAsync(context, 202, new
             {
                 selection_id = id,
@@ -161,11 +187,11 @@ internal static class Program
     }
 
     private static async Task<AnalysisOutput> AnalyzeSelectionAsync(
-        string root, string workspace, CancellationToken cancellationToken)
+        string root, string workspace, CancellationToken cancellationToken, WorkerFormat? worker)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(TimeSpan.FromMinutes(15));
-        var output = await CadAnalyzer.AnalyzeAsync(root, workspace, deadline.Token);
+        var output = await CadAnalyzer.AnalyzeAsync(root, workspace, deadline.Token, worker);
         ValidatePackage(output.PackagePath);
         return output;
     }
@@ -207,6 +233,8 @@ internal static class Program
             selection_id = id,
             status = "complete",
             report = output.Report,
+            worker_id = selection.Worker?.Id,
+            cad_system = selection.Worker?.CadSystem,
             package_url = $"{Prefix}api/v1/selections/{id}/package",
         });
     }

@@ -17,6 +17,8 @@ MAX_MEMBERS = 4096
 DOCUMENT_KINDS = ("part", "assembly")
 OUTPUTS = {
     "modelryx-preview": ("preview.pfg", "application/zip", 1024**3),
+    "model-preview": ("model-preview.json", "application/json", 64 * 1024**2),
+    "glb": ("model.glb", "model/gltf-binary", 512 * 1024**2),
     "part-metadata": ("preview.part-metadata.json", "application/json", 64 * 1024**2),
     "native-snapshot": ("preview.cad-raw-metadata.json", "application/json", 64 * 1024**2),
 }

@@ -10,8 +10,8 @@ Cleanup policies are not backups.
 
 Run from the repository root with the deployment's `.env` available. Use a
 maintenance window: prevent new requests at your ingress, allow active uploads
-and conversions to finish, then stop all writers. Also stop any external workers
-or maintenance processes that can write to this database or object volume.
+and conversions to finish, then stop all writers. Also stop other API clients/controllers or maintenance processes that can write to this
+database or object volume. Independent external CAD workers do not have database/object access.
 These Bash commands require Docker Compose and enough space for all objects.
 
 ```bash
@@ -19,18 +19,20 @@ set -euo pipefail
 umask 077
 backup_dir="$(pwd)/backups/$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "$backup_dir"
-docker compose stop api general-worker freecad-worker freecad-analyzer
+# List only writers enabled in this deployment; add embedded FreeCAD services if used.
+writers=(api general-worker)
+docker compose stop "${writers[@]}"
 # If a backup fails, keep writers stopped and investigate before restarting.
 docker compose exec -T db pg_dump -U modelryx -d modelryx --format=custom > "$backup_dir/database.dump"
 docker compose run --rm --no-deps -T --entrypoint tar api -C /var/lib/modelryx/objects -czf - . > "$backup_dir/objects.tar.gz"
 test -s "$backup_dir/database.dump"
 gzip -t "$backup_dir/objects.tar.gz"
 sha256sum "$backup_dir/database.dump" "$backup_dir/objects.tar.gz" > "$backup_dir/SHA256SUMS"
-docker compose start api general-worker freecad-worker freecad-analyzer
+docker compose start "${writers[@]}"
 ```
 
 Check service health before reopening ingress. Retain the two backup files together
-with the source revision and migration version. Keep configuration and secrets
+with the source revision and schema fingerprint. Keep configuration and secrets
 securely and separately. Copy backups off the host to encrypted storage with a
 retention policy. Do not commit them to Git; `/backups/` is ignored.
 Do not delete older backups until the new pair passes a recovery drill.
@@ -48,7 +50,8 @@ docker compose run --rm --no-deps storage-init
 # Restore a matched database/object backup pair.
 docker compose exec -T db pg_restore -U modelryx -d modelryx --exit-on-error --no-owner < /absolute/path/to/backup/database.dump
 docker compose run --rm --no-deps -T --user 0:0 --entrypoint sh api -c 'tar -xzf - -C /var/lib/modelryx/objects && chown -R 100:101 /var/lib/modelryx/objects' < /absolute/path/to/backup/objects.tar.gz
-docker compose up -d
+# Start the intended topology; this example keeps embedded FreeCAD disabled.
+docker compose up -d api general-worker step-worker
 ```
 
 Check `/health/ready`, sign in, download representative original files and

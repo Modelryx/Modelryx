@@ -23,7 +23,7 @@ Modelryx is a web-based platform for managing CAD (Computer-Aided Design) data w
 - **3D Preview** - Real-time GLB/3D model previewing and interaction
 - **Worker Framework** - Extensible system for adding new CAD formats and tools
 - **Containerized Deployment** - PostgreSQL backend and persistent local object storage
-- **Security** - HMAC authentication, role-based access, HTTPS support
+- **Security** - JWT user authentication, role-based access, shared-key worker authentication
 - **APIs** - Complete REST API for programmatic access
 - **Open Source** - Apache 2.0 licensed, community-driven
 
@@ -33,7 +33,7 @@ Modelryx follows a microservices architecture with these components:
 
 - **Frontend**: React 18+ with TypeScript on Vite, run locally at http://localhost:5174
 - **API Server**: FastAPI application on port 8000 with OpenAPI documentation
-- **Database**: PostgreSQL 14+ with pgvector for vector operations
+- **Database**: PostgreSQL 17 with pgvector for vector operations
 - **CAD Workers**: Containerized processing workers for format conversion and analysis
 - **Object Storage**: Persistent local filesystem volume for CAD files and artifacts
 
@@ -45,17 +45,17 @@ See the [platform architecture documentation](docs/architecture/platform-archite
 
 ### Prerequisites
 
-- **Docker & Docker Compose** v24.0+
-- **Node.js** v22.0+ (for the frontend)
+- **Docker Engine with Docker Compose v2**
+- **Node.js** v22.12+ (for the frontend)
 - **Python** v3.11+ (for server and workers)
-- **8+ GB RAM**, **10+ GB disk space**
+- Sufficient memory and disk for native CAD workloads; the default FreeCAD service limit is 8 GiB per container.
 
 ### 1. Clone & Configure
 
 ```bash
 # Clone the repository
-git clone https://github.com/Modelryx/Modelryx.git
-cd modelryx
+git clone https://github.com/yanggmtl/Modelryx.git
+cd Modelryx
 
 # Generate secure environment variables
 python3 << 'EOF'
@@ -96,33 +96,30 @@ server configured for single-page application routing. Configure the API's
 
 ### 3. Login
 
-Default credentials (change immediately!):
-- **Username:** admin
+Use your configured bootstrap credentials:
+- **Username:** `MODELRYX_BOOTSTRAP_ADMIN_USERNAME` (template: `admin`)
 - **Password:** (from MODELRYX_BOOTSTRAP_ADMIN_PASSWORD in .env)
 
 ## Development Setup
 
-For local development with hot reloading:
+Use the split Docker backend/host frontend setup above, or install the worker SDK and server
+editable packages for host Python development. The entry point is `modelryx.api.main:app`;
+PostgreSQL must include pgvector. See [DEVELOPMENT.md](DEVELOPMENT.md) for database initialization,
+environment files, CORS, checks and the supported service names.
 
-```bash
-# Terminal 1: Backend
-cd server
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install ../worker-sdk
-pip install -e ".[dev]"
-python -m uvicorn modelryx.api.main:app --reload
+### Run without embedded FreeCAD
 
-# Terminal 2: Frontend
-cd front-end
-npm install
-npm run dev  # http://localhost:5174
-
-# Terminal 3: Database (if not using Docker)
-docker run -e POSTGRES_PASSWORD=dev -p 5432:5432 postgres:15
+```powershell
+docker compose stop freecad-worker freecad-preprocessor
+docker compose up -d --build api general-worker step-worker
+.\workers\freecad\scripts\start-freecad-server.ps1 -ListenAddress 0.0.0.0
 ```
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed setup instructions.
+Register the standalone worker in **Administrator > External CAD Workers**. On Docker Desktop,
+its host URL is `http://host.docker.internal:8090`. Enabled matching FreeCAD registration takes
+precedence; without it, the dedicated standalone URL or embedded processing path remains.
+External failure does not automatically retry on embedded FreeCAD. CAD sessions still need the
+embedded runtime. See the [reference worker](workers/freecad/README.md).
 
 ## Deployment
 
@@ -132,7 +129,7 @@ For production deployment:
 
 1. **Read [deployment.md](docs/operations/deployment.md)** - Complete deployment guide
 2. **Review [security best practices](docs/security/worker-security.md)** - Worker authentication and security
-3. **Configure backups** - Use provided backup scripts for data safety
+3. **Configure backups** - Back up matched database and object-volume content and test recovery
 4. **Set up monitoring** - Health checks and logging
 
 Quick start:
@@ -159,14 +156,14 @@ Modelryx is designed to be extended with custom CAD workers for your tools and f
 Start with the [New CAD Worker Guide](docs/workers/new-cad-worker-guide.md) which includes:
 - Worker architecture and contract
 - HTTP API specification
-- Authentication (HMAC-based)
+- Authentication with `X-Modelryx-Worker-Key`
 - Deployment options (Docker, native, external)
 - Testing and debugging
 
 Example workers included:
-- **FreeCAD** - Built-in STEP conversion and metadata extraction
+- **FreeCAD** - Native FCStd conversion, metadata extraction and standalone external-worker reference
 - **STEP** - Universal 3D model processing
-- Both are fully documented examples for extending
+- Use the [worker SDK](worker-sdk/README.md) for the generic native-worker contract; STEP uses a separate geometry-service contract.
 
 ## Documentation
 
@@ -186,10 +183,12 @@ modelryx/
 |-- server/              # Python/FastAPI backend API
 |-- front-end/           # React/TypeScript/Vite UI
 |-- workers/
-|   |-- freecad/         # FreeCAD worker (built-in)
+|   |-- freecad/         # Embedded and standalone FreeCAD reference worker
 |   |-- step/            # STEP processor (built-in)
+|-- worker-sdk/          # Native HTTP protocol and validation helpers
+|-- local_cad_agent/     # Native file dialog and client preprocessor dispatch
 |-- docs/                # Documentation
-|-- scripts/             # Utility scripts (backup, deploy)
+|-- scripts/             # Configuration, verification and backup utilities
 |-- compose.yaml         # Docker Compose orchestration
 ```
 
@@ -199,9 +198,9 @@ modelryx/
 |-----------|-----------|
 | Backend | Python 3.11+, FastAPI, SQLAlchemy |
 | Frontend | React 18+, TypeScript, Vite |
-| Database | PostgreSQL 14+ with pgvector |
+| Database | PostgreSQL 17 with pgvector |
 | Object Storage | Persistent local filesystem |
-| Processing | Docker (containerized workers) |
+| Processing | General orchestrator, embedded FreeCAD or independent CAD/geometry services |
 | CAD | FreeCAD SDK, STEP format processing |
 
 ## Community & Support
@@ -223,9 +222,8 @@ The platform includes integrations with:
 
 1. Check [DEVELOPMENT.md](DEVELOPMENT.md) for setup issues
 2. Review [docs/development/testing.md](docs/development/testing.md) for test and validation
-3. Search existing [Issues](../../issues)
-4. Ask in [Discussions](../../discussions)
-5. See [security-policy.md](security-policy.md) for security reporting
+3. Follow [CONTRIBUTING.md](CONTRIBUTING.md) for repository support and contributions
+4. See [SECURITY_POLICY.md](SECURITY_POLICY.md) for security reporting
 
 ---
 

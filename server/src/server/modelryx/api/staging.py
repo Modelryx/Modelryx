@@ -352,6 +352,20 @@ def _bom_proposal_at_snapshot(
     ]
 
 
+def _external_assembly_worker(db: Session, filename: str, cad_system: str) -> dict | None:
+    from modelryx.services.external_workers import AmbiguousWorkerError, matching_worker
+
+    if PurePosixPath(filename).suffix.casefold() in {".step", ".stp"}:
+        return None
+    try:
+        worker = matching_worker(db, filename, cad_system)
+    except AmbiguousWorkerError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if worker and "assembly" in worker["capabilities"]["documentKinds"]:
+        return worker
+    return None
+
+
 class StagingMetadataRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -1039,6 +1053,12 @@ def create_edit_staging(
     """Acquire a revision checkout and snapshot its Artifact manifest for editing."""
     require_engineer(principal)
     actor = user_for_principal(db, principal)
+    item = db.get(Item, item_id)
+    revision = db.scalar(select(Revision).where(Revision.id == revision_id).with_for_update())
+    if item is None or revision is None or revision.part_id != item.id:
+        raise HTTPException(status_code=404, detail="Item revision not found")
+    if revision.created_by != actor.id:
+        raise HTTPException(status_code=403, detail="Only the revision creator can edit it")
     existing_staging = db.scalar(
         select(StagingSession).where(StagingSession.client_staging_id == payload.client_staging_id)
     )
@@ -1051,10 +1071,6 @@ def create_edit_staging(
             raise HTTPException(status_code=409, detail="Staging identity conflict")
         return _staging_response(db, existing_staging)
 
-    item = db.get(Item, item_id)
-    revision = db.scalar(select(Revision).where(Revision.id == revision_id).with_for_update())
-    if item is None or revision is None or revision.part_id != item.id:
-        raise HTTPException(status_code=404, detail="Item revision not found")
     if item.current_revision_id != revision.id:
         raise HTTPException(status_code=409, detail="Only the current Item Revision can be edited")
     if revision.lifecycle_state != "WORKING":
@@ -1372,6 +1388,20 @@ def update_staging_proposal(
         )
         and any(artifact.artifact_type == "CAD_ASSEMBLY" for artifact in payload.artifacts)
     )
+    if not native_assembly_package and payload.revision is not None:
+        root = next(
+            (
+                staged_by_id.get(file.staged_file_id)
+                for artifact in payload.artifacts
+                if artifact.is_primary and artifact.artifact_type == "CAD_ASSEMBLY"
+                for file in artifact.files
+                if file.role == "PRIMARY"
+            ),
+            None,
+        )
+        native_assembly_package = bool(
+            root and _external_assembly_worker(db, root.filename, payload.revision.cad_system)
+        )
     if len(artifact_file_ids) != len(set(artifact_file_ids)) and not native_assembly_package:
         raise HTTPException(status_code=422, detail="A staged file may belong to only one Artifact")
     decision_ids = [item.staged_file_id for item in payload.identity_decisions]
@@ -1621,6 +1651,14 @@ def mark_staging_ready(
             )
     if proposal.bom and proposal.item.item_type != "ASSEMBLY":
         raise HTTPException(status_code=422, detail="Only an ASSEMBLY Item may contain BOM lines")
+    if proposal.operation == "EDIT_ITEM_REVISION" and proposal.destination is not None:
+        from modelryx.services.bom_cycles import ensure_no_bom_cycle
+
+        ensure_no_bom_cycle(
+            db,
+            proposal.destination.revision_id,
+            {line.child_revision_id for line in proposal.bom if line.child_revision_id is not None},
+        )
     decisions = {item.staged_file_id: item for item in proposal.identity_decisions}
     for staged_file_id in use_existing_ids:
         decision = decisions[staged_file_id]
@@ -1863,10 +1901,17 @@ def save_assembly_analysis(
         dict(entry) for entry in report.get("missing_references") or [] if isinstance(entry, dict)
     ]
     cad_document_extensions = {".prt", ".iam", ".ipt", ".idw", ".ipn", ".dwg", ".dxf", ".fcstd"}
+    external_worker = _external_assembly_worker(
+        db,
+        str(report.get("root_logical_path") or ""),
+        str(((staging.proposal_json or {}).get("revision") or {}).get("cad_system") or ""),
+    )
 
     def is_missing_supporting_reference(entry: dict[str, Any]) -> bool:
         if str(entry.get("kind") or "").casefold() == "linked-resource":
             return True
+        if external_worker is not None:
+            return False
         reference = str(entry.get("reference") or "").replace("\\", "/")
         return bool(PurePosixPath(reference).suffix) and (
             PurePosixPath(reference).suffix.casefold() not in cad_document_extensions
@@ -2076,7 +2121,7 @@ def save_assembly_analysis(
                 reason = (
                     "The occurrence still references the existing child revision. Its local "
                     "file differs, but that child is not checked out, "
-                            "so the local bytes are ignored."
+                    "so the local bytes are ignored."
                 )
             elif same_reference:
                 state = "UNCHANGED" if same_content else "MODIFIED"
@@ -2242,7 +2287,7 @@ def save_assembly_analysis(
                     reason = (
                         "The occurrence still references the existing child revision. Its local "
                         "file differs, but that child is not checked out, "
-                            "so the local bytes are ignored."
+                        "so the local bytes are ignored."
                     )
                 elif same_reference:
                     state = "UNCHANGED" if same_content else "MODIFIED"
@@ -2574,6 +2619,22 @@ def stage_reconciled_assembly(
     report = analysis.get("report") or {}
     reconciliation = list(analysis.get("reconciliation") or [])
     decisions = dict(analysis.get("identity_decisions") or {})
+    report_root = str(report.get("root_logical_path") or "")
+    report_system = str(
+        ((staging.proposal_json or {}).get("revision") or {}).get("cad_system") or ""
+    )
+    if _external_assembly_worker(db, report_root, report_system) is not None and any(
+        int(entry.get("depth") or 0) > 0
+        and entry.get("status") in {"ADDED", "RELINKED", "MODIFIED", "REMOVED"}
+        for entry in reconciliation
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Changes inside external subassemblies must be reconciled "
+                "in their own revisions first"
+            ),
+        )
     if not report or report.get("missing_references"):
         raise HTTPException(status_code=422, detail="A complete assembly analysis is required")
     if any(entry.get("status") in {"MISSING", "CONFLICT"} for entry in reconciliation):
@@ -2673,51 +2734,80 @@ def stage_reconciled_assembly(
                 )
             if decision["decision"] == "USE_EXISTING":
                 child_revision_id = decision["existing_revision_id"]
-                identity_decisions.append(
-                    {
-                        "staged_file_id": str(child_file.id),
-                        "decision": "USE_EXISTING",
-                        "existing_revision_id": child_revision_id,
-                        "item": None,
-                        "revision": None,
-                    }
+                identity = {
+                    "staged_file_id": str(child_file.id),
+                    "decision": "USE_EXISTING",
+                    "existing_revision_id": child_revision_id,
+                    "item": None,
+                    "revision": None,
+                }
+                previous = next(
+                    (
+                        value
+                        for value in identity_decisions
+                        if value["staged_file_id"] == str(child_file.id)
+                    ),
+                    None,
                 )
+                if previous is not None and previous != identity:
+                    raise HTTPException(
+                        status_code=422, detail=f"Conflicting identity decisions for {child_path}"
+                    )
+                if previous is None:
+                    identity_decisions.append(identity)
             else:
                 child_revision_id = None
                 child_staged_file_id = str(child_file.id)
-                identity_decisions.append(
-                    {
-                        "staged_file_id": str(child_file.id),
-                        "decision": "CREATE_NEW",
-                        "existing_revision_id": None,
-                        "item": decision["item"],
-                        "revision": decision["revision"],
-                    }
+                identity = {
+                    "staged_file_id": str(child_file.id),
+                    "decision": "CREATE_NEW",
+                    "existing_revision_id": None,
+                    "item": decision["item"],
+                    "revision": decision["revision"],
+                }
+                previous = next(
+                    (
+                        value
+                        for value in identity_decisions
+                        if value["staged_file_id"] == str(child_file.id)
+                    ),
+                    None,
                 )
+                if previous is not None and previous != identity:
+                    raise HTTPException(
+                        status_code=422, detail=f"Conflicting identity decisions for {child_path}"
+                    )
+                if previous is not None:
+                    # Repeated occurrences share one definition and Item identity.
+                    continue_create_artifact = False
+                else:
+                    identity_decisions.append(identity)
+                    continue_create_artifact = True
                 child_type = (decision.get("item") or {}).get("item_type")
-                artifacts.append(
-                    {
-                        "client_artifact_id": str(uuid.uuid4()),
-                        "existing_relation_id": None,
-                        "owner_staged_file_id": str(child_file.id),
-                        "artifact_type": "CAD_ASSEMBLY"
-                        if child_type == "ASSEMBLY"
-                        else "CAD_MODEL",
-                        "name": (decision.get("item") or {}).get("name") or child_file.filename,
-                        "description": None,
-                        "classification": "AUTHORITATIVE",
-                        "relation_type": "SPECIFICATION",
-                        "sequence": len(artifacts),
-                        "is_primary": True,
-                        "files": [
-                            {
-                                "staged_file_id": str(child_file.id),
-                                "reference_name": "MODEL",
-                                "role": "PRIMARY",
-                            }
-                        ],
-                    }
-                )
+                if continue_create_artifact:
+                    artifacts.append(
+                        {
+                            "client_artifact_id": str(uuid.uuid4()),
+                            "existing_relation_id": None,
+                            "owner_staged_file_id": str(child_file.id),
+                            "artifact_type": "CAD_ASSEMBLY"
+                            if child_type == "ASSEMBLY"
+                            else "CAD_MODEL",
+                            "name": (decision.get("item") or {}).get("name") or child_file.filename,
+                            "description": None,
+                            "classification": "AUTHORITATIVE",
+                            "relation_type": "SPECIFICATION",
+                            "sequence": len(artifacts),
+                            "is_primary": True,
+                            "files": [
+                                {
+                                    "staged_file_id": str(child_file.id),
+                                    "reference_name": "MODEL",
+                                    "role": "PRIMARY",
+                                }
+                            ],
+                        }
+                    )
         if child_revision_id is None and child_staged_file_id is None:
             raise HTTPException(
                 status_code=422,
@@ -2770,10 +2860,13 @@ def stage_reconciled_assembly(
         revision["cad_system"] = "FreeCAD"
         revision["native_format"] = "FCStd"
     else:
-        raise HTTPException(
-            status_code=422,
-            detail="Assembly package root must be an Inventor IAM or FreeCAD FCStd file",
-        )
+        worker = _external_assembly_worker(db, root_path, str(revision.get("cad_system") or ""))
+        if worker is None:
+            raise HTTPException(
+                status_code=422, detail="No enabled external worker supports this assembly root"
+            )
+        revision["cad_system"] = worker["capabilities"]["cadSystem"]
+        revision["native_format"] = extension.lstrip(".").upper()
     proposal["revision"] = revision
     staging.proposal_json = proposal
     staging.snapshot_version += 1

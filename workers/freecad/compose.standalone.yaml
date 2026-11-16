@@ -1,0 +1,29 @@
+name: modelryx-freecad-standalone
+
+services:
+  freecad:
+    image: modelryx-freecad-standalone:local
+    build:
+      context: ../..
+      dockerfile: workers/freecad/Dockerfile.standalone
+    restart: unless-stopped
+    environment:
+      MODELRYX_INTERNAL_WORKER_KEY: ${MODELRYX_INTERNAL_WORKER_KEY:?Set MODELRYX_INTERNAL_WORKER_KEY in the environment file}
+      MODELRYX_CONVERTER_VERSION: ${MODELRYX_CONVERTER_VERSION:-modelryx-fcstd-29}
+      MODELRYX_FREECAD_JOB_ROOT: /data/jobs
+      MODELRYX_FREECAD_STAGE_TIMEOUT_SECONDS: ${MODELRYX_FREECAD_STAGE_TIMEOUT_SECONDS:-}
+    ports:
+      - "${MODELRYX_FREECAD_BIND_ADDRESS:-127.0.0.1}:${MODELRYX_FREECAD_PORT:-8090}:8090"
+    volumes:
+      - jobs:/data/jobs
+    mem_limit: ${MODELRYX_FREECAD_MEMORY_LIMIT:-8g}
+    pids_limit: ${MODELRYX_FREECAD_PIDS_LIMIT:-512}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/ready', timeout=5)"]
+      interval: 5s
+      timeout: 10s
+      retries: 12
+      start_period: 15s
+
+volumes:
+  jobs:

@@ -1,27 +1,14 @@
+import { useCallback, useEffect, useState } from 'react';
+import { api } from '../../api';
+import {
+  ExternalWorkers,
+  ExternalWorkerAvailability,
+  type ExternalWorkerStatus,
+} from './ExternalWorkers';
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
-import type {
-  CadLicenseInfo,
-  CadWorkerSettings,
-  CadWorkerStatus,
-  CheckoutNotificationRun,
-  NxDevelopmentCapabilities,
-  Status,
-} from './types';
+import type { CadWorkerSettings, CadWorkerStatus, CheckoutNotificationRun, Status } from './types';
 
 const formatBytes = (bytes: number) => `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
-
-function isNxDevelopmentCapabilities(value: unknown): value is NxDevelopmentCapabilities {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.enabled === 'boolean' &&
-    Array.isArray(candidate.documentKinds) &&
-    candidate.documentKinds.every((item) => typeof item === 'string') &&
-    Array.isArray(candidate.capabilities) &&
-    candidate.capabilities.every((item) => typeof item === 'string') &&
-    typeof candidate.detail === 'string'
-  );
-}
 
 export type OperationsPanelProps = {
   status: Status | null;
@@ -56,6 +43,19 @@ export function OperationsPanel({
   onRefresh,
   onRunNotifications,
 }: OperationsPanelProps) {
+  const [externalStatuses, setExternalStatuses] = useState<ExternalWorkerStatus[]>([]);
+  const [externalStatusError, setExternalStatusError] = useState('');
+  const refreshExternalStatuses = useCallback(async () => {
+    try {
+      setExternalStatuses(await api<ExternalWorkerStatus[]>('/admin/external-workers/status'));
+      setExternalStatusError('');
+    } catch (reason) {
+      setExternalStatusError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }, []);
+  useEffect(() => {
+    void refreshExternalStatuses();
+  }, [refreshExternalStatuses]);
   return (
     <div className="admin-tab-panel">
       <div className="admin-section" style={{ padding: '1.25rem' }}>
@@ -118,14 +118,19 @@ export function OperationsPanel({
               <h3 id="worker-health-title">CAD server availability</h3>
               <p>
                 Queue workers use heartbeats. Standalone CAD servers use direct availability checks.
-                The FreeCAD analyzer check requires a standalone worker.
+                The FreeCAD preprocessor is checked through its HTTP service.
               </p>
             </div>
           </div>
+          {externalStatusError && (
+            <p className="error" role="alert">
+              {externalStatusError}
+            </p>
+          )}
           <div className="worker-health-grid">
             {(status?.workers ?? [])
-              .filter(
-                (worker) => !['AUTOCAD', 'INVENTOR'].includes(worker.worker_type.toUpperCase())
+              .filter((worker) =>
+                ['FREECAD', 'STEP', 'GENERAL'].includes(worker.worker_type.toUpperCase())
               )
               .map((worker) => (
                 <article className="worker-health-card" key={worker.worker_type}>
@@ -205,7 +210,7 @@ export function OperationsPanel({
                 <article className="worker-health-card" key={system}>
                   <div className="maintenance-title-row">
                     <strong>
-                      {system === 'freecad' ? 'STANDALONE FREECAD' : 'FREECAD ANALYZER'}
+                      {system === 'freecad' ? 'STANDALONE FREECAD' : 'FREECAD PREPROCESSOR'}
                     </strong>
                     <span
                       className={`maintenance-health ${connection?.availability === 'ONLINE' ? 'healthy' : 'degraded'}`}
@@ -237,127 +242,18 @@ export function OperationsPanel({
                 </article>
               );
             })}
-            {(['autocad', 'inventor', 'nx'] as const).map((system) => {
-              const connection = cadWorkerStatus?.[system];
-              const license = connection?.capabilities.license as CadLicenseInfo | undefined;
-              const developmentValue = connection?.capabilities.development;
-              const nxDevelopment = isNxDevelopmentCapabilities(developmentValue)
-                ? developmentValue
-                : undefined;
-              const label =
-                system === 'autocad'
-                  ? 'AUTOCAD'
-                  : system === 'inventor'
-                    ? 'INVENTOR'
-                    : 'SIEMENS NX';
-              const readiness = connection?.processing_readiness;
-              const configurationSource = connection?.configuration_source;
-              const configurationLabel =
-                configurationSource === 'ADMIN_OVERRIDE'
-                  ? 'Administrator override'
-                  : configurationSource === 'ENVIRONMENT_DEFAULT'
-                    ? 'Deployment default'
-                    : configurationSource === 'ADMIN_DISABLED'
-                      ? 'Disabled by administrator'
-                      : 'Not configured';
-              const readinessLabel =
-                connection?.availability === 'NOT_CONFIGURED'
-                  ? 'Not configured'
-                  : connection?.availability !== 'ONLINE'
-                    ? 'Endpoint unavailable'
-                    : readiness === 'READY'
-                      ? 'Worker reports ready — routing remains disabled'
-                      : readiness === 'NOT_READY'
-                        ? 'Not ready — production routing disabled'
-                        : readiness === 'UNKNOWN'
-                          ? 'Could not confirm readiness'
-                          : 'Not applicable';
-              return (
-                <article className="worker-health-card" key={system}>
-                  <div className="maintenance-title-row">
-                    <strong>{label}</strong>
-                    <span
-                      className={`maintenance-health ${connection?.availability === 'ONLINE' ? 'healthy' : 'degraded'}`}
-                    >
-                      {connection?.availability ?? 'CHECKING'}
-                    </span>
-                  </div>
-                  <dl>
-                    <div>
-                      <dt>Endpoint</dt>
-                      <dd>{connection?.url ?? 'Not configured'}</dd>
-                    </div>
-                    <div>
-                      <dt>Configuration</dt>
-                      <dd>{configurationLabel}</dd>
-                    </div>
-                    <div>
-                      <dt>License</dt>
-                      <dd>
-                        {license?.status ??
-                          (connection?.availability === 'ONLINE' ? 'UNVERIFIED' : '—')}
-                      </dd>
-                    </div>
-                    {license?.lastVerifiedAt && (
-                      <div>
-                        <dt>License verified</dt>
-                        <dd>{new Date(license.lastVerifiedAt).toLocaleString()}</dd>
-                      </div>
-                    )}
-                    {system === 'nx' && (
-                      <div>
-                        <dt>Production gate</dt>
-                        <dd>{readiness ? readinessLabel : 'Checking'}</dd>
-                      </div>
-                    )}
-                    {system === 'nx' && connection?.readiness_code && (
-                      <div>
-                        <dt>Gate code</dt>
-                        <dd>{connection.readiness_code}</dd>
-                      </div>
-                    )}
-                    {system === 'nx' && nxDevelopment?.enabled && (
-                      <>
-                        <div>
-                          <dt>Development scope</dt>
-                          <dd>{nxDevelopment.documentKinds.join(', ') || '—'}</dd>
-                        </div>
-                        <div>
-                          <dt>Development features</dt>
-                          <dd>{nxDevelopment.capabilities.join(', ') || '—'}</dd>
-                        </div>
-                      </>
-                    )}
-                    <div>
-                      <dt>Last checked</dt>
-                      <dd>
-                        {connection?.checked_at
-                          ? new Date(connection.checked_at).toLocaleString()
-                          : 'Waiting'}
-                      </dd>
-                    </div>
-                  </dl>
-                  {license?.detail && <p className="worker-license-detail">{license.detail}</p>}
-                  {system === 'nx' && nxDevelopment?.enabled && (
-                    <p className="maintenance-warning">{nxDevelopment.detail}</p>
-                  )}
-                  {system === 'nx' && connection?.readiness_detail && (
-                    <p className="maintenance-warning">{connection.readiness_detail}</p>
-                  )}
-                  {connection?.detail && <p className="maintenance-warning">{connection.detail}</p>}
-                </article>
-              );
-            })}
+            <ExternalWorkerAvailability workers={externalStatuses} />
           </div>
         </section>
+        <ExternalWorkers onChanged={refreshExternalStatuses} />
         <section className="maintenance-card" aria-labelledby="licensed-cad-servers-title">
           <div className="maintenance-card-heading">
             <div>
               <h3 id="licensed-cad-servers-title">CAD server settings</h3>
               <p>
-                Configure standalone CAD server URLs. Leave a FreeCAD worker URL empty to use the
-                embedded worker. Leave an analyzer URL empty to disable server-side analysis.
-                Siemens NX remains unavailable for production routing until its worker is qualified.
+                Configure FreeCAD worker and preprocessor URLs. Leave the worker URL empty to use
+                the embedded worker, or leave the preprocessor URL empty to disable server-side
+                analysis.
               </p>
             </div>
           </div>
@@ -379,7 +275,7 @@ export function OperationsPanel({
               />
             </label>
             <label>
-              FreeCAD analyzer URL
+              FreeCAD preprocessor URL
               <input
                 name="freecadAnalyzerUrl"
                 type="url"
@@ -389,54 +285,6 @@ export function OperationsPanel({
                   setCadWorkerSettings((current) => ({
                     ...current,
                     freecad_analyzer_url: event.target.value || null,
-                  }));
-                  setCadWorkerSettingsSaved(false);
-                }}
-              />
-            </label>
-            <label>
-              AutoCAD server URL
-              <input
-                name="autocadUrl"
-                type="url"
-                placeholder="https://autocad.internal.example:5080"
-                value={cadWorkerSettings.autocad_url ?? ''}
-                onChange={(event) => {
-                  setCadWorkerSettings((current) => ({
-                    ...current,
-                    autocad_url: event.target.value || null,
-                  }));
-                  setCadWorkerSettingsSaved(false);
-                }}
-              />
-            </label>
-            <label>
-              Inventor server URL
-              <input
-                name="inventorUrl"
-                type="url"
-                placeholder="https://inventor.internal.example:5091"
-                value={cadWorkerSettings.inventor_url ?? ''}
-                onChange={(event) => {
-                  setCadWorkerSettings((current) => ({
-                    ...current,
-                    inventor_url: event.target.value || null,
-                  }));
-                  setCadWorkerSettingsSaved(false);
-                }}
-              />
-            </label>
-            <label>
-              Siemens NX server URL
-              <input
-                name="nxUrl"
-                type="url"
-                placeholder="https://nx.internal.example:5092"
-                value={cadWorkerSettings.nx_url ?? ''}
-                onChange={(event) => {
-                  setCadWorkerSettings((current) => ({
-                    ...current,
-                    nx_url: event.target.value || null,
                   }));
                   setCadWorkerSettingsSaved(false);
                 }}
@@ -453,7 +301,10 @@ export function OperationsPanel({
               <button
                 type="button"
                 disabled={cadWorkerSettingsBusy || cadWorkerStatusBusy || loading}
-                onClick={() => void onRefresh()}
+                onClick={() => {
+                  void onRefresh();
+                  void refreshExternalStatuses();
+                }}
               >
                 {cadWorkerStatusBusy ? 'Checking…' : 'Check status'}
               </button>

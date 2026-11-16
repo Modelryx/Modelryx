@@ -53,9 +53,7 @@ def _can_control_processing(db: Session, revision: Revision, principal: Principa
     return item is not None and item.created_by == user.id
 
 
-def _require_processing_control(
-    db: Session, revision: Revision, principal: Principal
-) -> None:
+def _require_processing_control(db: Session, revision: Revision, principal: Principal) -> None:
     if not _can_control_processing(db, revision, principal):
         raise HTTPException(
             status_code=403,
@@ -63,8 +61,22 @@ def _require_processing_control(
         )
 
 
-def _licensed_processing_type(filename: str, cad_system: str) -> str | None:
+def _licensed_processing_type(
+    filename: str, cad_system: str, db: Session | None = None
+) -> str | None:
     extension = Path(filename).suffix.casefold()
+    if db is not None and extension not in {".step", ".stp"}:
+        from modelryx.services.external_workers import (
+            JOB_TYPE,
+            AmbiguousWorkerError,
+            matching_worker,
+        )
+
+        try:
+            if matching_worker(db, filename, cad_system):
+                return JOB_TYPE
+        except AmbiguousWorkerError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
     if extension == ".prt" and cad_system.casefold() == "siemens nx":
         return "NX_TO_MODELRYX"
     if extension in {".dwg", ".dxf"}:
@@ -94,8 +106,7 @@ def _processing_fix_suggestion(job: ProcessingJob) -> str | None:
     stage = job.stage.upper()
     if "QUEUED" in stage:
         return (
-            "Confirm that the required CAD worker is running and connected, then "
-            "retry the stage."
+            "Confirm that the required CAD worker is running and connected, then retry the stage."
         )
     if "INSPECT" in stage:
         return (
@@ -115,8 +126,7 @@ def _processing_fix_suggestion(job: ProcessingJob) -> str | None:
     if "PUBLISH" in stage:
         return "Verify Modelryx storage is writable and has free space, then retry the stage."
     return (
-        "Review the error below, correct the source or worker configuration, and "
-        "retry the stage."
+        "Review the error below, correct the source or worker configuration, and retry the stage."
     )
 
 
@@ -209,9 +219,7 @@ def list_processing_jobs(
 
 
 @router.get("/processing-jobs/{job_id}", response_model=ProcessingJobResponse)
-def read_processing_job(
-    job_id: uuid.UUID, db: Db, principal: Actor
-) -> ProcessingJobResponse:
+def read_processing_job(job_id: uuid.UUID, db: Db, principal: Actor) -> ProcessingJobResponse:
     job = db.get(ProcessingJob, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Processing job not found")
@@ -255,7 +263,12 @@ def reprocess_revision_preview(
     revision = db.get(Revision, revision_id)
     if revision is None:
         raise HTTPException(status_code=404, detail="Revision not found")
-    _require_processing_control(db, revision, principal)
+    if not principal.has_role("designer", "administrator"):
+        raise HTTPException(status_code=403, detail="Designer role required to generate metadata and preview")
+    from modelryx.api.items import revision_action_availability
+
+    if not revision_action_availability(revision.part_id, revision.id, db, principal)["worker_configured"]:
+        raise HTTPException(status_code=409, detail="No matching CAD worker is configured")
     snapshot_id = latest_content_snapshot_id(db, revision.id)
     if snapshot_id is None:
         raise HTTPException(status_code=409, detail="Revision has no published content snapshot")
@@ -270,9 +283,11 @@ def reprocess_revision_preview(
     candidates = [
         (file, processing_type)
         for file in current_artifact_files(db, revision.id)
-        if (processing_type := _licensed_processing_type(
-            file.original_filename, revision.cad_system
-        ))
+        if (
+            processing_type := _licensed_processing_type(
+                file.original_filename, revision.cad_system, db
+            )
+        )
     ]
     native, processing_type = next(
         (candidate for candidate in candidates if candidate[0].role == "PRIMARY"),
@@ -543,7 +558,9 @@ def preview_files(
 
 
 def preview_artifact(
-    db: Session, revision_id: uuid.UUID, kind: str,
+    db: Session,
+    revision_id: uuid.UUID,
+    kind: str,
     snapshot_id: uuid.UUID | None = None,
 ) -> ArtifactFile:
     revision = db.get(Revision, revision_id)
@@ -568,7 +585,10 @@ def preview_artifact(
 
 @router.get("/revisions/{revision_id}/preview/model", response_class=FileResponse)
 def revision_preview_model(
-    revision_id: uuid.UUID, db: Db, _: Actor, settings: Config,
+    revision_id: uuid.UUID,
+    db: Db,
+    _: Actor,
+    settings: Config,
     snapshot_id: uuid.UUID | None = None,
 ) -> FileResponse:
     artifact = preview_artifact(db, revision_id, "GLB", snapshot_id)
@@ -589,19 +609,33 @@ def _display_thumbnail(
 
 @router.get("/revisions/{revision_id}/preview/thumbnail", response_class=Response)
 def revision_preview_thumbnail(
-    revision_id: uuid.UUID, db: Db, _: Actor, settings: Config,
+    revision_id: uuid.UUID,
+    db: Db,
+    _: Actor,
+    settings: Config,
     snapshot_id: uuid.UUID | None = None,
 ) -> Response:
     files = preview_files(db, revision_id, snapshot_id)
     thumbnail = next(
-        (item for item in files if item.kind == "IMAGE"
-         and item.original_filename == THUMBNAIL_NAME),
+        (
+            item
+            for item in files
+            if item.kind == "IMAGE" and item.original_filename == THUMBNAIL_NAME
+        ),
         None,
     )
-    model = next((item for item in files if item.kind == "GLB"
-                  and item.original_filename == "model.glb"), None)
-    metadata = next((item for item in files if item.kind == "METADATA"
-                     and item.original_filename == "model-preview.json"), None)
+    model = next(
+        (item for item in files if item.kind == "GLB" and item.original_filename == "model.glb"),
+        None,
+    )
+    metadata = next(
+        (
+            item
+            for item in files
+            if item.kind == "METADATA" and item.original_filename == "model-preview.json"
+        ),
+        None,
+    )
     storage = LocalStorageProvider(settings.storage_root)
     if model is not None and metadata is not None:
         model_path = storage.path_for(model.storage_key)
@@ -613,7 +647,8 @@ def revision_preview_thumbnail(
                     str(model_path), model.sha256, str(metadata_path), metadata.sha256
                 )
                 return Response(
-                    content=image, media_type="image/png",
+                    content=image,
+                    media_type="image/png",
                     headers={"Content-Disposition": f'inline; filename="{THUMBNAIL_NAME}"'},
                 )
         except Exception as error:  # A thumbnail failure must not hide a stored preview.
@@ -621,13 +656,20 @@ def revision_preview_thumbnail(
     if thumbnail is None:
         raise HTTPException(status_code=404, detail="Revision thumbnail is unavailable")
     path = storage.path_for(thumbnail.storage_key)
-    return FileResponse(path, media_type="image/png", filename=thumbnail.original_filename,
-                        content_disposition_type="inline")
+    return FileResponse(
+        path,
+        media_type="image/png",
+        filename=thumbnail.original_filename,
+        content_disposition_type="inline",
+    )
 
 
 @router.get("/revisions/{revision_id}/preview/metadata", response_class=Response)
 def revision_preview_metadata(
-    revision_id: uuid.UUID, db: Db, _: Actor, settings: Config,
+    revision_id: uuid.UUID,
+    db: Db,
+    _: Actor,
+    settings: Config,
     snapshot_id: uuid.UUID | None = None,
 ) -> Response:
     revision = db.get(Revision, revision_id)
@@ -644,7 +686,11 @@ def revision_preview_metadata(
 
 @router.get("/items/{item_id}/revisions/{revision_id}/preview/occurrence-map")
 def preview_occurrence_map(
-    item_id: uuid.UUID, revision_id: uuid.UUID, db: Db, principal: Actor, settings: Config,
+    item_id: uuid.UUID,
+    revision_id: uuid.UUID,
+    db: Db,
+    principal: Actor,
+    settings: Config,
     snapshot_id: uuid.UUID | None = None,
 ) -> dict:
     """Map managed BOM occurrences to preview IDs only when exact identifiers agree uniquely."""
@@ -713,7 +759,9 @@ def revision_preview_drawing(
 
 
 def _drawing_representation_metadata(
-    db: Session, revision_id: uuid.UUID, settings: Settings,
+    db: Session,
+    revision_id: uuid.UUID,
+    settings: Settings,
     snapshot_id: uuid.UUID | None = None,
 ) -> tuple[dict[str, dict], list[dict]]:
     files = preview_files(db, revision_id, snapshot_id)
@@ -724,9 +772,7 @@ def _drawing_representation_metadata(
         None,
     )
     if normalized_file is not None:
-        path = LocalStorageProvider(settings.storage_root).path_for(
-            normalized_file.storage_key
-        )
+        path = LocalStorageProvider(settings.storage_root).path_for(normalized_file.storage_key)
         try:
             normalized = json.loads(path.read_text(encoding="utf-8"))
             sheets = normalized.get("native", {}).get("drawing_sheets", [])
@@ -735,9 +781,7 @@ def _drawing_representation_metadata(
                     "display_name": str(
                         normalized.get("identity", {}).get("display_name") or "Drawing"
                     ),
-                    "source_path": str(
-                        normalized.get("identity", {}).get("name") or "drawing"
-                    ),
+                    "source_path": str(normalized.get("identity", {}).get("name") or "drawing"),
                     "sheet_count": len(sheets),
                     "sheets": sheets,
                     "warnings": [],
@@ -745,11 +789,7 @@ def _drawing_representation_metadata(
         except (OSError, UnicodeDecodeError, json.JSONDecodeError, AttributeError):
             pass
     manifest_file = next(
-        (
-            item
-            for item in files
-            if item.original_filename == "drawing-previews.json"
-        ),
+        (item for item in files if item.original_filename == "drawing-previews.json"),
         None,
     )
     if manifest_file is None:
@@ -778,8 +818,10 @@ def _drawing_representation_metadata(
             "warnings": drawing.get("warnings", []),
         }
     source_files = [
-        item for item in files
-        if item.artifact_id and (source := db.get(Artifact, item.artifact_id))
+        item
+        for item in files
+        if item.artifact_id
+        and (source := db.get(Artifact, item.artifact_id))
         and source.artifact_type == "DRAWING"
     ]
     source_by_path = {
@@ -798,31 +840,36 @@ def _drawing_representation_metadata(
                 if source_file is not None and source_file.artifact_id is not None
                 else "failed-" + hashlib.sha256(source.encode()).hexdigest()[:24]
             )
-            failures.append({
-                "id": stable_id,
-                "kind": "2D",
-                "filename": Path(source).name,
-                "display_name": str(failure.get("displayName") or Path(source).stem),
-                "source_path": source,
-                "source_artifact_id": (
-                    str(source_file.artifact_id)
-                    if source_file is not None and source_file.artifact_id is not None
-                    else None
-                ),
-                "media_type": "application/pdf",
-                "preview_url": None,
-                "retry_url": None,
-                "state": "FAILED",
-                "error": str(failure.get("error") or "Drawing representation export failed"),
-                "sheet_count": None,
-                "sheets": [],
-            })
+            failures.append(
+                {
+                    "id": stable_id,
+                    "kind": "2D",
+                    "filename": Path(source).name,
+                    "display_name": str(failure.get("displayName") or Path(source).stem),
+                    "source_path": source,
+                    "source_artifact_id": (
+                        str(source_file.artifact_id)
+                        if source_file is not None and source_file.artifact_id is not None
+                        else None
+                    ),
+                    "media_type": "application/pdf",
+                    "preview_url": None,
+                    "retry_url": None,
+                    "state": "FAILED",
+                    "error": str(failure.get("error") or "Drawing representation export failed"),
+                    "sheet_count": None,
+                    "sheets": [],
+                }
+            )
     return result, failures
 
 
 @router.get("/revisions/{revision_id}/preview/representations")
 def revision_preview_representations(
-    revision_id: uuid.UUID, db: Db, _: Actor, settings: Config,
+    revision_id: uuid.UUID,
+    db: Db,
+    _: Actor,
+    settings: Config,
     snapshot_id: uuid.UUID | None = None,
 ) -> list[dict]:
     revision = db.get(Revision, revision_id)
@@ -842,43 +889,53 @@ def revision_preview_representations(
             else None
         )
         if item.kind == "GLB":
-            result.append({
-                "id": str(item.id), "kind": "3D", "filename": item.original_filename,
-                "media_type": item.mime_type,
-                "preview_url": f"/revisions/{revision.id}/preview/model{query}",
-                "source_artifact_id": source_artifact_id,
-                "state": "READY",
-            })
+            result.append(
+                {
+                    "id": str(item.id),
+                    "kind": "3D",
+                    "filename": item.original_filename,
+                    "media_type": item.mime_type,
+                    "preview_url": f"/revisions/{revision.id}/preview/model{query}",
+                    "source_artifact_id": source_artifact_id,
+                    "state": "READY",
+                }
+            )
         elif item.kind == "PDF":
             metadata = drawing_metadata.get(item.original_filename, {})
-            result.append({
-                "id": str(item.id), "kind": "2D", "filename": item.original_filename,
-                "media_type": item.mime_type,
-                "preview_url": f"/revisions/{revision.id}/preview/drawings/{item.id}{query}",
-                "source_artifact_id": source_artifact_id,
-                "state": "READY",
-                **metadata,
-            })
+            result.append(
+                {
+                    "id": str(item.id),
+                    "kind": "2D",
+                    "filename": item.original_filename,
+                    "media_type": item.mime_type,
+                    "preview_url": f"/revisions/{revision.id}/preview/drawings/{item.id}{query}",
+                    "source_artifact_id": source_artifact_id,
+                    "state": "READY",
+                    **metadata,
+                }
+            )
         elif item.kind == "IMAGE" and item.mime_type == "image/png":
             if item.original_filename == THUMBNAIL_NAME:
                 continue
-            result.append({
-                "id": str(item.id), "kind": "2D", "filename": item.original_filename,
-                "media_type": item.mime_type,
-                "preview_url": f"/revisions/{revision.id}/preview/images/{item.id}{query}",
-                "source_artifact_id": source_artifact_id,
-                "state": "READY",
-                "display_name": Path(item.original_filename).stem,
-            })
+            result.append(
+                {
+                    "id": str(item.id),
+                    "kind": "2D",
+                    "filename": item.original_filename,
+                    "media_type": item.mime_type,
+                    "preview_url": f"/revisions/{revision.id}/preview/images/{item.id}{query}",
+                    "source_artifact_id": source_artifact_id,
+                    "state": "READY",
+                    "display_name": Path(item.original_filename).stem,
+                }
+            )
     ready_source_ids = {
         item.get("source_artifact_id")
         for item in result
         if item.get("state") == "READY" and item.get("source_artifact_id")
     }
     result.extend(
-        item
-        for item in failed_drawings
-        if item.get("source_artifact_id") not in ready_source_ids
+        item for item in failed_drawings if item.get("source_artifact_id") not in ready_source_ids
     )
     return result
 
@@ -897,7 +954,8 @@ def revision_preview_drawing_file(
 ) -> FileResponse:
     artifact = next(
         (
-            item for item in preview_files(db, revision_id, snapshot_id)
+            item
+            for item in preview_files(db, revision_id, snapshot_id)
             if item.id == artifact_file_id and item.kind == "PDF"
         ),
         None,
@@ -905,9 +963,7 @@ def revision_preview_drawing_file(
     if artifact is None:
         raise HTTPException(status_code=404, detail="Drawing representation not found")
     path = LocalStorageProvider(settings.storage_root).path_for(artifact.storage_key)
-    return FileResponse(
-        path, media_type="application/pdf", filename=artifact.original_filename
-    )
+    return FileResponse(path, media_type="application/pdf", filename=artifact.original_filename)
 
 
 @router.get(
@@ -924,7 +980,8 @@ def revision_preview_image_file(
 ) -> FileResponse:
     artifact = next(
         (
-            item for item in preview_files(db, revision_id, snapshot_id)
+            item
+            for item in preview_files(db, revision_id, snapshot_id)
             if item.id == artifact_file_id and item.kind == "IMAGE"
         ),
         None,

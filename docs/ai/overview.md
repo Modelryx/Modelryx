@@ -74,7 +74,7 @@ its own validated request model and must not be confused with unconstrained RAG.
 
 ## Trust and safety boundaries
 
-- Authorization and tenant visibility are enforced before retrieval and again before returning
+- Authorization and record visibility are enforced before retrieval and again before returning
   source records.
 - Models never emit SQL, storage paths, arbitrary URLs, native CAD commands, or executable code.
 - Retrieved documents, CAD metadata, attachment text, and model output are untrusted data.

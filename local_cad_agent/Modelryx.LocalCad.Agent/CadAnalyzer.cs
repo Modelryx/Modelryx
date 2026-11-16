@@ -9,7 +9,7 @@ namespace Modelryx.LocalCad.Agent;
 
 internal static class CadAnalyzer
 {
-    private static readonly AgentConfiguration Configuration = AgentConfiguration.Load();
+    private static AgentConfiguration Configuration => AgentConfiguration.Load();
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -17,9 +17,22 @@ internal static class CadAnalyzer
     };
 
     public static async Task<AnalysisOutput> AnalyzeAsync(string root, string workDirectory,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, WorkerFormat? externalWorker = null)
     {
         var extension = Path.GetExtension(root).ToLowerInvariant();
+        if (externalWorker is not null)
+        {
+            var configuration = Configuration;
+            var local = configuration.FindExternal(externalWorker.Id, externalWorker.CadSystem, extension)
+                ?? throw new InvalidOperationException($"Install the local preprocessor for '{externalWorker.WorkerName}' before opening this file.");
+            var executable = configuration.RequireExternalExecutable(local);
+            try
+            {
+                var json = await RunAsync(executable, [root, workDirectory], cancellationToken);
+                return ParseNativeReport(json, workDirectory, local.Version, root);
+            }
+            finally { await StopOwnedInventorAsync(workDirectory); }
+        }
         return extension switch
         {
             ".iam" or ".ipt" or ".idw" or ".ipn" => await AnalyzeInventorAsync(

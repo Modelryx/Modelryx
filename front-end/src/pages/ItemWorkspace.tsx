@@ -684,6 +684,7 @@ function RevisionActionChoices({
   closeMenu,
   refreshToken,
   activeSection,
+  availability,
 }: {
   itemId: string;
   revisionId: string;
@@ -695,6 +696,7 @@ function RevisionActionChoices({
   closeMenu: () => void;
   refreshToken: number;
   activeSection: string;
+  availability: RevisionActionAvailability | undefined;
 }) {
   const itemPath = `/items/${encodeURIComponent(itemId)}`;
   const revisionPath = `${itemPath}/revisions/${encodeURIComponent(revisionId)}`;
@@ -708,7 +710,7 @@ function RevisionActionChoices({
       >
         Compare revisions
       </Link>
-      {canEdit &&
+      {availability?.is_creator && canEdit &&
       revision.lifecycle_state === 'WORKING' &&
       revision.checkout_status !== 'CHECKED_OUT_BY_OTHER' ? (
         <Link
@@ -719,20 +721,18 @@ function RevisionActionChoices({
         >
           Edit revision
         </Link>
-      ) : (
-        <button type="button" role="menuitem" disabled>
-          Edit revision
-        </button>
-      )}
-      <Link
+      ) : null}
+      {availability?.can_generate && (availability.worker_configured ? <Link
         role="menuitem"
         aria-current={activeSection === 'generate' ? 'page' : undefined}
         to={`${revisionPath}?section=generate`}
         onClick={closeMenu}
       >
         Generate metadata &amp; preview
-      </Link>
-      {canReview ? (
+      </Link> : <button type="button" role="menuitem" disabled title="No matching CAD worker is configured">
+        Generate metadata &amp; preview
+      </button>)}
+      {canReview && availability?.can_review ? (
         <Link
           role="menuitem"
           aria-current={activeSection === 'review' ? 'page' : undefined}
@@ -741,24 +741,29 @@ function RevisionActionChoices({
         >
           Review
         </Link>
-      ) : (
-        <button type="button" role="menuitem" disabled>
-          Review
-        </button>
-      )}
+      ) : null}
       <RevisionLifecycle
         key={`${revisionId}:${refreshToken}`}
         itemId={itemId}
         revision={revision}
         canEdit={canEdit}
         isAdmin={isAdmin}
-        canRelease={canRelease}
+        canRelease={!!availability?.can_release}
+        isCreator={!!availability?.is_creator}
         closeMenu={closeMenu}
         activeSection={activeSection}
       />
     </>
   );
 }
+type RevisionActionAvailability = {
+  is_creator: boolean;
+  is_assigned_reviewer: boolean;
+  can_review: boolean;
+  can_release: boolean;
+  can_generate: boolean;
+  worker_configured: boolean;
+};
 export function ItemWorkspace({
   canEdit,
   canReview,
@@ -794,6 +799,9 @@ export function ItemWorkspace({
   );
   const itemPath = `/items/${encodeURIComponent(itemId)}`;
   const revisionPath = revisionId ? `${itemPath}/revisions/${encodeURIComponent(revisionId)}` : '';
+  const actionAvailability = useResource<RevisionActionAvailability>(
+    revisionId ? `${revisionPath}/action-availability` : null
+  );
   const basePath = revisionPath || itemPath;
   const item = useResource<Item>(itemPath);
   const revisions = useResource<Revision[]>(`${itemPath}/revisions`);
@@ -841,7 +849,6 @@ export function ItemWorkspace({
         { id: 'edit', label: 'Edit revision', group: 'Actions' },
         { id: 'generate', label: 'Generate metadata & preview', group: 'Actions' },
         { id: 'review', label: 'Review', group: 'Actions' },
-        { id: 'emergency', label: 'Emergency Review', group: 'Actions' },
         { id: 'approval', label: 'Request approval', group: 'Actions' },
         { id: 'release', label: 'Release revision', group: 'Actions' },
         { id: 'withdraw', label: 'Withdraw request', group: 'Actions' },
@@ -944,6 +951,7 @@ export function ItemWorkspace({
                         closeMenu={closeMenu}
                         refreshToken={lifecycleRefreshToken}
                         activeSection={activeSection}
+                        availability={actionAvailability.data}
                       />
                     )
                   : undefined
@@ -979,210 +987,215 @@ export function ItemWorkspace({
               actions apply to the current revision. <Link to={basePath}>Return to current</Link>
             </p>
           )}
-          {activeSection === 'history' && (
-            <HistorySection key={basePath} path={`${basePath}/history`} />
-          )}
-          {activeSection === 'overview' && versionReady && (
-            <section>
-              <SectionTitle
-                title="Overview"
-                description={
-                  revisionId
-                    ? 'Revision identity and selected model image.'
-                    : 'Stable Item identity and description.'
-                }
-              />
-              <div className={revisionId ? 'revision-overview-layout' : ''}>
-                {(!revisionId || overviewRevision) && (
-                  <OverviewProperties item={item.data} revision={overviewRevision} />
-                )}
-                {revisionId && overviewRevision && (
-                  <RevisionThumbnail
-                    key={`${revisionId}:${historicalSnapshotId ?? 'current'}`}
-                    revisionId={revisionId}
-                    itemNumber={item.data.item_number}
-                    revisionCode={overviewRevision.revision_code}
-                    snapshotId={historicalSnapshotId}
-                    previewPath={`${basePath}?${new URLSearchParams({ section: 'preview', ...(requestedVersionId ? { version: requestedVersionId } : {}) })}`}
-                  />
-                )}
-              </div>
-            </section>
-          )}
-          {activeSection === 'revisions' && (
-            <section>
-              <SectionTitle
-                title="Revisions"
-                description="Open a specific revision to inspect its content and state."
-              />
-              <ResourceState state={revisions} />
-              {!revisions.loading && !revisions.error && revisions.data && (
-                <RevisionTable itemPath={itemPath} revisions={revisions.data} />
-              )}
-            </section>
-          )}
-          {!revisionId && activeSection === 'item-attachments' && (
-            <Attachments
-              key={itemPath}
-              path={`${itemPath}/attachments`}
-              scope="Item"
-              editUrl={canEdit ? `${itemPath}/attachments/edit` : undefined}
-            />
-          )}
-          {revisionId && !revision.error && revision.data && (
-            <>
-              {activeSection === 'versions' && versionReady && (
-                <VersionHistory
-                  key={revisionId}
-                  revisionId={revisionId}
-                  itemId={itemId}
-                  isAssembly={item.data.item_type === 'ASSEMBLY'}
-                  canRestore={
-                    canEdit &&
-                    revision.data.lifecycle_state === 'WORKING' &&
-                    revision.data.checkout_status !== 'CHECKED_OUT_BY_OTHER'
+          <div key={`${basePath}:${activeSection}:${historicalSnapshotId ?? 'current'}`}>
+            {activeSection === 'history' && (
+              <HistorySection key={basePath} path={`${basePath}/history`} />
+            )}
+            {activeSection === 'overview' && versionReady && (
+              <section>
+                <SectionTitle
+                  title="Overview"
+                  description={
+                    revisionId
+                      ? 'Revision identity and selected model image.'
+                      : 'Stable Item identity and description.'
                   }
                 />
-              )}
-              {activeSection === 'structure' && versionReady && (
-                <StructureSection
-                  key={`${revisionId}:${historicalSnapshotId ?? 'current'}`}
-                  item={item.data}
-                  revisionId={revisionId}
-                  snapshotId={historicalSnapshotId}
+                <div className={revisionId ? 'revision-overview-layout' : ''}>
+                  {(!revisionId || overviewRevision) && (
+                    <OverviewProperties item={item.data} revision={overviewRevision} />
+                  )}
+                  {revisionId && overviewRevision && (
+                    <RevisionThumbnail
+                      key={`${revisionId}:${historicalSnapshotId ?? 'current'}`}
+                      revisionId={revisionId}
+                      itemNumber={item.data.item_number}
+                      revisionCode={overviewRevision.revision_code}
+                      snapshotId={historicalSnapshotId}
+                      previewPath={`${basePath}?${new URLSearchParams({ section: 'preview', ...(requestedVersionId ? { version: requestedVersionId } : {}) })}`}
+                    />
+                  )}
+                </div>
+              </section>
+            )}
+            {activeSection === 'revisions' && (
+              <section>
+                <SectionTitle
+                  title="Revisions"
+                  description="Open a specific revision to inspect its content and state."
                 />
-              )}
-              {activeSection === 'relationships' && (
-                <RelationshipsSection key={revisionId} itemId={itemId} revisionId={revisionId} />
-              )}
-              {activeSection === 'preview' && versionReady && (
-                <PreviewSection
-                  key={`${revisionId}:${historicalSnapshotId ?? 'current'}`}
-                  revisionId={revisionId}
-                  revisionCode={revision.data.revision_code}
-                  item={item.data}
-                  snapshotId={historicalSnapshotId}
-                  onManagedSelection={onManagedSelection}
-                  viewerCommand={viewerCommand}
-                />
-              )}
-              {activeSection === 'revision-files' && versionReady && (
-                <ArtifactSection
-                  key={`${revisionId}:${historicalSnapshotId ?? 'current'}`}
-                  path={`/item-revisions/${encodeURIComponent(revisionId)}/artifacts${historicalSnapshotId ? `?snapshot_id=${encodeURIComponent(historicalSnapshotId)}` : ''}`}
-                  revisionId={revisionId}
-                  itemNumber={item.data.item_number}
-                  revisionCode={revision.data.revision_code}
-                  isAssembly={item.data.item_type === 'ASSEMBLY'}
-                  snapshotId={historicalSnapshotId}
-                />
-              )}
-              {activeSection === 'revision-attachments' && (
-                <Attachments
-                  key={revisionId}
-                  path={`${revisionPath}/attachments`}
-                  scope="Revision"
-                  editUrl={canEdit ? `${revisionPath}/attachments/edit` : undefined}
-                />
-              )}
-              {activeSection === 'cad' && (
-                <RevisionCadSection
-                  key={revisionId}
-                  itemId={itemId}
-                  revision={revision.data}
-                  canEdit={canEdit}
-                />
-              )}
-              {activeSection === 'stages' && (
-                <RevisionStages key={revisionId} revisionId={revisionId} isAdmin={isAdmin} />
-              )}
-              {activeSection === 'intelligence' && (
-                <BOMIntelligenceSection key={revisionId} revisionId={revisionId} />
-              )}
-              {activeSection === 'properties' && (
-                <MetadataSection
-                  key={revisionId}
-                  path={`/revisions/${encodeURIComponent(revisionId)}/metadata`}
-                  item={item.data}
-                  declared={revision.data.metadata_json}
-                />
-              )}
-              {activeSection === 'generate' && <GeneratePreviewPage key={revisionId} embedded />}
-              {activeSection === 'compare' && (
-                <Suspense fallback={<p role="status">Loading comparison…</p>}>
-                  <Comparison key={revisionId} embedded />
-                </Suspense>
-              )}
-              {activeSection === 'edit' &&
-                (canEdit &&
-                revision.data.lifecycle_state === 'WORKING' &&
-                revision.data.checkout_status !== 'CHECKED_OUT_BY_OTHER' ? (
-                  <Suspense fallback={<p role="status">Loading revision editor…</p>}>
-                    <CheckinWorkflow
+                <ResourceState state={revisions} />
+                {!revisions.loading && !revisions.error && revisions.data && (
+                  <RevisionTable itemPath={itemPath} revisions={revisions.data} />
+                )}
+              </section>
+            )}
+            {!revisionId && activeSection === 'item-attachments' && (
+              <Attachments
+                key={itemPath}
+                path={`${itemPath}/attachments`}
+                scope="Item"
+                editUrl={canEdit ? `${itemPath}/attachments/edit` : undefined}
+              />
+            )}
+            {revisionId && !revision.error && revision.data && (
+              <>
+                {activeSection === 'versions' && versionReady && (
+                  <VersionHistory
+                    key={revisionId}
+                    revisionId={revisionId}
+                    itemId={itemId}
+                    isAssembly={item.data.item_type === 'ASSEMBLY'}
+                    canRestore={
+                      canEdit &&
+                      revision.data.lifecycle_state === 'WORKING' &&
+                      revision.data.checkout_status !== 'CHECKED_OUT_BY_OTHER'
+                    }
+                  />
+                )}
+                {activeSection === 'structure' && versionReady && (
+                  <StructureSection
+                    key={`${revisionId}:${historicalSnapshotId ?? 'current'}`}
+                    item={item.data}
+                    revisionId={revisionId}
+                    snapshotId={historicalSnapshotId}
+                  />
+                )}
+                {activeSection === 'relationships' && (
+                  <RelationshipsSection key={revisionId} itemId={itemId} revisionId={revisionId} />
+                )}
+                {activeSection === 'preview' && versionReady && (
+                  <PreviewSection
+                    key={`${revisionId}:${historicalSnapshotId ?? 'current'}`}
+                    revisionId={revisionId}
+                    revisionCode={revision.data.revision_code}
+                    item={item.data}
+                    snapshotId={historicalSnapshotId}
+                    onManagedSelection={onManagedSelection}
+                    viewerCommand={viewerCommand}
+                  />
+                )}
+                {activeSection === 'revision-files' && versionReady && (
+                  <ArtifactSection
+                    key={`${revisionId}:${historicalSnapshotId ?? 'current'}`}
+                    path={`/item-revisions/${encodeURIComponent(revisionId)}/artifacts${historicalSnapshotId ? `?snapshot_id=${encodeURIComponent(historicalSnapshotId)}` : ''}`}
+                    revisionId={revisionId}
+                    itemNumber={item.data.item_number}
+                    revisionCode={revision.data.revision_code}
+                    isAssembly={item.data.item_type === 'ASSEMBLY'}
+                    snapshotId={historicalSnapshotId}
+                  />
+                )}
+                {activeSection === 'revision-attachments' && (
+                  <Attachments
+                    key={revisionId}
+                    path={`${revisionPath}/attachments`}
+                    scope="Revision"
+                    editUrl={canEdit ? `${revisionPath}/attachments/edit` : undefined}
+                  />
+                )}
+                {activeSection === 'cad' && (
+                  <RevisionCadSection
+                    key={revisionId}
+                    itemId={itemId}
+                    revision={revision.data}
+                    canEdit={canEdit}
+                  />
+                )}
+                {activeSection === 'stages' && (
+                  <RevisionStages key={revisionId} revisionId={revisionId} isAdmin={isAdmin} />
+                )}
+                {activeSection === 'intelligence' && (
+                  <BOMIntelligenceSection key={revisionId} revisionId={revisionId} />
+                )}
+                {activeSection === 'properties' && (
+                  <MetadataSection
+                    key={revisionId}
+                    path={`/revisions/${encodeURIComponent(revisionId)}/metadata`}
+                    item={item.data}
+                    declared={revision.data.metadata_json}
+                  />
+                )}
+              {activeSection === 'generate' && actionAvailability.data?.worker_configured && actionAvailability.data?.can_generate && <GeneratePreviewPage key={revisionId} embedded />}
+                {activeSection === 'compare' && (
+                  <Suspense fallback={<p role="status">Loading comparison…</p>}>
+                    <Comparison key={revisionId} embedded />
+                  </Suspense>
+                )}
+                {activeSection === 'edit' &&
+                (actionAvailability.data?.is_creator && canEdit &&
+                  revision.data.lifecycle_state === 'WORKING' &&
+                  revision.data.checkout_status !== 'CHECKED_OUT_BY_OTHER' ? (
+                    <Suspense fallback={<p role="status">Loading revision editor…</p>}>
+                      <CheckinWorkflow
+                        key={revisionId}
+                        embedded
+                        editContext={{
+                          itemId,
+                          itemNumber: item.data.item_number,
+                          itemName: item.data.name,
+                          itemType: item.data.item_type,
+                          revisionId,
+                          revisionCode: revision.data.revision_code,
+                        }}
+                      />
+                    </Suspense>
+                  ) : (
+                    <p className="empty-panel">
+                      Editing is unavailable for this revision or your role.
+                    </p>
+                  ))}
+                {activeSection === 'review' && actionAvailability.data?.can_review && (
+                  <Suspense fallback={<p role="status">Loading reviews…</p>}>
+                    <ReviewInbox
                       key={revisionId}
+                      canReview={canReview}
                       embedded
-                      editContext={{
-                        itemId,
-                        itemNumber: item.data.item_number,
-                        itemName: item.data.name,
-                        itemType: item.data.item_type,
-                        revisionId,
-                        revisionCode: revision.data.revision_code,
+                      selectedRevisionId={revisionId}
+                      onChanged={() => {
+                        revision.retry();
+                        actionAvailability.retry();
+                        setLifecycleRefreshToken((value) => value + 1);
                       }}
                     />
                   </Suspense>
-                ) : (
-                  <p className="empty-panel">
-                    Editing is unavailable for this revision or your role.
-                  </p>
-                ))}
-              {activeSection === 'review' && (
-                <Suspense fallback={<p role="status">Loading reviews…</p>}>
-                  <ReviewInbox
-                    key={revisionId}
-                    canReview={canReview}
-                    embedded
-                    selectedRevisionId={revisionId}
+                )}
+                {(['approval', 'release', 'withdraw'] as const).includes(
+                  activeSection as Exclude<RevisionLifecycleAction, 'emergency'>
+                ) && (
+                  <RevisionLifecyclePanel
+                    key={`${revisionId}:${activeSection}`}
+                    itemId={itemId}
+                    revision={revision.data}
+                    action={activeSection as RevisionLifecycleAction}
+                    canEdit={canEdit}
+                    isAdmin={isAdmin}
+                    canRelease={!!actionAvailability.data?.can_release}
+                    isCreator={!!actionAvailability.data?.is_creator}
                     onChanged={() => {
                       revision.retry();
+                      actionAvailability.retry();
                       setLifecycleRefreshToken((value) => value + 1);
                     }}
                   />
-                </Suspense>
-              )}
-              {(['emergency', 'approval', 'release', 'withdraw'] as const).includes(
-                activeSection as RevisionLifecycleAction
-              ) && (
-                <RevisionLifecyclePanel
-                  key={`${revisionId}:${activeSection}`}
-                  itemId={itemId}
-                  revision={revision.data}
-                  action={activeSection as RevisionLifecycleAction}
-                  canEdit={canEdit}
-                  isAdmin={isAdmin}
-                  canRelease={canRelease}
-                  onChanged={() => {
-                    revision.retry();
-                    setLifecycleRefreshToken((value) => value + 1);
-                  }}
-                />
-              )}
-              {versionReady && (
-                <RevisionAssistant
-                  key={`${revisionId}:${historicalSnapshotId ? 'historical' : 'current'}`}
-                  itemId={itemId}
-                  revisionId={revisionId}
-                  itemNumber={item.data.item_number}
-                  isAssembly={item.data.item_type === 'ASSEMBLY'}
-                  selectedOccurrenceId={selectedOccurrenceId}
-                  historical={!!historicalSnapshotId}
-                  onViewerAction={(command) => {
-                    setViewerCommandState({ revisionId, command });
-                    navigate(`${basePath}?section=preview`);
-                  }}
-                />
-              )}
-            </>
+                )}
+              </>
+            )}
+          </div>
+          {revisionId && !revision.error && revision.data && versionReady && (
+            <RevisionAssistant
+              key={`${revisionId}:${historicalSnapshotId ? 'historical' : 'current'}`}
+              itemId={itemId}
+              revisionId={revisionId}
+              itemNumber={item.data.item_number}
+              isAssembly={item.data.item_type === 'ASSEMBLY'}
+              selectedOccurrenceId={selectedOccurrenceId}
+              historical={!!historicalSnapshotId}
+              onViewerAction={(command) => {
+                setViewerCommandState({ revisionId, command });
+                navigate(`${basePath}?section=preview`);
+              }}
+            />
           )}
         </>
       )}

@@ -43,6 +43,39 @@ if (args.Length > 0)
     return;
 }
 
+// CAD-system filters retain the selected worker even when native extensions overlap.
+var inventorFormat = new WorkerFormat("inventor", "Inventor", "Autodesk Inventor", "1.0",
+    [".ipt", ".iam", ".idw", ".ipn", ".dwg", ".dxf"]);
+var autocadFormat = new WorkerFormat("autocad", "AutoCAD", "Autodesk AutoCAD", "1.0", [".dwg", ".dxf"]);
+var cadFilters = NativeFilePicker.BuildFilters([autocadFormat, inventorFormat]);
+Assert(cadFilters.Select(filter => filter.Name).SequenceEqual(new[] { "FreeCAD", "Inventor", "AutoCAD" }),
+    "only CAD-system file types are offered in the expected order");
+Assert(cadFilters[0].Label == "FreeCAD (*.FCStd)", "FreeCAD file type label");
+Assert(NativeFilePicker.SelectFile("drawing.DWG", cadFilters[1]).Worker?.Id == "inventor",
+    "Inventor filter routes shared DWG to Inventor");
+Assert(NativeFilePicker.SelectFile("drawing.dwg", cadFilters[2]).Worker?.Id == "autocad",
+    "AutoCAD filter routes shared DWG to AutoCAD");
+Assert(NativeFilePicker.SelectFile("part.FCStd", cadFilters[0]).Worker is null,
+    "FreeCAD retains built-in preprocessing without external registration");
+var freecadFormat = new WorkerFormat("external-freecad", "FreeCAD", "FreeCAD", "1.0", [".fcstd"]);
+var registeredFilters = NativeFilePicker.BuildFilters([freecadFormat, inventorFormat, autocadFormat]);
+Assert(registeredFilters.Count == 3 && NativeFilePicker.SelectFile("part.FCStd", registeredFilters[0]).Worker?.Id == "external-freecad",
+    "registered FreeCAD uses one filter and the external preprocessor");
+try
+{
+    NativeFilePicker.SelectFile("part.ipt", cadFilters[2]);
+    throw new Exception("AutoCAD selection must reject Inventor-only extension.");
+}
+catch (InvalidOperationException error) when (error.Message.Contains("AutoCAD file type")) { }
+var duplicateFilters = NativeFilePicker.BuildFilters([autocadFormat, autocadFormat with { Id = "other-autocad" }]);
+try
+{
+    NativeFilePicker.SelectFile("drawing.dwg", duplicateFilters.Single(filter => filter.CadSystem == "autocad"));
+    throw new Exception("Duplicate registrations within one CAD system must remain ambiguous.");
+}
+catch (InvalidOperationException error) when (error.Message.Contains("More than one registered AutoCAD")) { }
+Console.WriteLine("All CAD file picker routing tests passed.");
+
 if (!OperatingSystem.IsWindows())
 {
     try { await CadAnalyzer.AnalyzeAsync("root.prt", Path.GetTempPath(), CancellationToken.None); }

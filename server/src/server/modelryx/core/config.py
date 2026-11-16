@@ -37,13 +37,10 @@ class Settings(BaseSettings):
     converter_timeout_seconds: int = 1800
     server_url: str = "http://localhost:8000"
     cad_analyzer_url: str | None = None
+    freecad_preprocessor_url: str | None = None
     step_worker_url: str = "http://localhost:8080"
     freecad_worker_url: str | None = None
     internal_worker_key: str | None = None
-    autocad_worker_url: str | None = None
-    inventor_worker_url: str | None = None
-    nx_worker_url: str | None = None
-    nx_allow_unqualified_processing: bool = False
     max_preview_package_bytes: int = 2 * 1024 * 1024 * 1024
     max_preview_glb_bytes: int = 1024 * 1024 * 1024
     max_preview_bom_bytes: int = 64 * 1024 * 1024
@@ -137,9 +134,8 @@ class Settings(BaseSettings):
 
         if len(self.jwt_secret.strip()) < 32 or is_placeholder(self.jwt_secret):
             raise ValueError("production requires a unique JWT secret of at least 32 characters")
-        if (
-            len(self.bootstrap_admin_password.strip()) < 16
-            or is_placeholder(self.bootstrap_admin_password)
+        if len(self.bootstrap_admin_password.strip()) < 16 or is_placeholder(
+            self.bootstrap_admin_password
         ):
             raise ValueError(
                 "production requires a unique administrator password of at least 16 characters"

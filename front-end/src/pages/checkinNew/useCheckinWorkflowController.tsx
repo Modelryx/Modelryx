@@ -13,7 +13,7 @@ import '../CheckinNew.css';
 import { createPrepareModifiedEditChildren } from './editAssemblyActions';
 import { createAssemblyUploadActions } from './assemblyUploadActions';
 import { randomUUID } from '../../uuid';
-import { unzipSync } from 'fflate';
+import { unzipSync, zipSync } from 'fflate';
 
 import {
   type CadBundleManifest,
@@ -607,7 +607,8 @@ export function useCheckinWorkflowController({
     event: ChangeEvent<HTMLInputElement> | File[],
     packagedMain?: string,
     packagedReport?: CadDependencyReport,
-    forceFolder = false
+    forceFolder = false,
+    externalCadSystem?: string
   ) => {
     const selectedFiles = Array.isArray(event) ? event : Array.from(event.target.files ?? []);
     if (selectedFiles.length === 0) return;
@@ -623,7 +624,7 @@ export function useCheckinWorkflowController({
     const effectiveMode = forceFolder
       ? 'folder'
       : packagedMain
-        ? (inventorPackage || nxPackage) && packagedReport!.document_type === 'ASSEMBLY'
+        ? (inventorPackage || nxPackage) && packagedReport?.document_type === 'ASSEMBLY'
           ? 'folder'
           : 'single'
         : 'single';
@@ -637,7 +638,8 @@ export function useCheckinWorkflowController({
       !hasInventorAssembly &&
       !hasInventorPart &&
       !hasNx &&
-      !hasFreeCad
+      !hasFreeCad &&
+      !externalCadSystem
     ) {
       setFiles([]);
       setMainFileName('');
@@ -656,6 +658,7 @@ export function useCheckinWorkflowController({
       const packagedType = packagedReport?.files.find(
         (row) => row.logical_path === logicalPath
       )?.document_type;
+      if (externalCadSystem) return true;
       if (isProcessingSupport(logicalPath, packagedType)) return false;
       return effectiveMode !== 'folder' || nativePackageFolder || /\.fcstd$/i.test(file.name);
     });
@@ -663,9 +666,15 @@ export function useCheckinWorkflowController({
     const entries: FileEntry[] = chosenFiles.map((file) => ({
       file,
       logicalPath: file.webkitRelativePath || file.name,
-      documentType: packagedReport?.files.find(
-        (row) => row.logical_path === (file.webkitRelativePath || file.name)
-      )?.document_type,
+      externalCadSystem,
+      documentType:
+        externalCadSystem && forceFolder && !packagedReport
+          ? (file.webkitRelativePath || file.name) === packagedMain
+            ? 'ASSEMBLY'
+            : 'SUPPORTING'
+          : packagedReport?.files.find(
+              (row) => row.logical_path === (file.webkitRelativePath || file.name)
+            )?.document_type,
       sha256: null,
       status: 'pending' as const,
       isDuplicate: false,
@@ -704,12 +713,12 @@ export function useCheckinWorkflowController({
           : extension === 'step' || extension === 'stp'
             ? 'STEP'
             : null;
-    if (extension === 'prt') {
+    if (!externalCadSystem && extension === 'prt') {
       setWorkerWarning(
         'NX processing requires a qualified worker, or an explicitly enabled development worker. Preview generation also requires a compatible STEP service.'
       );
     }
-    if (sharedDrawing) {
+    if (!externalCadSystem && sharedDrawing) {
       try {
         const [inventor, autocad] = await Promise.all([
           api<WorkerPreflight>('/workers/preflight?worker_type=INVENTOR'),
@@ -729,7 +738,7 @@ export function useCheckinWorkflowController({
           'Unable to verify Inventor or AutoCAD worker availability. You may continue staging, but processing could be delayed.'
         );
       }
-    } else if (requiredWorker) {
+    } else if (!externalCadSystem && requiredWorker) {
       try {
         const preflight = await api<WorkerPreflight>(
           `/workers/preflight?worker_type=${requiredWorker}`
@@ -874,6 +883,12 @@ export function useCheckinWorkflowController({
         }
         setStagingId(staging.id);
         setStagingSnapshotVersion(staging.snapshot_version);
+        if (externalCadSystem) {
+          sessionStorage.setItem(
+            `modelryx-external-stage:${staging.id}`,
+            JSON.stringify({ root: initialMain, cadSystem: externalCadSystem })
+          );
+        }
         const identityEntries = entries.filter(
           (entry) => entry.sha256 && createsManagedItem(entry, packagedReport)
         );
@@ -957,17 +972,58 @@ export function useCheckinWorkflowController({
       });
       matched.push(file);
     }
+    const formats = await api<
+      Array<{ cadSystem: string; sourceExtensions: string[]; documentKinds: string[] }>
+    >('/workers/external-formats');
+    const proposedPrimaryId = stage.proposal?.artifacts
+      ?.find((artifact: { is_primary?: boolean }) => artifact.is_primary)
+      ?.files?.find((file: { role?: string }) => file.role === 'PRIMARY')?.staged_file_id;
+    let savedExternal: { root?: string; cadSystem?: string } = {};
+    try {
+      savedExternal = JSON.parse(
+        sessionStorage.getItem(`modelryx-external-stage:${stage.id}`) || '{}'
+      );
+    } catch {
+      // Older or corrupt browser state must not prevent resuming a server-side stage.
+    }
+    const proposedMain =
+      stage.files.find((file) => file.id === proposedPrimaryId) ??
+      stage.files.find((file) => file.logical_path === savedExternal.root);
+    const externalRoots = stage.files.flatMap((file) => {
+      const extension = `.${file.filename.split('.').pop()?.toLowerCase()}`;
+      return formats
+        .filter(
+          (worker) =>
+            worker.sourceExtensions.includes(extension) &&
+            (stage.files.length === 1 || worker.documentKinds.includes('assembly'))
+        )
+        .map((worker) => ({ file, worker }));
+    });
+    const inferred = externalRoots.length === 1 ? externalRoots[0] : undefined;
     const main =
+      proposedMain ??
+      inferred?.file ??
       stage.files
         .filter((file) => /\.(iam|ipt|fcstd)$/i.test(file.filename))
         .sort(
           (left, right) =>
             logicalPathDepth(left.logical_path) - logicalPathDepth(right.logical_path) ||
             (/\.iam$/i.test(left.filename) ? -1 : 1)
-        )[0] ?? stage.files[0];
+        )[0] ??
+      stage.files[0];
     setResumeStage(stage);
     setUploadMode(stage.files.length > 1 ? 'folder' : 'single');
-    await handleFileSelect(matched, main.logical_path, undefined, stage.files.length > 1);
+    const system = stage.proposal?.revision?.cad_system ?? savedExternal.cadSystem;
+    const externalSystem =
+      formats.find((worker) => worker.cadSystem.toLowerCase() === String(system).toLowerCase())
+        ?.cadSystem ?? inferred?.worker.cadSystem;
+    await handleFileSelect(
+      matched,
+      main.logical_path,
+      undefined,
+      stage.files.length > 1,
+      externalSystem
+    );
   };
 
   const persistEditAssemblyAnalysis = async (
@@ -1101,6 +1157,99 @@ export function useCheckinWorkflowController({
     }
   };
 
+  const analyzeExternalEditFolder = async (selected: File[], rootName: string) => {
+    if (!editStaging) return;
+    setCadSelectionBusy(true);
+    setEditStagingError('');
+    try {
+      const roots = selected.filter((file) => file.name === rootName);
+      if (roots.length !== 1)
+        throw new Error('The folder must contain exactly one file with the selected root name.');
+      const root = roots[0];
+      const rootPath = root.webkitRelativePath || root.name;
+      const extension = `.${root.name.split('.').pop()?.toLowerCase()}`;
+      const system = String(editStaging.proposal?.revision?.cad_system ?? '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+      const workers = await api<
+        Array<{
+          id: string;
+          cadSystem: string;
+          sourceExtensions: string[];
+          documentKinds: string[];
+          dependencyAnalysis: boolean;
+        }>
+      >('/workers/external-formats');
+      const matches = workers.filter(
+        (worker) =>
+          worker.dependencyAnalysis &&
+          worker.documentKinds.includes('assembly') &&
+          worker.sourceExtensions.includes(extension) &&
+          worker.cadSystem.toLowerCase().replace(/[^a-z0-9]/g, '') === system
+      );
+      if (matches.length !== 1)
+        throw new Error(
+          matches.length
+            ? 'More than one external analyzer matches this assembly.'
+            : 'No enabled external worker offers dependency analysis for this assembly.'
+        );
+      if (selected.length > 5000) throw new Error('The assembly folder contains too many files.');
+      const contents: Record<string, Uint8Array> = {};
+      const paths = new Set<string>();
+      for (const file of selected) {
+        const path = (file.webkitRelativePath || file.name).replace(/\\/g, '/');
+        if (
+          !path ||
+          path.startsWith('/') ||
+          path.split('/').includes('..') ||
+          paths.has(path.toLowerCase())
+        )
+          throw new Error(`Unsafe or duplicate package path: ${path}`);
+        paths.add(path.toLowerCase());
+        contents[path] = new Uint8Array(await file.arrayBuffer());
+      }
+      const rootBytes = new TextEncoder().encode(rootPath);
+      let binary = '';
+      rootBytes.forEach((value) => {
+        binary += String.fromCharCode(value);
+      });
+      const archive = zipSync(contents);
+      const response = await fetch(
+        serverApiUrl(`/cad/analyze?worker_id=${encodeURIComponent(matches[0].id)}`),
+        {
+          method: 'POST',
+          headers: {
+            ...authorizationHeader(),
+            'Content-Type': 'application/zip',
+            'X-Modelryx-Root-Path-B64': btoa(binary),
+          },
+          body: new Blob([archive]),
+        }
+      );
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok)
+        throw new Error(body.detail ?? `External assembly analysis failed (${response.status}).`);
+      const report = body as CadDependencyReport;
+      if (
+        report.document_type !== 'ASSEMBLY' ||
+        report.root_logical_path?.toLowerCase() !== rootPath.toLowerCase() ||
+        !Array.isArray(report.files) ||
+        !Array.isArray(report.missing_references)
+      )
+        throw new Error('The worker returned an invalid assembly analysis.');
+      await persistEditAssemblyAnalysis(report, selected);
+      setEditMessage(
+        `Analyzed ${selected.length} files. Review and reconcile the assembly before staging.`
+      );
+    } catch (reason) {
+      setEditStagingError(
+        reason instanceof Error ? reason.message : 'Unable to analyze the external assembly.'
+      );
+    } finally {
+      setCadSelectionBusy(false);
+    }
+  };
+
   const applySafeEditReconciliation = async () => {
     if (!editStaging || !editAnalysisIsCurrent) return;
     setEditBusy(true);
@@ -1134,34 +1283,68 @@ export function useCheckinWorkflowController({
       let decision: Record<string, unknown>;
       if (choice === 'CREATE_NEW') {
         const childPath = String(entry.new?.child_logical_path ?? '');
-        const analyzedFile = dependencyReport?.files.find(
-          (file) => file.logical_path === childPath
+        const priorEntry = editReconciliation.find(
+          (candidate) =>
+            candidate !== entry &&
+            String(candidate.new?.child_logical_path ?? '').toLowerCase() ===
+              childPath.toLowerCase() &&
+            editAssemblyAnalysis?.identity_decisions?.[
+              `${String(candidate.parent_logical_path ?? '').toLowerCase()}::${candidate.occurrence_key.toLowerCase()}`
+            ]
         );
-        const itemType =
-          analyzedFile?.document_type === 'ASSEMBLY' || /\.iam$/i.test(childPath)
-            ? 'ASSEMBLY'
-            : 'PART';
-        const generated = await api<GeneratedItemNumber>('/staging/item-numbers/generate', 'POST', {
-          item_type: itemType,
-        });
-        const filename = childPath.split('/').pop() || entry.occurrence_key;
-        const profile = cadProfile(filename);
-        decision = {
-          decision: 'CREATE_NEW',
-          item: {
-            item_number: generated.item_number,
-            name: filename.replace(/\.[^.]+$/, ''),
-            item_type: itemType,
-            description: null,
-            category: null,
-          },
-          revision: {
-            revision_code: 'A',
-            description: null,
-            cad_system: profile.cadSystem,
-            native_format: profile.nativeFormat,
-          },
-        };
+        const priorDecision =
+          priorEntry &&
+          editAssemblyAnalysis?.identity_decisions?.[
+            `${String(priorEntry.parent_logical_path ?? '').toLowerCase()}::${priorEntry.occurrence_key.toLowerCase()}`
+          ];
+        if (priorDecision && priorDecision.decision !== 'CREATE_NEW') {
+          throw new Error(
+            'This component was already assigned to an existing Item. Use the same identity for each occurrence.'
+          );
+        }
+        if (priorDecision?.item && priorDecision.revision) {
+          decision = {
+            decision: 'CREATE_NEW',
+            item: priorDecision.item,
+            revision: priorDecision.revision,
+          };
+        } else {
+          const analyzedFile = dependencyReport?.files.find(
+            (file) => file.logical_path === childPath
+          );
+          const itemType =
+            analyzedFile?.document_type === 'ASSEMBLY' || /\.iam$/i.test(childPath)
+              ? 'ASSEMBLY'
+              : 'PART';
+          const generated = await api<GeneratedItemNumber>(
+            '/staging/item-numbers/generate',
+            'POST',
+            {
+              item_type: itemType,
+            }
+          );
+          const filename = childPath.split('/').pop() || entry.occurrence_key;
+          const profile = cadProfile(filename);
+          decision = {
+            decision: 'CREATE_NEW',
+            item: {
+              item_number: generated.item_number,
+              name: filename.replace(/\.[^.]+$/, ''),
+              item_type: itemType,
+              description: null,
+              category: null,
+            },
+            revision: {
+              revision_code: 'A',
+              description: null,
+              cad_system:
+                profile.cadSystem === 'Unknown'
+                  ? (editStaging.proposal?.revision?.cad_system ?? 'Unknown')
+                  : profile.cadSystem,
+              native_format: profile.nativeFormat,
+            },
+          };
+        }
       } else {
         decision = { decision: 'USE_EXISTING', existing_revision_id: choice };
       }
@@ -1282,7 +1465,21 @@ export function useCheckinWorkflowController({
     setFileSelectionError('');
     setDependencyReport(null);
     try {
-      const requestSelection = () => fetch(`${agentBase}/api/v1/selections`, { method: 'POST' });
+      const formats = await api<
+        Array<{
+          id: string;
+          cadSystem: string;
+          workerName: string;
+          workerVersion: string;
+          sourceExtensions: string[];
+        }>
+      >('/workers/external-formats');
+      const requestSelection = () =>
+        fetch(`${agentBase}/api/v1/selections`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formats),
+        });
       const checkHealth = async (): Promise<'ready' | 'forbidden' | 'unavailable'> => {
         const controller = new AbortController();
         const timeout = window.setTimeout(() => controller.abort(), 1500);
@@ -1353,6 +1550,8 @@ export function useCheckinWorkflowController({
         status_url?: string;
         report?: CadDependencyReport;
         package_url?: string;
+        worker_id?: string | null;
+        cad_system?: string | null;
       };
       let result = (await response.json().catch(() => ({}))) as LocalCadResult;
       if (!response.ok)
@@ -1393,7 +1592,14 @@ export function useCheckinWorkflowController({
       }
       if (!result.report || !result.package_url)
         throw new Error('The local CAD agent returned an incomplete result.');
-      const report = withoutProcessingSupport(result.report);
+      const selectedWorker = result.worker_id
+        ? formats.find(
+            (worker) => worker.id === result.worker_id && worker.cadSystem === result.cad_system
+          )
+        : undefined;
+      if (result.worker_id && !selectedWorker)
+        throw new Error('The local CAD agent returned an unregistered worker.');
+      const report = selectedWorker ? result.report : withoutProcessingSupport(result.report);
       setDependencyReport(report);
       if (report.contract_version !== '1.0') {
         throw new Error(
@@ -1447,7 +1653,8 @@ export function useCheckinWorkflowController({
         report,
         /\.prt$/i.test(report.root_logical_path)
           ? report.document_type === 'ASSEMBLY'
-          : selectedFiles.length > 1
+          : selectedFiles.length > 1,
+        selectedWorker?.cadSystem
       );
       setDependencyReport(report);
     } catch (reason) {
@@ -1738,6 +1945,15 @@ export function useCheckinWorkflowController({
     // the completion screen so a delayed or repeated click cannot submit it twice.
     if (committedItemId) return;
     if (uploadMode === 'folder') {
+      if (files.some((entry) => entry.externalCadSystem)) {
+        const root = files.find((entry) => entry.logicalPath === mainFileName);
+        if (dependencyReport && root?.documentType === 'ASSEMBLY' && !targetItemId) {
+          await uploadAssembly();
+        } else {
+          await uploadExternalAssembly();
+        }
+        return;
+      }
       if (/\.(iam|ipt)$/i.test(mainFileName)) await uploadInventorPackage();
       else await uploadAssembly();
       return;
@@ -1749,9 +1965,119 @@ export function useCheckinWorkflowController({
     }
   };
 
+  const uploadExternalAssembly = async () => {
+    const main = files.find((entry) => entry.logicalPath === mainFileName);
+    if (!main || !stagingId || files.some((entry) => entry.status !== 'ready')) return;
+    const index = files.indexOf(main);
+    if (!main.itemNumber.trim() || !main.itemName.trim() || !main.revision.trim()) {
+      updateEntry(index, { formError: 'Item number, name and revision are required.' });
+      return;
+    }
+    if (!(await reviewIdentities([main]))) return;
+    if (main.duplicateChoice === 'USE_EXISTING') {
+      updateEntry(index, { formError: 'Select Create new Item to upload this assembly package.' });
+      return;
+    }
+    setFiles((previous) =>
+      previous.map((entry) => ({ ...entry, status: 'uploading', uploadProgress: 0 }))
+    );
+    try {
+      let staging = await api<StagingResult>(`/staging/${stagingId}`);
+      const staged = (entry: FileEntry) => {
+        const row = staging.files.find((file) => file.logical_path === entry.logicalPath);
+        if (!row) throw new Error(`${entry.file.name} is missing from staging.`);
+        return row;
+      };
+      const relatedDrawings = main.externalCadSystem?.toLowerCase() === 'inventor'
+        ? files.filter((entry) => entry !== main && isDrawing(entry))
+        : [];
+      staging = await api<StagingResult>(`/staging/${stagingId}/proposal`, 'PUT', {
+        expected_snapshot_version: staging.snapshot_version,
+        operation: targetItemId ? 'CREATE_REVISION' : 'CREATE_ITEM',
+        ...(targetItemId && targetRevisionId
+          ? { destination: { item_id: targetItemId, revision_id: targetRevisionId } }
+          : {}),
+        item: {
+          item_number: main.itemNumber.trim(),
+          name: main.itemName.trim(),
+          item_type: main.documentType === 'ASSEMBLY' ? 'ASSEMBLY' : 'PART',
+          description: main.description.trim() || null,
+          category: main.category.trim() || null,
+        },
+        revision: {
+          revision_code: main.revision.trim(),
+          cad_system: main.externalCadSystem,
+          native_format: main.file.name.split('.').pop()?.toUpperCase(),
+        },
+        artifacts: [
+          {
+            client_artifact_id: randomUUID(),
+            artifact_type: main.documentType === 'ASSEMBLY' ? 'CAD_ASSEMBLY' : main.documentType === 'DRAWING' ? 'DRAWING' : 'CAD_MODEL',
+            name: main.itemName.trim(),
+            classification: 'AUTHORITATIVE',
+            relation_type: 'SPECIFICATION',
+            is_primary: true,
+            files: files.filter((entry) => !relatedDrawings.includes(entry)).map((entry) => ({
+              staged_file_id: staged(entry).id,
+              reference_name: entry.logicalPath,
+              role: entry === main ? 'PRIMARY' : 'SECONDARY',
+            })),
+          },
+          ...relatedDrawings.map((drawing) => ({
+            client_artifact_id: randomUUID(),
+            artifact_type: 'DRAWING',
+            name: drawing.file.name.replace(/\.[^.]+$/, ''),
+            classification: 'AUTHORITATIVE',
+            relation_type: 'DRAWING',
+            is_primary: false,
+            files: [{ staged_file_id: staged(drawing).id, reference_name: drawing.logicalPath, role: 'PRIMARY' }],
+          })),
+        ],
+        identity_decisions: [{ staged_file_id: staged(main).id, decision: 'CREATE_NEW' }],
+        bom: [],
+      });
+      setStagingSnapshotVersion(staging.snapshot_version);
+      for (const entry of files) {
+        const row = staged(entry);
+        if (row.state === 'VERIFIED') continue;
+        const response = await fetch(serverApiUrl(row.upload_url), {
+          method: 'PUT',
+          headers: { ...authorizationHeader(), 'Content-Type': 'application/octet-stream' },
+          body: entry.file,
+        });
+        if (!response.ok)
+          throw new Error(`Upload failed for ${entry.logicalPath} (${response.status}).`);
+        staging = (await response.json()) as StagingResult;
+      }
+      const workflow = await api<StagingWorkflowResult>(`/staging/${stagingId}/submit`, 'POST');
+      setCommitMessage(
+        'Assembly upload complete. Validation and publication are running in the background.'
+      );
+      setFiles((previous) =>
+        previous.map((entry) => ({
+          ...entry,
+          status: 'complete',
+          uploadProgress: workflow.progress_percent,
+        }))
+      );
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : 'Unable to upload the assembly.';
+      setFiles((previous) =>
+        previous.map((entry) => ({
+          ...entry,
+          status: 'ready',
+          formError: entry.logicalPath === mainFileName ? message : undefined,
+        }))
+      );
+    }
+  };
+
   const commitNewItem = async (index: number) => {
     const entry = files[index];
-    const profile = cadProfile(entry.file.name, entry.documentType);
+    const profile = {
+      ...cadProfile(entry.file.name, entry.documentType),
+      ...(entry.externalCadSystem ? { cadSystem: entry.externalCadSystem } : {}),
+    };
     if (!entry.sha256 || !stagingId || stagingSnapshotVersion === null) return;
     if (!(await reviewIdentities([entry]))) return;
     if (entry.duplicateChoice === 'USE_EXISTING') {
@@ -1910,7 +2236,11 @@ export function useCheckinWorkflowController({
   const completeCount = files.filter((f) => f.status === 'complete').length;
   const inventorMainCandidates = files.filter((entry) => /\.iam$/i.test(entry.file.name));
   const assemblyMainCandidates = files
-    .filter((entry) => /\.(prt|iam|ipt|fcstd|dwg|dxf|step|stp)$/i.test(entry.file.name))
+    .filter((entry) =>
+      entry.externalCadSystem
+        ? entry.logicalPath === mainFileName
+        : /\.(prt|iam|ipt|fcstd|dwg|dxf|step|stp)$/i.test(entry.file.name)
+    )
     .sort(
       (left, right) =>
         Number(right.logicalPath === mainFileName) - Number(left.logicalPath === mainFileName) ||
@@ -2141,6 +2471,7 @@ export function useCheckinWorkflowController({
     workerAnalysisFiles,
     cadSelectionBusy,
     editStaging,
+    setEditStaging,
     editStagingError,
     editBusy,
     editMessage,
@@ -2180,6 +2511,7 @@ export function useCheckinWorkflowController({
     retryCommitProcessing,
     cancelEdit,
     importEditCadPackage,
+    analyzeExternalEditFolder,
     applySafeEditReconciliation,
     resolveEditAssemblyIdentity,
     stageResolvedEditAssembly,

@@ -7,10 +7,10 @@ from pathlib import Path
 from threading import Lock
 from uuid import UUID
 
-from analyzer_api import analyze
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from modelryx_worker_sdk import CONTRACT_VERSION
+from preprocessor_api import analyze
 from pydantic import ValidationError
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
@@ -77,10 +77,12 @@ def create_app(*, adapter=None, root: Path | None = None, worker_key: str | None
         return {"status": "ready"}
 
     @app.get("/api/v1/capabilities", dependencies=[Depends(authenticate)])
-    def capabilities():
+    def capabilities(request: Request):
         return {
             "contractVersion": CONTRACT_VERSION,
             "cadSystem": "freecad",
+            "workerName": "FreeCAD",
+            "workerVersion": store(request).adapter.worker_version,
             "documentKinds": list(DOCUMENT_KINDS),
             "sourceExtensions": [".fcstd"],
             "outputRoles": list(OUTPUTS),

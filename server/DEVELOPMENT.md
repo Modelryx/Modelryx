@@ -1,101 +1,31 @@
-# Modelryx Development Setup
+# Server development
 
-## Architecture
+Use [the root development guide](../DEVELOPMENT.md) for setup. Run Compose from the repository
+root and the frontend from `front-end/`. The UI uses **5174** with strict port checking;
+the API uses **8000**. Enter the reachable API address and valid credentials in the sign-in form.
 
-Modelryx uses a split development model:
-- **Backend (Python/FastAPI)**: Runs in Docker with PostgreSQL and worker services
-- **Frontend (React/Vite)**: Runs natively on your host machine for fast development
+For host Python development, install the SDK and server editable packages, configure the host
+PostgreSQL URL and storage root in `server/.env`, then run from `server/`:
 
-## Quick Start
-
-### 1. Start the backend services:
-```bash
-docker compose up -d
+```powershell
+python -m modelryx.initialize_database
+python -m uvicorn modelryx.api.main:app --reload --port 8000
 ```
 
-This starts:
-- PostgreSQL database
-- FastAPI server (http://localhost:8000)
-- Background worker for file processing
+Initialization creates a fresh schema or verifies a matching one. There is no automatic
+migration command. Keep both database and object-volume backups before schema changes.
 
-### 2. Run the frontend development server:
-```bash
-cd ../front
-npm install  # First time only
-npm run dev
+For Docker-backed changes, run from the repository root:
+
+```powershell
+docker compose up -d --build api general-worker
 ```
 
-Access the app at **http://localhost:5173/** with hot reload.
+For environment-only changes, recreate the affected containers rather than restarting them.
+On an initialized deployment use `docker compose up -d --no-deps api general-worker`.
+Allow exact frontend origins through `MODELRYX_CORS_ORIGINS`, e.g.
+`["http://localhost:5174","http://192.168.1.20:5174"]`. Browser localhost is the client machine.
 
-### 3. Login to the application:
-
-When you first open the app, you'll see a login dialog:
-- **Server URL**: `http://localhost:8000` (or your backend URL)
-- **Username**: Optional (no validation yet)
-- **Password**: Optional (no validation yet)
-
-Click "Connect" to proceed. The server URL is saved and used for all API calls.
-
-## How It Works
-
-- Frontend dev server (Vite) runs on port 5173
-- API calls use the configured server URL from the login dialog
-- Edit web code → instant reload (no Docker rebuild)
-- Backend stays in Docker with all dependencies isolated
-- Both run simultaneously during development
-
-## Testing
-
-For a local Python installation, install the worker SDK before the server:
-
-```bash
-python -m pip install -e ./worker-sdk
-python -m pip install -e './server[dev]'
-```
-
-Run these commands from the repository root. Build the server image from the same root with
-`docker build -f server/Dockerfile .` so the build includes the SDK.
-
-```bash
-# Run backend tests
-docker compose run --rm test
-
-# Run frontend tests (if applicable)
-cd ../front
-npm test
-```
-
-## Troubleshooting
-
-### Access from another computer on the LAN
-
-Open `http://<server-ip>:5173/` and set the login dialog's **Server URL** to
-`http://<server-ip>:8000`. `localhost` refers to the computer running the browser.
-
-Allow the frontend's exact origin in the repository root `.env` used by Docker
-Compose, preserving any other origins you use. For example:
-
-```dotenv
-MODELRYX_CORS_ORIGINS=["http://localhost:5173","http://localhost:5174","http://192.168.50.53:5173"]
-```
-
-Apply the change with `docker compose up -d --no-deps api` from the repository root.
-A plain container restart does not apply changed Compose environment variables.
-For a backend started directly from `server/`, configure `server/.env` instead and
-restart that process. Ensure port 8000 is reachable from the client computer.
-An OPTIONS response containing `Disallowed CORS origin` means the frontend origin
-is missing from the API allowlist; check the scheme, hostname and port.
-
-**API requests failing:**
-```bash
-docker compose ps              # Check services are running
-curl http://localhost:8000/health/live  # Test backend
-```
-
-**Change server connection:**
-- Click "Change Server" button in the header
-- Enter new server URL and reconnect
-
-**Port conflicts:**
-- Vite (5173): Will auto-select next available port
-- API (8000): Change in compose.yaml if needed
+See [testing](../docs/development/testing.md), [API](../docs/development/api.md),
+[worker protocol](../worker-sdk/README.md) and [backup/recovery](../docs/operations/backup-strategy.md).
+The frontend has typecheck/build/lint scripts, not an `npm test` script.

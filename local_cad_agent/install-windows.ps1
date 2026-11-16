@@ -41,6 +41,7 @@ if ($BuildPreprocessorsFromSource -or $BuildNxPreprocessorFromSource) {
 }
 
 $Executable = Join-Path $Publish "Modelryx.LocalCad.Agent.exe"
+Copy-Item -Force -LiteralPath (Join-Path $PSScriptRoot 'register-preprocessor.ps1') -Destination $Publish
 $Preprocessors = Join-Path $Publish "preprocessors"
 New-Item -ItemType Directory -Force -Path $Preprocessors | Out-Null
 # Remove the legacy local adapter layout. Server extraction binaries do not belong in this install.
@@ -143,10 +144,14 @@ if (-not $nxPreprocessor) {
 }
 
 $settingsPath = Join-Path $Publish "settings.json"
+$previousSettings = $null
+if (Test-Path -LiteralPath $settingsPath) {
+    try { $previousSettings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json }
+    catch { throw "Existing Local CAD Agent settings could not be read; refusing to overwrite them." }
+}
 $effectiveAllowedOrigins = @($AllowedOrigins | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-if (-not $PSBoundParameters.ContainsKey('AllowedOrigins') -and (Test-Path -LiteralPath $settingsPath)) {
+if (-not $PSBoundParameters.ContainsKey('AllowedOrigins') -and $previousSettings) {
     try {
-        $previousSettings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
         $effectiveAllowedOrigins = @($previousSettings.AllowedOrigins | Where-Object {
             -not [string]::IsNullOrWhiteSpace($_)
         })
@@ -162,9 +167,10 @@ $settings = [ordered]@{
     AutoCadPreprocessorDll = $autoCadPreprocessor
     NxDirectory = $NxDirectory
     NxPreprocessorExecutable = $nxPreprocessor
+    ExternalPreprocessors = @($previousSettings.ExternalPreprocessors | Where-Object { $null -ne $_ })
     AllowedOrigins = $effectiveAllowedOrigins
 }
-$settings | ConvertTo-Json | Set-Content -Encoding UTF8 $settingsPath
+$settings | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 $settingsPath
 $Protocol = "HKCU:\Software\Classes\modelryx-cad"
 New-Item -Force -Path $Protocol | Out-Null
 Set-Item -Path $Protocol -Value "URL:Modelryx CAD Protocol"

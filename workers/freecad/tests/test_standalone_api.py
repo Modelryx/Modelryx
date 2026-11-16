@@ -40,9 +40,11 @@ class Converter:
             time.sleep(0.01)
         self.sources.append((source.read_bytes(), (source.parent / "child.FCStd").read_bytes()))
         with ZipFile(preview, "w") as package:
+            package.writestr("model-preview.json", '{"schemaVersion":1,"items":[]}')
+            package.writestr("model.glb", b"glTF" + (2).to_bytes(4,"little") + (12).to_bytes(4,"little"))
             package.writestr("diagnostics.json", '{"warnings":[{"message":"Example warning"}]}')
         for role, (name, _, _) in OUTPUTS.items():
-            if role != "modelryx-preview":
+            if role not in {"modelryx-preview", "model-preview", "glb"}:
                 (preview.parent / name).write_text("{}", encoding="utf-8")
 
 
@@ -182,11 +184,11 @@ def test_worker_http_contract(tmp_path):
 
 
 def test_standalone_worker_exposes_authenticated_analyzer(tmp_path, monkeypatch):
-    import analyzer_api
+    import preprocessor_api
 
     monkeypatch.setenv("MODELRYX_INTERNAL_WORKER_KEY", "test-key")
     monkeypatch.setattr(
-        analyzer_api,
+        preprocessor_api,
         "_analyze_archive",
         lambda _archive, root: {"root_file": str(root), "missing_references": []},
     )
@@ -200,3 +202,43 @@ def test_standalone_worker_exposes_authenticated_analyzer(tmp_path, monkeypatch)
         response = client.post("/analyze", content=source_package(), headers=headers)
         assert response.status_code == 200
         assert response.json()["root_file"] == "Components/Root.FCStd"
+
+
+def test_generic_external_profile_and_legacy_profile(tmp_path):
+    """Generic registration and the embedded server's legacy remote client both work."""
+    app = create_app(adapter=Converter(), root=tmp_path, worker_key="test-key")
+    source = source_package()
+    with TestClient(app) as client:
+        capabilities = client.get("/api/v1/capabilities", headers=KEY).json()
+        assert capabilities["workerName"] == "FreeCAD"
+        assert capabilities["workerVersion"] == "test"
+        assert {"native-snapshot", "part-metadata", "model-preview", "glb"} <= set(capabilities["outputRoles"])
+        for required, preferred in [
+            (["native-snapshot", "part-metadata", "model-preview"], ["glb"]),
+            (["native-snapshot", "part-metadata", "modelryx-preview"], []),
+        ]:
+            job = request_for(source).model_copy(update={"requiredOutputs": required, "preferredOutputs": preferred})
+            response = client.post("/api/v1/jobs", headers=KEY, files={
+                "request": ("request.json", job.model_dump_json(), "application/json"),
+                "source": ("source.zip", source, "application/zip"),
+            })
+            assert response.status_code == 202
+            record = wait_for_terminal(app.state.store, job.jobId)
+            assert record["state"] == "Partial"
+            outputs = record["result"]["outputs"]
+            assert {output["role"] for output in outputs} == set(required + preferred)
+            for output in outputs:
+                raw = client.get(output["downloadUrl"], headers=KEY).content
+                assert hashlib.sha256(raw).hexdigest() == output["sha256"]
+                assert output["provenance"]["generator"] == "test-freecad"
+
+
+@pytest.mark.parametrize("role,payload", [("glb", b"invalid geometry"), ("model-preview", b"[]")])
+def test_invalid_generic_preview_is_not_published(tmp_path, role, payload):
+    from standalone.jobs import export_preview_members
+
+    archive = tmp_path / "preview.pfg"
+    with ZipFile(archive, "w") as package:
+        package.writestr(OUTPUTS[role][0], payload)
+    with ZipFile(archive) as package, pytest.raises(ValueError):
+        export_preview_members(package, tmp_path, {role})

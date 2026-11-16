@@ -9,7 +9,7 @@ Guides for deploying, managing, and maintaining Modelryx in production environme
   - Environment configuration
   - CAD worker resource requirements
   - Health check endpoints
-  - Scaling and monitoring
+  - Service selection and operational verification
 
 - **[backup-strategy.md](backup-strategy.md)** - Backup and disaster recovery
   - Backup procedures and scheduling
@@ -19,8 +19,8 @@ Guides for deploying, managing, and maintaining Modelryx in production environme
 
 - **[database.md](database.md)** - Database schema and configuration
   - Database schema overview
-  - Migration management
-  - Configuration and tuning
+  - Fresh-schema initialization and upgrade limitations
+  - Model ownership and connection configuration
   - Troubleshooting
 
 ## Quick Links

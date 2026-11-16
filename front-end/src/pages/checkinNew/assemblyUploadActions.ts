@@ -7,6 +7,7 @@ import {
   type StagingResult,
   type StagingWorkflowResult,
   cadProfile,
+  createsManagedItem,
   nxBomInstanceNames,
   inventorBomInstanceNames,
   isDrawing,
@@ -49,11 +50,13 @@ export function createAssemblyUploadActions(context: Context) {
     targetRevisionId,
   } = context;
   const uploadAssembly = async () => {
-    const ready = files.filter((entry) => entry.status === 'ready');
+    const packageEntries = files.filter((entry) => entry.status === 'ready');
+    const ready = packageEntries.filter((entry) => createsManagedItem(entry, dependencyReport));
     if (ready.length === 0) return;
     if (!mainFileName || !ready.some((entry) => entry.logicalPath === mainFileName)) return;
     const main = ready.find((entry) => entry.logicalPath === mainFileName)!;
     const mainProfile = cadProfile(main.file.name, main.documentType);
+    if (main.externalCadSystem) mainProfile.cadSystem = main.externalCadSystem;
     let hasMissingIdentity = false;
     for (const entry of ready) {
       if (entry.duplicateChoice === 'USE_EXISTING') continue;
@@ -117,7 +120,7 @@ export function createAssemblyUploadActions(context: Context) {
       });
       return;
     }
-    const readyNames = new Set(ready.map((entry) => entry.logicalPath));
+    const readyNames = new Set(packageEntries.map((entry) => entry.logicalPath));
     setFiles((previous) =>
       previous.map((entry) =>
         readyNames.has(entry.logicalPath)
@@ -133,6 +136,9 @@ export function createAssemblyUploadActions(context: Context) {
         return row;
       };
       const createNewEntries = ready.filter((entry) => entry.duplicateChoice !== 'USE_EXISTING');
+      const inventorDrawings = main.externalCadSystem?.toLowerCase() === 'inventor'
+        ? packageEntries.filter((entry) => entry !== main && isDrawing(entry))
+        : [];
       const nxInstanceNames = /\.prt$/i.test(main.file.name)
         ? nxBomInstanceNames(dependencyReport?.references ?? [])
         : [];
@@ -151,7 +157,7 @@ export function createAssemblyUploadActions(context: Context) {
             pending.push(reference.child_logical_path);
           }
         }
-        return ready.filter((entry) => paths.has(entry.logicalPath));
+        return packageEntries.filter((entry) => paths.has(entry.logicalPath) && !inventorDrawings.includes(entry));
       };
       const artifacts = [
         {
@@ -162,11 +168,25 @@ export function createAssemblyUploadActions(context: Context) {
           classification: 'AUTHORITATIVE',
           relation_type: 'SPECIFICATION',
           is_primary: true,
-          files: ready.map((entry) => ({
+          files: packageEntries.filter((entry) => !inventorDrawings.includes(entry)).map((entry) => ({
             staged_file_id: stagedFile(entry).id,
             reference_name: entry.logicalPath,
             role: entry === main ? 'PRIMARY' : 'SECONDARY',
           })),
+        ...inventorDrawings.map((drawing) => ({
+          client_artifact_id: randomUUID(),
+          owner_staged_file_id: (() => {
+            const owner = createNewEntries.find((entry) => entry !== main &&
+              relatedSupportPaths(entry.logicalPath, [drawing.logicalPath], dependencyReport?.references ?? []).length > 0);
+            return owner ? stagedFile(owner).id : null;
+          })(),
+          artifact_type: 'DRAWING',
+          name: drawing.file.name.replace(/\.[^.]+$/, ''),
+          classification: 'AUTHORITATIVE',
+          relation_type: 'DRAWING',
+          is_primary: false,
+          files: [{ staged_file_id: stagedFile(drawing).id, reference_name: drawing.logicalPath, role: 'PRIMARY' }],
+        })),
         },
         ...createNewEntries
           .filter((entry) => entry !== main)
@@ -210,7 +230,7 @@ export function createAssemblyUploadActions(context: Context) {
                 },
                 revision: {
                   revision_code: entry.revision.trim(),
-                  cad_system: cadProfile(entry.file.name, entry.documentType).cadSystem,
+                  cad_system: entry.externalCadSystem || cadProfile(entry.file.name, entry.documentType).cadSystem,
                   native_format: cadProfile(entry.file.name, entry.documentType).nativeFormat,
                 },
               }
@@ -233,7 +253,10 @@ export function createAssemblyUploadActions(context: Context) {
         artifacts,
         identity_decisions: identityDecisions,
         bom: dependencyReport?.references?.length
-          ? dependencyReport.references.map((reference, index) => {
+          ? dependencyReport.references.filter((reference) =>
+              ready.some((entry) => entry.logicalPath === reference.parent_logical_path) &&
+              ready.some((entry) => entry.logicalPath === reference.child_logical_path)
+            ).map((reference, index) => {
               const parent = ready.find(
                 (entry) => entry.logicalPath === reference.parent_logical_path
               );
@@ -282,8 +305,8 @@ export function createAssemblyUploadActions(context: Context) {
         )
       );
 
-      for (const entry of ready) {
-        if (entry.duplicateChoice === 'USE_EXISTING') continue;
+      for (const entry of packageEntries) {
+        if (!main.externalCadSystem && entry.duplicateChoice === 'USE_EXISTING') continue;
         const current = staging.files.find((row) => row.logical_path === entry.logicalPath);
         if (!current) throw new Error(`${entry.file.name} is missing from staging.`);
         if (current.state !== 'VERIFIED') {

@@ -3,6 +3,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 
+import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -20,10 +21,39 @@ Config = Annotated[Settings, Depends(get_settings)]
 Actor = Annotated[Principal, Depends(current_principal)]
 
 
+@router.get("/external-formats")
+def external_formats(db: Db, _: Actor) -> list[dict]:
+    """Expose supported formats without exposing worker endpoints or credentials."""
+    from modelryx.services.external_workers import registered_workers
+
+    # STEP retains its built-in path. FreeCAD registrations opt into the external path;
+    # without one, the existing embedded/remote FreeCAD processing remains available.
+    built_in_extensions = {".step", ".stp"}
+    return [
+        {
+            "id": worker["id"],
+            "cadSystem": worker["capabilities"]["cadSystem"],
+            "workerName": worker["capabilities"]["workerName"],
+            "workerVersion": worker["capabilities"]["workerVersion"],
+            "sourceExtensions": [
+                extension
+                for extension in worker["capabilities"]["sourceExtensions"]
+                if extension not in built_in_extensions
+            ],
+            "documentKinds": worker["capabilities"]["documentKinds"],
+            "dependencyAnalysis": worker["capabilities"]["dependencyAnalysis"],
+        }
+        for worker in registered_workers(db)
+        if worker["enabled"]
+        and any(
+            extension not in built_in_extensions
+            for extension in worker["capabilities"]["sourceExtensions"]
+        )
+    ]
+
+
 class HeartbeatRequest(BaseModel):
-    worker_type: str = Field(
-        min_length=2, max_length=32, pattern=r"^[A-Z][A-Z0-9_-]*$"
-    )
+    worker_type: str = Field(min_length=2, max_length=32, pattern=r"^[A-Z][A-Z0-9_-]*$")
     machine_name: str = Field(min_length=1, max_length=255)
     worker_version: str = Field(min_length=1, max_length=100)
     application_version: str | None = Field(default=None, max_length=100)
@@ -43,8 +73,10 @@ def record_heartbeat(
     x_modelryx_worker_key: Annotated[str | None, Header()] = None,
 ) -> Response:
     expected = settings.internal_worker_key
-    if not expected or not x_modelryx_worker_key or not hmac.compare_digest(
-        expected, x_modelryx_worker_key
+    if (
+        not expected
+        or not x_modelryx_worker_key
+        or not hmac.compare_digest(expected, x_modelryx_worker_key)
     ):
         raise HTTPException(status_code=401, detail="Invalid worker credential")
     values = {
@@ -99,13 +131,81 @@ def _best_heartbeat(
 
 @router.get("/preflight", response_model=WorkerPreflightResponse)
 async def worker_preflight(
-    worker_type: Annotated[
-        str, Query(min_length=2, max_length=32, pattern=r"^[A-Z][A-Z0-9_-]*$")
-    ],
+    worker_type: Annotated[str, Query(min_length=2, max_length=32, pattern=r"^[A-Z][A-Z0-9_-]*$")],
     db: Db,
     _: Actor,
     settings: Config,
 ) -> WorkerPreflightResponse:
+    if worker_type == "FREECAD":
+        from modelryx.api.admin import _probe_freecad_worker
+        from modelryx.services.external_workers import (
+            AmbiguousWorkerError,
+            matching_worker,
+            validate_capabilities,
+        )
+        from modelryx.services.freecad_settings import FREECAD_WORKER_KEY, configured_url
+
+        # Follow processing precedence. A selected remote service must not be
+        # masked by a healthy embedded heartbeat (or require one to be online).
+        try:
+            external = matching_worker(db, "source.FCStd", "freecad")
+        except AmbiguousWorkerError:
+            return WorkerPreflightResponse(
+                worker_type=worker_type, available=False, compatible=False,
+                message=(
+                    "Multiple enabled FreeCAD workers match this format. "
+                    "Resolve the conflicting registrations."
+                ),
+            )
+        if external is not None:
+            capabilities = {}
+            available = False
+            try:
+                if not settings.internal_worker_key:
+                    raise ValueError("The internal worker key is not configured.")
+                async with httpx.AsyncClient(timeout=3.0, follow_redirects=False) as client:
+                    response = await client.get(f"{external['url'].rstrip('/')}/ready")
+                    response.raise_for_status()
+                    response = await client.get(
+                        f"{external['url'].rstrip('/')}/api/v1/capabilities",
+                        headers={"X-Modelryx-Worker-Key": settings.internal_worker_key},
+                    )
+                    response.raise_for_status()
+                    capabilities = response.json()
+                    if validate_capabilities(capabilities) != external["capabilities"]:
+                        raise ValueError("Worker capabilities changed; register the worker again.")
+                available = True
+                message = "External FreeCAD worker is online and compatible."
+            except (httpx.HTTPError, ValueError, TypeError):
+                message = (
+                    "The selected external FreeCAD worker is offline or incompatible. "
+                    "Check its readiness, shared key and registration in External CAD Workers."
+                )
+            return WorkerPreflightResponse(
+                worker_type=worker_type, available=available, compatible=available,
+                status="IDLE" if available else None, message=message,
+                adapter_version=capabilities.get("workerVersion") if available else None,
+                capabilities=capabilities if available else {},
+            )
+        remote_url = configured_url(db, FREECAD_WORKER_KEY, settings.freecad_worker_url)
+        if remote_url:
+            connection = await _probe_freecad_worker(
+                "freecad", remote_url, settings.internal_worker_key
+            )
+            available = connection.availability == "ONLINE"
+            return WorkerPreflightResponse(
+                worker_type=worker_type, available=available, compatible=available,
+                status="IDLE" if available else None,
+                message=(
+                    "Standalone FreeCAD worker is online and compatible."
+                    if available else (
+                        "The configured standalone FreeCAD worker is offline or incompatible. "
+                        "Check its status in Operations."
+                    )
+                ),
+                adapter_version=connection.capabilities.get("adapterVersion"),
+                capabilities=connection.capabilities,
+            )
     # Remote Windows CAD adapters pre-date heartbeat registration. Keep their
     # compatibility probe while allowing every other adapter to use the common
     # heartbeat protocol without a server-side product whitelist.
@@ -118,15 +218,7 @@ async def worker_preflight(
                 ApplicationSetting.key == f"cad.{cad_system}.server_url"
             )
         )
-        if not url:
-            url = (
-                settings.autocad_worker_url
-                if cad_system == "autocad"
-                else settings.inventor_worker_url
-            )
-        connection = await _probe_cad_worker(
-            cad_system, url, settings.internal_worker_key
-        )
+        connection = await _probe_cad_worker(cad_system, url, settings.internal_worker_key)
         available = connection.availability == "ONLINE"
         capabilities = connection.capabilities
         return WorkerPreflightResponse(
@@ -144,9 +236,7 @@ async def worker_preflight(
             capabilities=capabilities,
         )
     heartbeat, available = _best_heartbeat(db, worker_type, settings)
-    compatible = bool(
-        available and heartbeat and heartbeat.compatibility_state != "INCOMPATIBLE"
-    )
+    compatible = bool(available and heartbeat and heartbeat.compatibility_state != "INCOMPATIBLE")
     if not available:
         message = (
             f"{worker_type} processing is currently unavailable. You may stage files, "

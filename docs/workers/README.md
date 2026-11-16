@@ -20,7 +20,7 @@ This open-source repository includes:
 - **FreeCAD Worker** — Open-source CAD conversion and processing
 - **Modelryx Server** — FastAPI application and processing orchestration
 
-For details on adding custom worker implementations, refer to the worker SDK in `worker-sdk/README.md`.
+For the native worker protocol and reference implementation, see the [worker SDK](../../worker-sdk/README.md) and [FreeCAD worker](../../workers/freecad/README.md).
 
 ## Architecture
 
@@ -28,7 +28,7 @@ Workers are independently deployable services that:
 
 1. Accept authenticated job submissions from Modelryx
 2. Process CAD files and metadata asynchronously
-3. Validate and publish outputs to object storage
+3. Validate and expose hashed, job-scoped outputs for Modelryx to download
 4. Communicate job status and results back to the server
 
 All worker communication is authenticated using a shared internal key and idempotent via submission IDs.

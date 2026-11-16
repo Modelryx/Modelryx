@@ -91,7 +91,16 @@ def can_acknowledge(finding: ValidationFinding | FindingInput) -> bool:
     return not finding.blocking and finding.severity == "WARNING" and "ignore_warning" in actions
 
 
+def drawing_geometry_not_applicable(metadata: dict[str, Any]) -> bool:
+    return (
+        str((metadata.get("native") or {}).get("document_type") or "").casefold() == "drawing"
+        and (metadata.get("quality") or {}).get("geometry") == "not_applicable"
+    )
+
+
 def geometry_findings(metadata: dict[str, Any]) -> list[FindingInput]:
+    if drawing_geometry_not_applicable(metadata):
+        return []
     geometry = metadata.get("geometry") or {}
     shape = geometry.get("shape") or {}
     topology = geometry.get("topology") or {}
@@ -140,7 +149,8 @@ def geometry_findings(metadata: dict[str, Any]) -> list[FindingInput]:
             )
         ]
 
-    if volume is not None and float(volume) <= 0:
+    surface_only = any("surface-only model; no solid bodies" in warning.casefold() for warning in warnings)
+    if volume is not None and float(volume) <= 0 and not surface_only:
         findings.append(
             FindingInput(
                 code="GEOMETRY_ZERO_VOLUME",
@@ -495,7 +505,10 @@ class ValidationService:
                     findings, {"metadata"}, evaluated=staging.metadata_json is not None
                 ),
                 "geometry": validator_state(
-                    findings, {"geometry"}, evaluated=staging.metadata_json is not None
+                    findings,
+                    {"geometry"},
+                    evaluated=staging.metadata_json is not None
+                    and not drawing_geometry_not_applicable(staging.metadata_json),
                 ),
                 "duplicate": validator_state(
                     findings,

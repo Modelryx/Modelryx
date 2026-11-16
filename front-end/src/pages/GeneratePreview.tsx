@@ -99,6 +99,9 @@ export function GeneratePreviewPage({ embedded = false }: { embedded?: boolean }
   const revisionPath = `/items/${encodeURIComponent(itemId)}/revisions/${encodeURIComponent(revisionId)}`;
   const item = useResource<Item>(itemId ? `/items/${encodeURIComponent(itemId)}` : null);
   const revision = useResource<Revision>(revisionId ? revisionPath : null);
+  const availability = useResource<{ can_generate: boolean; worker_configured: boolean }>(
+    revisionId ? `${revisionPath}/action-availability` : null
+  );
   const snapshots = useResource<Snapshot[]>(
     revisionId ? `/item-revisions/${encodeURIComponent(revisionId)}/content-snapshots` : null
   );
@@ -214,8 +217,7 @@ export function GeneratePreviewPage({ embedded = false }: { embedded?: boolean }
   };
 
   const retryFailed = job?.state === 'FAILED' && job.can_control;
-  const knownControl = generationJobs[0]?.can_control;
-  const canRequest = knownControl !== false;
+  const canRequest = !!availability.data?.can_generate && !!availability.data?.worker_configured;
   const showStatus = !!job && !jobsLoading && !jobsError;
   return (
     <div className="generation-page">

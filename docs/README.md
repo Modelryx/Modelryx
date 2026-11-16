@@ -41,7 +41,7 @@ Development setup, testing, and API reference.
 ### [Security](./security/)
 Security guidelines and best practices.
 
-- **[worker-security.md](./security/worker-security.md)** - CAD worker authentication, request signing, and security best practices
+- **[worker-security.md](./security/worker-security.md)** - CAD worker shared-key authentication, transport and ownership boundaries
 
 ## Quick Reference
 
@@ -92,7 +92,7 @@ modelryx/
 ├── server/              # Python FastAPI backend API
 ├── front-end/           # React TypeScript frontend UI
 ├── workers/
-│   ├── freecad/         # FreeCAD worker (built-in)
+│   ├── freecad/         # FreeCAD embedded/standalone reference worker
 │   └── step/            # STEP processor (built-in)
 ├── docs/                # Complete documentation
 │   ├── operations/      # Deployment and operations

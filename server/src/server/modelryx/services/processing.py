@@ -52,6 +52,13 @@ from modelryx.services.checkout_notifications import (
     create_checkout_expiry_notifications,
     record_checkout_notification_run,
 )
+from modelryx.services.external_workers import (
+    JOB_TYPE as EXTERNAL_CAD_JOB_TYPE,
+)
+from modelryx.services.external_workers import (
+    matching_worker,
+    validate_capabilities,
+)
 from modelryx.services.freecad_settings import FREECAD_WORKER_KEY, configured_url
 from modelryx.services.glb_thumbnail import THUMBNAIL_NAME, render_glb_thumbnail
 from modelryx.services.staging_workflow import (
@@ -318,6 +325,7 @@ def report_general_worker_heartbeat(
         "capabilities_json": {
             "job_types": [
                 "STEP_TO_MODELRYX",
+                EXTERNAL_CAD_JOB_TYPE,
                 "AUTOCAD_TO_MODELRYX",
                 "INVENTOR_TO_MODELRYX",
                 "NX_TO_MODELRYX",
@@ -515,6 +523,7 @@ def claim_job(
     )
     generic_job_types = (
         "STEP_TO_MODELRYX",
+        EXTERNAL_CAD_JOB_TYPE,
         "AUTOCAD_TO_MODELRYX",
         "INVENTOR_TO_MODELRYX",
         "NX_TO_MODELRYX",
@@ -756,6 +765,7 @@ def prepare_licensed_source_upload(
     source_files: list[ArtifactFile],
     workspace: Path,
     cad_system: str,
+    force_package: bool = False,
 ) -> tuple[Path, str]:
     """Create the native upload, preserving Inventor model and drawing paths."""
     source_path = storage.path_for(source_artifact.storage_key)
@@ -771,7 +781,10 @@ def prepare_licensed_source_upload(
         cad_system == "siemens_nx"
         and Path(source_artifact.original_filename).suffix.casefold() == ".prt"
     )
-    if len(source_files) <= 1 or not (is_inventor_package or is_autocad_package or is_nx_package):
+    external_package = force_package or cad_system not in {"inventor", "autocad", "siemens_nx"}
+    if len(source_files) <= 1 or not (
+        is_inventor_package or is_autocad_package or is_nx_package or external_package
+    ):
         return source_path, source_artifact.original_filename
 
     package_path = workspace / f"{cad_system}-package.zip"
@@ -1524,20 +1537,55 @@ def _configured_cad_server_url(db: Session, settings: Settings, cad_system: str)
     override = db.get(ApplicationSetting, setting_key)
     if override is not None:
         return override.value or None
-    return {
-        "autocad": settings.autocad_worker_url,
-        "inventor": settings.inventor_worker_url,
-        "siemens_nx": settings.nx_worker_url,
-    }.get(cad_system)
+    return None
+
+
+def preferred_cad_outputs(
+    cad_system: str, document_kind: str, has_related_drawings: bool,
+    supported_roles: list[str] | None = None,
+) -> list[str]:
+    outputs = [] if cad_system == "siemens_nx" and document_kind == "drawing" else ["glb"]
+    if document_kind == "drawing":
+        outputs.append("drawing-pdf")
+    elif has_related_drawings:
+        outputs.append("drawing-representations")
+    if document_kind == "assembly" and cad_system != "siemens_nx":
+        outputs.append("component-geometry")
+    return outputs if supported_roles is None else [role for role in outputs if role in supported_roles]
 
 
 def process_licensed_cad_job(db: Session, job: ProcessingJob, settings: Settings) -> None:
     """Dispatch native processing to a standalone licensed-CAD server and publish its result."""
-    configured_servers = [
-        (candidate, server_url)
-        for candidate in licensed_cad_system_candidates(job.type)
-        if (server_url := _configured_cad_server_url(db, settings, candidate))
-    ]
+    external = job.type == EXTERNAL_CAD_JOB_TYPE
+    external_worker = None
+    if external:
+        revision = db.get(Revision, job.revision_id)
+        snapshot = db.get(RevisionContentSnapshot, job.snapshot_id)
+        files = (
+            artifact_files_for_snapshot(
+                db,
+                revision.id,
+                snapshot.id,
+                artifact_types={"CAD_MODEL", "CAD_ASSEMBLY", "DRAWING", "CAD_DRAWING"},
+            )
+            if revision and snapshot
+            else []
+        )
+        primary = next((value for value in files if value.role == "PRIMARY"), None)
+        if primary is None:
+            raise RuntimeError("verified native artifact is missing")
+        external_worker = matching_worker(db, primary.original_filename, revision.cad_system)
+        if external_worker is None:
+            raise RuntimeError("No unique enabled external worker matches the source")
+        configured_servers = [
+            (external_worker["capabilities"]["cadSystem"], external_worker["url"])
+        ]
+    else:
+        configured_servers = [
+            (candidate, server_url)
+            for candidate in licensed_cad_system_candidates(job.type)
+            if (server_url := _configured_cad_server_url(db, settings, candidate))
+        ]
     if not configured_servers:
         if job.type == "AUTOCAD_TO_MODELRYX":
             raise RuntimeError("AutoCAD and fallback Inventor server URLs are not configured")
@@ -1555,17 +1603,26 @@ def process_licensed_cad_job(db: Session, job: ProcessingJob, settings: Settings
         else []
     )
     allowed_extensions = (
-        {".dwg", ".dxf"}
+        set(external_worker["capabilities"]["sourceExtensions"])
+        if external_worker is not None
+        else {".dwg", ".dxf"}
         if cad_system == "autocad"
         else {".prt"}
         if cad_system == "siemens_nx"
         else {".ipt", ".iam", ".idw", ".ipn", ".dwg", ".dxf"}
     )
-    source_files = [
-        value
-        for value in all_source_files
-        if Path(value.original_filename).suffix.casefold() in allowed_extensions
-    ]
+    if external:
+        # A worker advertises root formats, not every possible reference or support
+        # file. Send the entire authoritative artifact containing the chosen root.
+        source_files = [
+            value for value in all_source_files if value.artifact_id == primary.artifact_id
+        ]
+    else:
+        source_files = [
+            value
+            for value in all_source_files
+            if Path(value.original_filename).suffix.casefold() in allowed_extensions
+        ]
     source_artifact = next(
         (value for value in source_files if value.role == "PRIMARY"),
         source_files[0] if source_files else None,
@@ -1573,6 +1630,15 @@ def process_licensed_cad_job(db: Session, job: ProcessingJob, settings: Settings
     if revision is None or source_snapshot is None or source_artifact is None:
         raise RuntimeError("verified native artifact is missing")
     storage = LocalStorageProvider(settings.storage_root)
+    if external:
+        for source_file in source_files:
+            stored = storage.path_for(source_file.storage_key)
+            if (
+                not stored.is_file()
+                or stored.stat().st_size != source_file.byte_size
+                or sha256_file(stored).casefold() != source_file.sha256.casefold()
+            ):
+                raise RuntimeError("Verified native source bytes no longer match the snapshot")
     extension = source_artifact.original_filename.rsplit(".", 1)[-1].casefold()
     document_kind = {
         "iam": "assembly",
@@ -1580,7 +1646,7 @@ def process_licensed_cad_job(db: Session, job: ProcessingJob, settings: Settings
         "ipn": "presentation",
         "dwg": "drawing" if revision.native_format.casefold() == "drawing" else "model",
     }.get(extension, "part" if cad_system in {"inventor", "siemens_nx"} else "model")
-    if cad_system == "siemens_nx":
+    if cad_system == "siemens_nx" and not external:
         from modelryx.services.licensed_cad_contracts import nx_document_kind
 
         item = db.get(Item, revision.part_id)
@@ -1591,29 +1657,49 @@ def process_licensed_cad_job(db: Session, job: ProcessingJob, settings: Settings
             source_container.artifact_type if source_container is not None else None,
             item.part_type if item is not None else None,
         )
+    if external_worker is not None:
+        item = db.get(Item, revision.part_id)
+        source_container = (
+            db.get(Artifact, source_artifact.artifact_id) if source_artifact.artifact_id else None
+        )
+        if source_container is not None and source_container.artifact_type in {
+            "DRAWING",
+            "CAD_DRAWING",
+        }:
+            document_kind = "drawing"
+        else:
+            document_kind = (
+                "assembly" if item is not None and item.part_type == "ASSEMBLY" else "part"
+            )
+        supported_kinds = external_worker["capabilities"]["documentKinds"]
+        if (
+            document_kind == "part"
+            and document_kind not in supported_kinds
+            and "model" in supported_kinds
+        ):
+            document_kind = "model"
+        if document_kind not in supported_kinds:
+            raise RuntimeError("External worker does not support this document kind")
     remote_job_id = uuid.uuid5(job.id, f"attempt:{max(job.attempt_count, 1)}")
     headers = {"X-Modelryx-Worker-Key": settings.internal_worker_key}
     base_url = server_url.rstrip("/")
     with tempfile.TemporaryDirectory(prefix=f"modelryx-{cad_system}-{job.id}-") as directory:
         workspace = Path(directory)
         source_path, root_path = prepare_licensed_source_upload(
-            storage, source_artifact, source_files, workspace, cad_system
+            storage, source_artifact, source_files, workspace, cad_system, force_package=external
         )
-        preferred_outputs = (
-            [] if cad_system == "siemens_nx" and document_kind == "drawing" else ["glb"]
+        preferred_outputs = preferred_cad_outputs(
+            cad_system,
+            document_kind,
+            any(
+                Path(value.original_filename).suffix.casefold() in {".idw", ".dwg", ".dxf"}
+                for value in source_files
+                if value.id != source_artifact.id
+            ),
+            external_worker["capabilities"]["outputRoles"] if external_worker else None,
         )
-        if document_kind == "drawing":
-            preferred_outputs.append("drawing-pdf")
-        elif any(
-            Path(value.original_filename).suffix.casefold() in {".idw", ".dwg", ".dxf"}
-            for value in source_files
-            if value.id != source_artifact.id
-        ):
-            preferred_outputs.append("drawing-representations")
-        if document_kind == "assembly" and cad_system != "siemens_nx":
-            preferred_outputs.append("component-geometry")
         required_outputs = ["native-snapshot", "part-metadata", "model-preview"]
-        if cad_system == "autocad":
+        if cad_system == "autocad" and not external:
             required_outputs.append("xref-dependencies")
         request_payload = {
             "contractVersion": "1.0",
@@ -1638,7 +1724,17 @@ def process_licensed_cad_job(db: Session, job: ProcessingJob, settings: Settings
         request_path.write_text(json.dumps(request_payload), encoding="utf-8")
         update_stage(db, job, "DISPATCHING", 20)
         with httpx.Client(timeout=httpx.Timeout(60.0), follow_redirects=False) as client:
-            if cad_system == "siemens_nx":
+            if external_worker is not None:
+                capability_response = client.get(f"{base_url}/api/v1/capabilities", headers=headers)
+                capability_response.raise_for_status()
+                capabilities = validate_capabilities(capability_response.json())
+                if capabilities != external_worker["capabilities"]:
+                    raise RuntimeError(
+                        "External worker capabilities changed; an administrator must re-register it"
+                    )
+                readiness = client.get(f"{base_url}/ready")
+                readiness.raise_for_status()
+            if cad_system == "siemens_nx" and not external:
                 capabilities_response = client.get(
                     f"{base_url}/api/v1/capabilities", headers=headers
                 )
@@ -1655,21 +1751,8 @@ def process_licensed_cad_job(db: Session, job: ProcessingJob, settings: Settings
                         capabilities.get("capabilities") or []
                     )
                 )
-                development = capabilities.get("development") or {}
-                development_ready = (
-                    settings.environment != "production"
-                    and settings.nx_allow_unqualified_processing
-                    and development.get("enabled") is True
-                    and document_kind in (development.get("documentKinds") or [])
-                    and {"metadata-v1", "model-preview-v1"}.issubset(
-                        development.get("capabilities") or []
-                    )
-                )
-                if not production_ready and not development_ready:
-                    raise RuntimeError(
-                        "NX worker is not production-ready; "
-                            "development processing requires explicit server opt-in"
-                    )
+                if not production_ready:
+                    raise RuntimeError("NX worker is not production-ready")
             with request_path.open("rb") as request_stream, source_path.open("rb") as source_stream:
                 response = client.post(
                     f"{base_url}/api/v1/jobs",
@@ -1677,9 +1760,13 @@ def process_licensed_cad_job(db: Session, job: ProcessingJob, settings: Settings
                     files={
                         "request": ("request.json", request_stream, "application/json"),
                         "source": (
-                            source_artifact.original_filename,
+                            source_path.name
+                            if external and len(source_files) > 1
+                            else source_artifact.original_filename,
                             source_stream,
-                            source_artifact.mime_type,
+                            "application/zip"
+                            if external and len(source_files) > 1
+                            else source_artifact.mime_type,
                         ),
                     },
                 )
@@ -1741,7 +1828,21 @@ def process_licensed_cad_job(db: Session, job: ProcessingJob, settings: Settings
                     f"{error.get('message') or state}"
                 )
             result = remote.get("result") or {}
-            if cad_system == "siemens_nx":
+            if external:
+                from modelryx_worker_sdk import validate_result
+
+                validate_result(
+                    request_payload,
+                    result,
+                    allowed_outputs={
+                        "native-snapshot": ("application/json", settings.max_preview_bom_bytes),
+                        "part-metadata": ("application/json", settings.max_preview_bom_bytes),
+                        "model-preview": ("application/json", settings.max_preview_bom_bytes),
+                        "glb": ("model/gltf-binary", settings.max_preview_glb_bytes),
+                        "drawing-pdf": ("application/pdf", settings.max_pdf_preview_bytes),
+                    },
+                )
+            if cad_system == "siemens_nx" and not external:
                 from modelryx.services.licensed_cad_contracts import validate_nx_worker_result
 
                 validate_nx_worker_result(request_payload, result)
@@ -1756,7 +1857,7 @@ def process_licensed_cad_job(db: Session, job: ProcessingJob, settings: Settings
                 output_path = workspace / licensed_output_filename(
                     role, cad_system, len(downloaded)
                 )
-                if cad_system == "siemens_nx":
+                if cad_system == "siemens_nx" and not external:
                     limit = (
                         settings.max_preview_glb_bytes
                         if role == "glb"
@@ -1768,7 +1869,7 @@ def process_licensed_cad_job(db: Session, job: ProcessingJob, settings: Settings
                     )
                     if manifest["size"] > limit:
                         raise RuntimeError(
-                            f"NX worker output {role} exceeds the configured size limit"
+                            f"CAD worker output {role} exceeds the configured size limit"
                         )
                 received = 0
                 with client.stream(
@@ -1778,9 +1879,11 @@ def process_licensed_cad_job(db: Session, job: ProcessingJob, settings: Settings
                     with output_path.open("wb") as output_stream:
                         for chunk in output_response.iter_bytes():
                             received += len(chunk)
-                            if cad_system == "siemens_nx" and received > manifest["size"]:
+                            if (external or cad_system == "siemens_nx") and received > manifest[
+                                "size"
+                            ]:
                                 raise RuntimeError(
-                                    f"NX worker output {role} exceeds its declared size"
+                                    f"CAD worker output {role} exceeds its declared size"
                                 )
                             output_stream.write(chunk)
                 if output_path.stat().st_size != int(manifest.get("size") or -1):
@@ -1790,7 +1893,7 @@ def process_licensed_cad_job(db: Session, job: ProcessingJob, settings: Settings
                 downloaded[role] = (output_path, manifest)
 
         required_roles = {"part-metadata", "native-snapshot", "model-preview"}
-        if cad_system == "autocad":
+        if cad_system == "autocad" and not external:
             required_roles.add("xref-dependencies")
         if missing_roles := required_roles - downloaded.keys():
             raise RuntimeError(
@@ -1803,7 +1906,7 @@ def process_licensed_cad_job(db: Session, job: ProcessingJob, settings: Settings
             downloaded["glb"] = downloaded["reference-glb"]
         metadata_path = downloaded["part-metadata"][0]
         part_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        if cad_system == "siemens_nx":
+        if cad_system == "siemens_nx" and not external:
             from modelryx.services.licensed_cad_contracts import validate_nx_worker_metadata
 
             validate_nx_worker_metadata(
@@ -1909,7 +2012,7 @@ def process_licensed_cad_job(db: Session, job: ProcessingJob, settings: Settings
             generator_version=generator_version,
         )
         outputs.append(raw_artifact)
-        if cad_system == "siemens_nx":
+        if cad_system == "siemens_nx" and not external:
             # Retain translator/license/conversion provenance with immutable output lineage.
             result_manifest_path = workspace / "siemens_nx.result-manifest.json"
             result_manifest_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
@@ -1994,9 +2097,35 @@ def process_licensed_cad_job(db: Session, job: ProcessingJob, settings: Settings
             raw_artifact=raw_artifact,
             metadata=part_metadata,
         )
+        worker_warnings = list(result.get("warnings") or [])
+        if external and document_kind == "assembly":
+            from modelryx.services.bom_cycles import unresolved_native_occurrences
+
+            components = (part_metadata.get("assembly") or {}).get("components") or []
+            if components and unresolved_native_occurrences(db, revision.id, components):
+                worker_warnings.append(
+                    "The worker found assembly components without managed BOM relationships. "
+                    "Review the native assembly metadata and resolve the BOM."
+                )
+            bom_view = db.scalar(
+                select(BomViewRevision.id)
+                .where(BomViewRevision.revision_id == revision.id)
+                .order_by(BomViewRevision.sequence.desc())
+                .limit(1)
+            )
+            if bom_view is not None and any(
+                (line.properties_json or {}).get("native_placement") == "unavailable"
+                for line in db.scalars(
+                    select(BomLine).where(BomLine.bom_view_revision_id == bom_view)
+                )
+            ):
+                worker_warnings.append(
+                    "One or more managed BOM relationships use an identity transform because "
+                    "native placement was unavailable."
+                )
         revision.state = published_revision_state(
             extraction.status,
-            list(result.get("warnings") or []) + list(part_metadata["quality"]["warnings"]),
+            worker_warnings + list(part_metadata["quality"]["warnings"]),
         )
         revision.search_text = json.dumps(
             {"metadata": revision.metadata_json, "derived": revision.derived_metadata_json},
@@ -2007,7 +2136,7 @@ def process_licensed_cad_job(db: Session, job: ProcessingJob, settings: Settings
         job.progress_percent = 100
         job.converter_version = generator_version
         job.diagnostics_json = {
-            "warnings": result.get("warnings") or [],
+            "warnings": worker_warnings,
             "remote": {
                 "cad_system": cad_system,
                 "server": base_url,
@@ -2043,7 +2172,12 @@ def process_job(db: Session, job: ProcessingJob, settings: Settings) -> None:
     if job.type == "STEP_TO_MODELRYX":
         process_step_job(db, job, settings)
         return
-    if job.type in {"AUTOCAD_TO_MODELRYX", "INVENTOR_TO_MODELRYX", "NX_TO_MODELRYX"}:
+    if job.type in {
+        "AUTOCAD_TO_MODELRYX",
+        "INVENTOR_TO_MODELRYX",
+        "NX_TO_MODELRYX",
+        EXTERNAL_CAD_JOB_TYPE,
+    }:
         process_licensed_cad_job(db, job, settings)
         return
     if job.type != "FCSTD_TO_MODELRYX":
@@ -2512,6 +2646,7 @@ def fail_job(db: Session, job: ProcessingJob, error: Exception) -> None:
         job.finished_at = datetime.now(UTC)
         if revision is not None and job.type in {
             "AUTOCAD_TO_MODELRYX",
+            EXTERNAL_CAD_JOB_TYPE,
             "FCSTD_TO_MODELRYX",
             "INVENTOR_TO_MODELRYX",
             "NX_TO_MODELRYX",

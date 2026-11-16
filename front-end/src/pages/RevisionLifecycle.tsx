@@ -30,6 +30,7 @@ type LifecycleProps = {
   canEdit: boolean;
   isAdmin: boolean;
   canRelease: boolean;
+  isCreator: boolean;
 };
 const revisionPath = (itemId: string, revisionId: string) =>
   `/items/${encodeURIComponent(itemId)}/revisions/${encodeURIComponent(revisionId)}`;
@@ -40,6 +41,7 @@ export function RevisionLifecycle({
   canEdit,
   isAdmin,
   canRelease,
+  isCreator,
   closeMenu,
   activeSection,
 }: LifecycleProps & { closeMenu: () => void; activeSection: string }) {
@@ -73,12 +75,11 @@ export function RevisionLifecycle({
     );
   return (
     <>
-      {choice('emergency', canEdit && isAdmin && !unavailable && !pending && !approved)}
-      {choice(
+      {isCreator && choice(
         'approval',
         canEdit && !unavailable && !pending && !approved && !groups.loading && !groups.error
       )}
-      {choice('release', canEdit && canRelease && !unavailable)}
+      {canRelease && choice('release', !unavailable)}
       {pending?.can_withdraw && choice('withdraw', true)}
       <div className="revision-action-status">
         {approvals.loading ? (
@@ -128,6 +129,7 @@ export function RevisionLifecyclePanel({
   canEdit,
   isAdmin,
   canRelease,
+  isCreator,
   action,
   onChanged,
 }: LifecycleProps & { action: RevisionLifecycleAction; onChanged: () => void }) {
@@ -157,8 +159,8 @@ export function RevisionLifecyclePanel({
       : action === 'emergency'
         ? canEdit && isAdmin && eligible && !pending && revision.approval_status !== 'APPROVED'
         : action === 'approval'
-          ? canEdit && eligible && !pending && revision.approval_status !== 'APPROVED'
-          : canEdit && canRelease && eligible;
+          ? isCreator && canEdit && eligible && !pending && revision.approval_status !== 'APPROVED'
+          : canRelease && eligible;
   const ready =
     !approvals.loading &&
     !approvals.error &&

@@ -2,7 +2,10 @@ openapi: 3.1.0
 info:
   title: Modelryx standalone CAD worker
   version: "1.0"
-  description: Read-only CAD conversion protocol. See the SDK README for package and lifecycle rules.
+  description: >-
+    Read-only CAD conversion protocol for independently deployed workers. Registration and
+    embedded/external routing belong to Modelryx, not this worker API. See the SDK README
+    for the generic publication profile, local preprocessor contract and FreeCAD fallback rules.
 security:
   - WorkerKey: []
 paths:
@@ -90,8 +93,11 @@ paths:
         "404": {description: Output unavailable}
   /analyze:
     post:
-      summary: Optional FreeCAD dependency analyzer
-      description: Available when dependencyAnalysis is true. The server authorizes the caller before forwarding the package.
+      summary: Optional native CAD dependency analysis
+      description: >-
+        Available when dependencyAnalysis is true. The server authorizes the caller before
+        forwarding the package. This discovers references without publishing engineering records;
+        it is separate from the locally installed preprocessor executable.
       parameters:
         - name: X-Modelryx-Root-Path-B64
           in: header
@@ -103,7 +109,21 @@ paths:
           application/zip:
             schema: {type: string, format: binary}
       responses:
-        "200": {description: Dependency analysis report}
+        "200":
+          description: Dependency analysis report
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/DependencyReport"}
+              example:
+                document_type: ASSEMBLY
+                root_file: Root.cad
+                root_logical_path: project/Root.cad
+                files:
+                  - {logical_path: project/Root.cad, is_root: true, document_type: ASSEMBLY}
+                  - {logical_path: project/Part.cad, is_root: false, document_type: PART}
+                references:
+                  - {parent_logical_path: project/Root.cad, child_logical_path: project/Part.cad, instance_name: "part:1"}
+                missing_references: []
         "401": {description: Invalid worker key}
         "422": {description: Invalid root or package}
 components:
@@ -119,16 +139,50 @@ components:
     Role: {type: string, pattern: "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"}
     Digest: {type: string, pattern: "^[0-9a-fA-F]{64}$"}
     Capabilities:
+      description: >-
+        Generic Modelryx registration requires native-snapshot, part-metadata and model-preview
+        output roles. Other profiles, including the dedicated FreeCAD PFG client, may use a subset
+        of these roles. Advertise only supported formats and outputs; re-register after changes.
+      example:
+        contractVersion: "1.0"
+        cadSystem: freecad
+        workerName: FreeCAD
+        workerVersion: "1.0.0"
+        documentKinds: [part, assembly]
+        sourceExtensions: [.fcstd]
+        outputRoles: [native-snapshot, part-metadata, model-preview, glb, modelryx-preview]
+        dependencyAnalysis: true
       type: object
       required: [contractVersion, cadSystem, documentKinds, sourceExtensions, outputRoles]
       properties:
         contractVersion: {const: "1.0"}
         cadSystem: {type: string, minLength: 1}
         documentKinds: {type: array, items: {type: string}}
+        workerName: {type: string, description: Human-readable worker name}
+        workerVersion: {type: string, description: Worker release version}
         sourceExtensions: {type: array, items: {type: string, pattern: "^\\."}}
         outputRoles: {type: array, items: {$ref: "#/components/schemas/Role"}}
-        dependencyAnalysis: {type: boolean}
+        dependencyAnalysis: {type: boolean, description: Implements the optional authenticated POST /analyze endpoint; independent of local preprocessor installation}
     JobRequest:
+      description: >-
+        Generic publication requests native-snapshot, part-metadata and model-preview and prefers
+        glb when advertised. Required roles must be produced; unsupported preferred roles may be
+        omitted. Source hashes and sizes describe the exact uploaded native file or dependency ZIP.
+      example:
+        contractVersion: "1.0"
+        jobId: 95fc8a83-24cc-409a-b121-b4b951bfbf2c
+        attempt: 1
+        cadSystem: freecad
+        documentKind: assembly
+        source:
+          snapshotId: ed42e268-91bb-48bd-8eb6-74182443c31e
+          sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          size: 24576
+          rootPath: Pump.FCStd
+        configuration: null
+        requiredOutputs: [native-snapshot, part-metadata, model-preview]
+        preferredOutputs: [glb]
+        expiresAt: "2030-01-01T00:00:00Z"
       type: object
       required: [contractVersion, jobId, attempt, cadSystem, documentKind, source, configuration, requiredOutputs, preferredOutputs, expiresAt]
       properties:
@@ -197,3 +251,49 @@ components:
             message: {type: string}
             retryable: {type: boolean}
             stage: {type: string}
+
+    DependencyFile:
+      type: object
+      required: [logical_path, is_root]
+      properties:
+        logical_path: {type: string, minLength: 1, description: Package-relative POSIX path}
+        is_root: {type: boolean}
+        document_type: {type: [string, "null"]}
+    DependencyReference:
+      type: object
+      required: [parent_logical_path, child_logical_path]
+      properties:
+        parent_logical_path: {type: string, minLength: 1}
+        child_logical_path: {type: string, minLength: 1}
+        instance_name: {type: [string, "null"]}
+        occurrence_id: {type: [string, "null"]}
+        occurrence_key: {type: [string, "null"]}
+        transform: {type: [array, "null"], minItems: 16, maxItems: 16, items: {type: number}}
+        is_visible: {type: [boolean, "null"]}
+        is_suppressed: {type: [boolean, "null"]}
+        source_reference: {type: [string, "null"]}
+        reference_designator: {type: [string, "null"]}
+        properties: {type: object}
+    MissingReference:
+      type: object
+      required: [reference, referenced_by]
+      properties:
+        reference: {type: [string, "null"]}
+        referenced_by: {type: string, minLength: 1}
+        kind: {type: string}
+        suggestion: {type: [string, "null"]}
+    DependencyReport:
+      description: >-
+        Native dependency evidence for review; not a published BOM. Missing references must
+        be resolved before the source package is accepted. Local executable reports additionally
+        provide contract_version, analyzer_version and isolated_reopen_validated as documented
+        in the SDK README; an optional package path is local-only, not an HTTP download URL.
+      type: object
+      required: [document_type, root_file, root_logical_path, files, references, missing_references]
+      properties:
+        document_type: {type: string, minLength: 1}
+        root_file: {type: string, minLength: 1}
+        root_logical_path: {type: string, minLength: 1}
+        files: {type: array, minItems: 1, items: {$ref: "#/components/schemas/DependencyFile"}}
+        references: {type: array, items: {$ref: "#/components/schemas/DependencyReference"}}
+        missing_references: {type: array, items: {$ref: "#/components/schemas/MissingReference"}}

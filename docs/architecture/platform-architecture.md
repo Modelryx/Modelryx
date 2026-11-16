@@ -54,10 +54,12 @@ licensing, operating-system, and failure-isolation requirements.
 | Directory | Runtime responsibility |
 | --- | --- |
 | `front-end/` | React/Vite browser UI, authenticated API client, PDF preview, and Three.js-based viewer |
-| `server/` | FastAPI application, SQLAlchemy models, migrations, domain services, orchestration, and background processing |
+| `server/` | FastAPI application, SQLAlchemy models, schema initialization, domain services, orchestration, and background processing |
 | `workers/freecad/` | FreeCAD dependency analysis, native conversion, and controlled CAD operations |
 | `workers/step/` | Standalone authenticated STEP geometry and metadata service |
-| `scripts/` | Project configuration, startup, verification, maintenance, and document-generation utilities |
+| `worker-sdk/` | Native worker HTTP contract, manifest validation and conformance probe |
+| `local_cad_agent/` | Native file dialog, CAD-system selection and installed client preprocessor dispatch |
+| `scripts/` | Project configuration, verification, public export and database backup/restore utilities |
 | `docs/` | Cross-component current architecture, integrations, product specifications |
 
 Component-specific build and installation instructions belong in each component's `README.md` or
@@ -81,7 +83,7 @@ under `services`, `cad`, `metadata`, `duplicate_detection`, `engineering_search`
 
 The server owns:
 
-- identity, authentication, roles, authorization, and tenant-aware access;
+- identity, authentication, roles, authorization, and record access;
 - Item and Revision identity, numbering, lifecycle, checkout, and approval;
 - Artifact lineage, content snapshots, attachments, downloads, and retention;
 - upload staging, validation, duplicate decisions, and atomic commit;
@@ -110,13 +112,14 @@ process restarts.
 There are two primary integration shapes:
 
 1. The FreeCAD adapter and analyzer are platform-shipped but runtime-isolated.
-2. The STEP worker is an authenticated stateless HTTP conversion service.
+2. The STEP worker is an authenticated HTTP conversion service with durable job journals.
 
 Additional CAD workers can be developed following the [worker integration guide](../workers/new-cad-worker-guide.md).
 
 Modelryx selects a service, provides an immutable source or dependency package, and validates the
 result. Workers extract native evidence and generate representations; only Modelryx publishes
-Artifacts, metadata, generated component Items, and BOM records.
+Artifacts, metadata and managed BOM records. Generic external publication retains native
+component evidence for operator review; it does not automatically create component Items.
 
 ## Persistence
 
@@ -124,8 +127,9 @@ Artifacts, metadata, generated component Items, and BOM records.
 
 PostgreSQL is the system of record for users, configuration, Items, Revisions, Artifacts and their
 relations, content snapshots, processing jobs, metadata records, BOM data, approvals, checkouts,
-audit events, search documents, and AI/knowledge records. Alembic migrations are the supported way
-to evolve the relational schema.
+audit events, search documents, and AI/knowledge records. The initializer creates fresh schemas
+and verifies their fingerprint. It refuses incompatible existing schemas; no Alembic upgrade
+workflow is shipped. Data-preserving upgrades need a separately qualified process.
 
 The development image includes pgvector for vector-backed engineering search when embeddings are
 configured. Structured and lexical search continue to work without an external AI provider.
@@ -222,12 +226,13 @@ For AI architecture details, see [AI subsystem overview](../ai/overview.md).
 
 ## Deployment topology
 
-The root `compose.yaml` defines PostgreSQL, migrations, storage initialization, the FastAPI service,
-general and FreeCAD workers, the FreeCAD analyzer, and STEP worker. Custom CAD workers can be
+The root `compose.yaml` defines PostgreSQL, database initialization, storage initialization, the FastAPI service,
+general and FreeCAD workers, the FreeCAD preprocessor, and STEP worker. Custom CAD workers can be
 deployed as independent services and are reached through configured URLs.
 
-Production deployments may replace the local object volume, TLS termination, secret delivery,
-process scheduling, and network topology. They must preserve the ownership, authentication,
+Operators can change TLS termination, secret delivery, process scheduling and network topology.
+The current application uses a shared local object volume; replacing it with remote object storage
+requires application integration, not only deployment configuration. They must preserve the ownership, authentication,
 validation, immutability, and idempotency boundaries described here.
 
 ## Architectural invariants
@@ -238,13 +243,12 @@ validation, immutability, and idempotency boundaries described here.
 4. CAD-specific logic stays behind worker boundaries.
 5. Background work is durable, restart-safe, observable, and idempotent.
 6. Optional AI services can enrich or propose, but cannot bypass domain authorization and validation.
-7. Current architecture documents describe implemented behavior; proposals belong in `docs/roadmap`.
+7. Current architecture documents describe implemented behavior; historical plans and proposals must be labeled separately.
 
 ## Related documents
 
 - [Documentation index](../README.md)
 - [CAD processing framework](cad-processing-framework.md)
 - [PartMetadata v1 specification](partmetadata-v1.md)
-- [PartMetadata v1](partmetadata-v1.md)
-- [Operations and recovery](../operations/operations.md)
-- [Troubleshooting and local startup](../operations/troubleshooting.md)
+- [Operations and recovery](../operations/deployment.md)
+- [Troubleshooting and local startup](../../DEVELOPMENT.md)

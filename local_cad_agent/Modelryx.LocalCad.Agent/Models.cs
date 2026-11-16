@@ -17,7 +17,15 @@ public sealed record MissingReference(
 public sealed record DependencyReference(
     [property: JsonPropertyName("parent_logical_path")] string ParentLogicalPath,
     [property: JsonPropertyName("child_logical_path")] string ChildLogicalPath,
-    [property: JsonPropertyName("instance_name")] string? InstanceName = null);
+    [property: JsonPropertyName("instance_name")] string? InstanceName = null,
+    [property: JsonPropertyName("occurrence_id")] string? OccurrenceId = null,
+    [property: JsonPropertyName("occurrence_key")] string? OccurrenceKey = null,
+    [property: JsonPropertyName("transform")] double[]? Transform = null,
+    [property: JsonPropertyName("is_visible")] bool? IsVisible = null,
+    [property: JsonPropertyName("is_suppressed")] bool? IsSuppressed = null,
+    [property: JsonPropertyName("source_reference")] string? SourceReference = null,
+    [property: JsonPropertyName("reference_designator")] string? ReferenceDesignator = null,
+    [property: JsonPropertyName("properties")] JsonObject? Properties = null);
 
 public sealed record DependencyReport(
     [property: JsonPropertyName("contract_version")] string ContractVersion,
@@ -35,4 +43,4 @@ public sealed record DependencyReport(
 public sealed record AnalysisOutput(DependencyReport Report, string PackagePath);
 public sealed record SelectionJob(
     Guid Id, DateTimeOffset CreatedAt, string Workspace, CancellationTokenSource Cancellation,
-    Task<AnalysisOutput> Analysis);
+    Task<AnalysisOutput> Analysis, WorkerFormat? Worker = null);

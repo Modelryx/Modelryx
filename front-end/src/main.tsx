@@ -434,6 +434,16 @@ function Library({
   const [viewScope, setViewScope] = useState<'PERSONAL' | 'SHARED'>('PERSONAL');
   const [viewBusy, setViewBusy] = useState(false);
   const [viewError, setViewError] = useState('');
+  const [workerCadSystems, setWorkerCadSystems] = useState<string[]>([]);
+  useEffect(() => {
+    let active = true;
+    api<Array<{ cadSystem: string }>>('/workers/external-formats')
+      .then((workers) => {
+        if (active) setWorkerCadSystems(workers.map((worker) => worker.cadSystem).filter(Boolean));
+      })
+      .catch(() => { if (active) setWorkerCadSystems([]); });
+    return () => { active = false; };
+  }, []);
   useEffect(() => {
     let active = true;
     api<SavedLibraryView[]>('/ui-views')
@@ -808,7 +818,16 @@ function Library({
               onFiltersChange: changeFilters,
               filterOptions: {
                 item_type: values(state.data.facets?.item_types),
-                cad: values(state.data.facets?.cad_systems),
+                cad: (() => {
+                  const existing = values(state.data.facets?.cad_systems);
+                  const seen = new Set(existing.map((value) => value.toLocaleLowerCase()));
+                  return [...existing, ...workerCadSystems.filter((system) => {
+                    const key = system.toLocaleLowerCase();
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                  })];
+                })(),
                 status: values(state.data.facets?.item_statuses),
               },
             }}

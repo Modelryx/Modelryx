@@ -193,6 +193,9 @@ def submit_approval_request(
     if payload.emergency and payload.reviewer_group_id is not None:
         raise HTTPException(status_code=422, detail="Emergency review cannot use a reviewer group")
     revision = revision_for_item(db, item_id, revision_id)
+    actor = user_for_principal(db, principal)
+    if not payload.emergency and revision.created_by != actor.id:
+        raise HTTPException(status_code=403, detail="Only the revision creator can request approval")
     if revision.lifecycle_state != "WORKING":
         raise HTTPException(status_code=409, detail="Only a working revision can be submitted")
     if revision.state not in {"READY", "READY_WITH_WARNINGS"}:
@@ -203,7 +206,6 @@ def submit_approval_request(
             status_code=409, detail="Only the current Item Revision can be submitted"
         )
     snapshot = latest_snapshot(db, revision.id)
-    actor = user_for_principal(db, principal)
     pending = db.scalar(
         select(RevisionApprovalRequest)
         .where(

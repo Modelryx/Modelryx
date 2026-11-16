@@ -21,6 +21,7 @@ export type IdentityReview = {
 export type FileEntry = {
   file: File;
   logicalPath: string;
+  externalCadSystem?: string;
   documentType?:
     'PART' | 'ASSEMBLY' | 'DRAWING' | 'PRESENTATION' | 'PROJECT' | 'SUPPORTING' | 'UNKNOWN';
   sha256: string | null;
@@ -363,10 +364,15 @@ export const cadProfile = (filename: string, documentType?: FileEntry['documentT
     return { cadSystem: 'STEP', nativeFormat: 'STEP', artifactType: 'STEP', itemType: 'PART' };
   }
   return {
-    cadSystem: 'FreeCAD',
-    nativeFormat: 'FCStd',
-    artifactType: 'CAD_MODEL',
-    itemType: 'PART',
+    cadSystem: extension === 'fcstd' ? 'FreeCAD' : 'Unknown',
+    nativeFormat: extension === 'fcstd' ? 'FCStd' : (extension ?? 'unknown').toUpperCase(),
+    artifactType:
+      documentType === 'ASSEMBLY'
+        ? 'CAD_ASSEMBLY'
+        : documentType === 'DRAWING'
+          ? 'DRAWING'
+          : 'CAD_MODEL',
+    itemType: documentType === 'ASSEMBLY' ? 'ASSEMBLY' : 'PART',
   };
 };
 
@@ -380,13 +386,16 @@ export const isManagedCadDefinition = (entry: FileEntry) =>
 export const createsManagedItem = (
   entry: FileEntry,
   report: CadDependencyReport | null | undefined
-) => isManagedCadDefinition(entry) || !report || entry.logicalPath === report.root_logical_path;
+) =>
+  entry.externalCadSystem && entry.documentType === 'SUPPORTING'
+    ? false
+    : isManagedCadDefinition(entry) || !report || entry.logicalPath === report.root_logical_path;
 
 export const isProcessingSupport = (path: string, documentType?: string) =>
   /\.ipj$/i.test(path) || documentType === 'PROJECT' || documentType === 'SUPPORTING';
 
 export const isDrawing = (entry: FileEntry) =>
-  /\.(idw|dwg)$/i.test(entry.file.name) || entry.documentType === 'DRAWING';
+  /\.(idw|dwg|dxf)$/i.test(entry.file.name) || entry.documentType === 'DRAWING';
 
 export const relatedSupportPaths = (
   ownerPath: string,

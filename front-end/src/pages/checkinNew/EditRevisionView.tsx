@@ -1,9 +1,11 @@
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { flattenEditOccurrences, normalizedCadReference, retainedFileOccurrence } from './model';
 import type { CheckinController } from './useCheckinWorkflowController';
+import { NativeBomReview } from './NativeBomReview';
 
 export function EditRevisionView({ controller }: { controller: CheckinController }) {
+  const [externalAssemblyRoot, setExternalAssemblyRoot] = useState('');
   const {
     targetItemId,
     targetItemNumber,
@@ -13,6 +15,7 @@ export function EditRevisionView({ controller }: { controller: CheckinController
     workerAnalysisFiles,
     cadSelectionBusy,
     editStaging,
+    setEditStaging,
     editStagingError,
     editBusy,
     editMessage,
@@ -57,6 +60,7 @@ export function EditRevisionView({ controller }: { controller: CheckinController
     retryCommitProcessing,
     cancelEdit,
     importEditCadPackage,
+    analyzeExternalEditFolder,
     applySafeEditReconciliation,
     resolveEditAssemblyIdentity,
     stageResolvedEditAssembly,
@@ -88,6 +92,17 @@ export function EditRevisionView({ controller }: { controller: CheckinController
       {!editStaging && !editStagingError && <p>Creating the staging session and checkout…</p>}
       {editStaging && (
         <section className="checkin-plan-panel">
+          {!editAssemblyAnalysis &&
+            !editStaging.proposal?.artifacts?.some(
+              (artifact: { is_primary?: boolean; existing_relation_id?: string | null }) =>
+                artifact.is_primary && !artifact.existing_relation_id
+            ) && (
+              <NativeBomReview
+                staging={editStaging}
+                disabled={editBusy}
+                onUpdate={setEditStaging}
+              />
+            )}
           <section className="edit-staged-content">
             <h2>Staged content</h2>
             <p className="muted">
@@ -489,6 +504,42 @@ export function EditRevisionView({ controller }: { controller: CheckinController
                 }}
               />
             </label>
+            {editStaging.proposal?.item?.item_type === 'ASSEMBLY' && (
+              <>
+                <label className="button">
+                  Select external assembly root
+                  <input
+                    type="file"
+                    hidden
+                    disabled={editBusy || cadSelectionBusy}
+                    onChange={(event) => {
+                      setExternalAssemblyRoot(event.target.files?.[0]?.name ?? '');
+                      event.target.value = '';
+                    }}
+                  />
+                </label>
+                {externalAssemblyRoot && (
+                  <label className="button">
+                    Analyze folder for {externalAssemblyRoot}
+                    <input
+                      type="file"
+                      hidden
+                      multiple
+                      ref={(input) => {
+                        if (input) input.webkitdirectory = true;
+                      }}
+                      disabled={editBusy || cadSelectionBusy}
+                      onChange={(event) => {
+                        const files = Array.from(event.target.files ?? []);
+                        if (files.length)
+                          void analyzeExternalEditFolder(files, externalAssemblyRoot);
+                        event.target.value = '';
+                      }}
+                    />
+                  </label>
+                )}
+              </>
+            )}
             <button
               type="button"
               className="button-primary"

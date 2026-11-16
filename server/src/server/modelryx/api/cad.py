@@ -2,6 +2,7 @@ import base64
 import binascii
 import uuid
 from datetime import UTC, datetime, timedelta
+from pathlib import PurePosixPath
 from typing import Annotated
 
 import httpx
@@ -105,18 +106,67 @@ async def analyze_cad_upload(
     principal: Actor,
     settings: Config,
     db: Db,
+    worker_id: str | None = None,
 ) -> dict:
     """Run the canonical dependency analyzer when no capable local service exists."""
     _require_cad_editor(principal)
-    analyzer_url = configured_url(db, FREECAD_ANALYZER_KEY, settings.cad_analyzer_url)
+    external_worker = None
+    if worker_id is not None:
+        from modelryx.services.external_workers import registered_workers
+
+        external_worker = next(
+            (
+                worker
+                for worker in registered_workers(db)
+                if worker["id"] == worker_id and worker["enabled"]
+            ),
+            None,
+        )
+        if external_worker is None or not external_worker["capabilities"]["dependencyAnalysis"]:
+            raise HTTPException(
+                status_code=422, detail="External worker does not support dependency analysis"
+            )
+        analyzer_url = external_worker["url"]
+    else:
+        analyzer_url = configured_url(
+            db,
+            FREECAD_ANALYZER_KEY,
+            settings.freecad_preprocessor_url or settings.cad_analyzer_url,
+        )
     if not analyzer_url or not settings.internal_worker_key:
         raise HTTPException(status_code=503, detail="CAD worker analysis is unavailable")
-    _root_path, encoded_root_path = _cad_root_path(request)
+    root_path, encoded_root_path = _cad_root_path(request)
+    if external_worker is not None:
+        root = PurePosixPath(root_path.replace("\\", "/"))
+        if (
+            root.is_absolute()
+            or ".." in root.parts
+            or not root.name
+            or root.suffix.casefold() not in external_worker["capabilities"]["sourceExtensions"]
+        ):
+            raise HTTPException(
+                status_code=422, detail="External worker does not support the requested root path"
+            )
     content = await request.body()
     if not content or len(content) > settings.max_assembly_upload_bytes:
         raise HTTPException(status_code=413, detail="CAD analysis package is too large")
     try:
-        async with httpx.AsyncClient(timeout=settings.converter_timeout_seconds) as client:
+        async with httpx.AsyncClient(
+            timeout=settings.converter_timeout_seconds, follow_redirects=False
+        ) as client:
+            if external_worker is not None:
+                from modelryx.services.external_workers import validate_capabilities
+
+                capabilities = await client.get(
+                    f"{analyzer_url.rstrip('/')}/api/v1/capabilities",
+                    headers={"X-Modelryx-Worker-Key": settings.internal_worker_key},
+                )
+                capabilities.raise_for_status()
+                if validate_capabilities(capabilities.json()) != external_worker["capabilities"]:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="External worker capabilities changed; re-register it",
+                    )
             response = await client.post(
                 f"{analyzer_url.rstrip('/')}/analyze",
                 content=content,
@@ -126,11 +176,9 @@ async def analyze_cad_upload(
                     "X-Modelryx-Worker-Key": settings.internal_worker_key,
                 },
             )
-    except httpx.HTTPError as exc:
-        raise HTTPException(
-            status_code=503, detail="CAD analyzer could not be reached"
-        ) from exc
-    if response.is_error:
+    except (httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail="CAD analyzer could not be reached") from exc
+    if not response.is_success:
         try:
             detail = response.json().get("detail")
         except ValueError:
@@ -140,13 +188,16 @@ async def analyze_cad_upload(
 
 
 def _has_active_edit_staging(db: Session, revision_id: uuid.UUID) -> bool:
-    return db.scalar(
-        select(StagingSession.id).where(
-            StagingSession.base_revision_id == revision_id,
-            StagingSession.operation == "EDIT_ITEM_REVISION",
-            StagingSession.status.in_({"PREPARING", "READY_TO_COMMIT"}),
+    return (
+        db.scalar(
+            select(StagingSession.id).where(
+                StagingSession.base_revision_id == revision_id,
+                StagingSession.operation == "EDIT_ITEM_REVISION",
+                StagingSession.status.in_({"PREPARING", "READY_TO_COMMIT"}),
+            )
         )
-    ) is not None
+        is not None
+    )
 
 
 def session_response(value: CADSession) -> CADSessionResponse:
@@ -270,9 +321,7 @@ def owned_session(
 
 @router.get("/cad/workers", response_model=list[CADWorkerSummary])
 def list_cad_workers(db: Db, _: Actor, settings: Config) -> list[CADWorkerSummary]:
-    return worker_summaries(
-        db.scalars(select(WorkerHeartbeat)), cutoff=_worker_cutoff(settings)
-    )
+    return worker_summaries(db.scalars(select(WorkerHeartbeat)), cutoff=_worker_cutoff(settings))
 
 
 @router.get("/cad/workers/{worker_id}/capabilities", response_model=CADWorkerCapabilities)

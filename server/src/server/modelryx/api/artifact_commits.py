@@ -110,8 +110,22 @@ def _content_blob_for_staged_file(
     return blob
 
 
-def _native_processing_type(filename: str, cad_system: str) -> str | None:
+def _native_processing_type(
+    filename: str, cad_system: str, db: Session | None = None
+) -> str | None:
     extension = Path(filename).suffix.casefold()
+    if db is not None and extension not in {".step", ".stp"}:
+        from modelryx.services.external_workers import (
+            JOB_TYPE,
+            AmbiguousWorkerError,
+            matching_worker,
+        )
+
+        try:
+            if matching_worker(db, filename, cad_system):
+                return JOB_TYPE
+        except AmbiguousWorkerError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
     if extension == ".prt" and cad_system.casefold() == "siemens nx":
         return "NX_TO_MODELRYX"
     if extension == ".fcstd":
@@ -607,6 +621,20 @@ def _commit_edit(
         if parent_revision is None:
             raise HTTPException(status_code=422, detail="Edit BOM parent is unresolved")
         lines_by_parent.setdefault(parent_revision.id, []).append(line)
+    from modelryx.services.bom_cycles import ensure_no_bom_cycle
+
+    # Serialize graph checks and edits so concurrent reciprocal links cannot both pass.
+    db.execute(text("SELECT pg_advisory_xact_lock(hashtext('modelryx:bom-graph'))"))
+    for parent_id, parent_lines in lines_by_parent.items():
+        children = set()
+        for line in parent_lines:
+            child_id = line.child_revision_id
+            if child_id is None and line.child_staged_file_id is not None:
+                child = revision_by_file.get(line.child_staged_file_id)
+                child_id = child.id if child is not None else None
+            if child_id is not None:
+                children.add(child_id)
+        ensure_no_bom_cycle(db, parent_id, children)
     assembly_revision_ids = {revision.id} | {
         child.id
         for child in created_revisions
@@ -678,10 +706,43 @@ def _commit_edit(
     revision.cad_system = proposal.revision.cad_system
     revision.native_format = proposal.revision.native_format
     processing_type = (
-        _native_processing_type(new_primary_file.original_filename, revision.cad_system)
+        _native_processing_type(new_primary_file.original_filename, revision.cad_system, db)
         if new_primary_file is not None
         else None
     )
+    if processing_type is None and new_primary_file is None and item.part_type == "ASSEMBLY":
+        # Editing a BOM creates a new snapshot without the old derived artifacts.
+        # Regenerate generic worker output against that snapshot so metadata and
+        # previews remain available and unresolved-component warnings are updated.
+        from modelryx.services.artifact_content import artifact_files_for_snapshot
+        from modelryx.services.external_workers import JOB_TYPE
+
+        db.flush()
+        source_file = next(
+            (
+                value
+                for value in artifact_files_for_snapshot(
+                    db, revision.id, snapshot.id, artifact_types={"CAD_ASSEMBLY"}
+                )
+                if value.role == "PRIMARY"
+            ),
+            None,
+        )
+        if source_file is not None:
+            candidate = _native_processing_type(
+                source_file.original_filename, revision.cad_system, db
+            )
+            was_external = db.scalar(
+                select(ProcessingJob.id)
+                .where(
+                    ProcessingJob.revision_id == revision.id,
+                    ProcessingJob.type == JOB_TYPE,
+                    ProcessingJob.state == "SUCCEEDED",
+                )
+                .limit(1)
+            )
+            if candidate == JOB_TYPE or (candidate is None and was_external is not None):
+                processing_type = JOB_TYPE
     if processing_type is not None or (
         force_reprocess and revision.native_format.lower() == "fcstd"
     ):
@@ -705,7 +766,7 @@ def _commit_edit(
                 status_code=422, detail="A new component requires a primary CAD file"
             )
         child_processing_type = _native_processing_type(
-            primary_file.original_filename, child_revision.cad_system
+            primary_file.original_filename, child_revision.cad_system, db
         )
         if child_processing_type is not None:
             child_revision.state = "PROCESSING"
@@ -1266,7 +1327,7 @@ def commit_staging_upload(
             primary_file is not None
             and (
                 processing_type := _native_processing_type(
-                    primary_file.original_filename, created_revision.cad_system
+                    primary_file.original_filename, created_revision.cad_system, db
                 )
             )
             is not None

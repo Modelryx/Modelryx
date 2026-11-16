@@ -62,7 +62,7 @@ application release and its recorded schema fingerprint.
 ## Verification
 
 ```bash
-docker compose --profile test run --build --rm test
+docker compose -p modelryx-check --env-file .env.example --profile test run --build --rm test
 ```
 
 The test profile uses a separate `modelryx_test` database, resets only that test

@@ -1,4 +1,4 @@
-"""Authenticated HTTP wrapper around the canonical FreeCAD dependency analyzer."""
+"""Authenticated HTTP wrapper around the FreeCAD dependency preprocessor."""
 
 from __future__ import annotations
 
@@ -20,17 +20,18 @@ from typing import BinaryIO
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 
-app = FastAPI(title="Modelryx FreeCAD Analyzer", version="1.0")
+app = FastAPI(title="Modelryx FreeCAD Preprocessor", version="1.0")
 
 MAX_FILES = 500
 MAX_UNCOMPRESSED_BYTES = 2 * 1024 * 1024 * 1024
 MAX_ARCHIVE_BYTES = MAX_UNCOMPRESSED_BYTES + 64 * 1024 * 1024
 MEMORY_SPOOL_BYTES = 8 * 1024 * 1024
 MAX_PATH_LENGTH = 240
-PREPROCESSOR = Path(os.environ.get(
-    "MODELRYX_FREECAD_ANALYZER_SCRIPT",
-    "/opt/modelryx-preprocessor/modelryx_freecad_preprocessor.py",
-))
+PREPROCESSOR = Path(
+    os.environ.get("MODELRYX_FREECAD_PREPROCESSOR_SCRIPT")
+    or os.environ.get("MODELRYX_FREECAD_ANALYZER_SCRIPT")
+    or "/opt/modelryx-preprocessor/modelryx_freecad_preprocessor.py"
+)
 ANALYSIS_TIMEOUT_SECONDS = 300
 
 
@@ -57,7 +58,9 @@ def _root_path(encoded: str | None) -> PurePosixPath:
         raise HTTPException(status_code=422, detail="Invalid encoded CAD root path") from exc
     path = _safe_member(value)
     if path.suffix.casefold() != ".fcstd":
-        raise HTTPException(status_code=422, detail="FreeCAD analyzer root must be an .FCStd file")
+        raise HTTPException(
+            status_code=422, detail="FreeCAD preprocessor root must be an .FCStd file"
+        )
     return path
 
 
@@ -194,6 +197,19 @@ def _failure_detail(completed: subprocess.CompletedProcess[str], workspace: Path
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/ready")
+def ready() -> dict[str, str]:
+    if not PREPROCESSOR.is_file():
+        raise HTTPException(status_code=503, detail="FreeCAD preprocessor is unavailable")
+    return {"status": "ready"}
+
+
+@app.get("/api/v1/capabilities")
+def capabilities(x_modelryx_worker_key: str | None = Header(default=None)) -> dict:
+    _require_key(x_modelryx_worker_key)
+    return {"contractVersion": "1.0", "cadSystem": "freecad", "dependencyAnalysis": True}
 
 
 @app.post("/analyze")

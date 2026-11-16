@@ -17,6 +17,32 @@ from worker_io import atomic_write_json
 
 from .conversion import OUTPUTS, ConversionRequest, expired, materialize_source
 
+
+def export_preview_members(package: ZipFile, workspace: Path, requested: set[str]) -> None:
+    """Expose the generic worker roles without changing the authoritative PFG conversion."""
+    for role in ("model-preview", "glb"):
+        if role not in requested:
+            continue
+        name, _, limit = OUTPUTS[role]
+        entries = [entry for entry in package.infolist() if entry.filename == name]
+        if len(entries) != 1 or not 0 < entries[0].file_size <= limit:
+            raise ValueError(f"FreeCAD preview has a missing, ambiguous or oversized {role} output")
+        with package.open(entries[0]) as source, (workspace / name).open("wb") as target:
+            shutil.copyfileobj(source, target, length=1024 * 1024)
+        file = workspace / name
+        if role == "model-preview":
+            value = json.loads(file.read_bytes())
+            if not isinstance(value, dict):
+                raise ValueError("FreeCAD model preview must be a JSON object")
+        else:
+            with file.open("rb") as stream:
+                header = stream.read(12)
+            if (len(header) != 12 or header[:4] != b"glTF"
+                    or int.from_bytes(header[4:8], "little") != 2
+                    or int.from_bytes(header[8:12], "little") != file.stat().st_size):
+                raise ValueError("FreeCAD GLB output is invalid")
+
+
 LOGGER = logging.getLogger(__name__)
 ACTIVE = {"Queued", "Reconstructing", "Extracting", "Validating"}
 
@@ -201,7 +227,9 @@ class JobStore:
             with self.lock:
                 check_interrupted()
                 self.write(record, state="Validating", stage="validating", progress=85)
+            requested = set(request.requiredOutputs) | set(request.preferredOutputs)
             with ZipFile(preview) as package:
+                export_preview_members(package, workspace, requested)
                 diagnostics_entry = package.getinfo("diagnostics.json")
                 if diagnostics_entry.file_size > 8 * 1024**2:
                     raise ValueError("FreeCAD diagnostics exceed their size limit")
@@ -211,7 +239,6 @@ class JobStore:
                 for warning in diagnostics.get("warnings", [])
                 if warning.get("message", "").strip()
             ]
-            requested = set(request.requiredOutputs) | set(request.preferredOutputs)
             outputs = []
             for role, (name, media_type, limit) in OUTPUTS.items():
                 if role in requested:

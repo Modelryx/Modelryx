@@ -26,6 +26,8 @@ services:
       POSTGRES_DB: modelryx
       POSTGRES_USER: modelryx
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Error: POSTGRES_PASSWORD must be set in .env}"
+    ports:
+      - "127.0.0.1:${MODELRYX_POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U modelryx -d modelryx"]
       interval: 5s
@@ -50,15 +52,11 @@ services:
       MODELRYX_AI_EMBEDDING_MODEL: ${MODELRYX_AI_EMBEDDING_MODEL:-}
       MODELRYX_AI_EMBEDDING_DIMENSIONS: ${MODELRYX_AI_EMBEDDING_DIMENSIONS:-1536}
       MODELRYX_SERVER_URL: http://api:8000
-      MODELRYX_CAD_ANALYZER_URL: ${MODELRYX_CAD_ANALYZER_URL:-http://freecad-analyzer:8090}
+      MODELRYX_FREECAD_PREPROCESSOR_URL: ${MODELRYX_FREECAD_PREPROCESSOR_URL:-${MODELRYX_CAD_ANALYZER_URL:-http://freecad-preprocessor:8090}}
       MODELRYX_STEP_WORKER_URL: http://step-worker:8080
       MODELRYX_FREECAD_WORKER_URL: ${MODELRYX_FREECAD_WORKER_URL:-}
       MODELRYX_CONVERTER_VERSION: ${MODELRYX_CONVERTER_VERSION:-modelryx-fcstd-29}
       MODELRYX_INTERNAL_WORKER_KEY: ${MODELRYX_INTERNAL_WORKER_KEY:?Set MODELRYX_INTERNAL_WORKER_KEY in .env}
-      MODELRYX_AUTOCAD_WORKER_URL: ${MODELRYX_AUTOCAD_WORKER_URL:-http://host.docker.internal:5080}
-      MODELRYX_INVENTOR_WORKER_URL: ${MODELRYX_INVENTOR_WORKER_URL:-http://host.docker.internal:5091}
-      MODELRYX_NX_WORKER_URL: ${MODELRYX_NX_WORKER_URL:-}
-      MODELRYX_NX_ALLOW_UNQUALIFIED_PROCESSING: ${MODELRYX_NX_ALLOW_UNQUALIFIED_PROCESSING:-false}
       MODELRYX_BOOTSTRAP_ADMIN_USERNAME: ${MODELRYX_BOOTSTRAP_ADMIN_USERNAME:-admin}
       MODELRYX_BOOTSTRAP_ADMIN_PASSWORD: "${MODELRYX_BOOTSTRAP_ADMIN_PASSWORD:?Error: MODELRYX_BOOTSTRAP_ADMIN_PASSWORD must be set in .env}"
       MODELRYX_CORS_ORIGINS: ${MODELRYX_CORS_ORIGINS:-["http://localhost:5173","http://localhost:5174"]}
@@ -146,13 +144,16 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  freecad-analyzer:
+  freecad-preprocessor:
     build:
       context: .
       dockerfile: workers/freecad/Dockerfile
     mem_limit: ${MODELRYX_FREECAD_MEMORY_LIMIT:-8g}
     pids_limit: ${MODELRYX_FREECAD_PIDS_LIMIT:-512}
-    command: ["uvicorn", "analyzer_api:app", "--app-dir", "/opt/modelryx-converter", "--host", "0.0.0.0", "--port", "8090"]
+    command: ["uvicorn", "preprocessor_api:app", "--app-dir", "/opt/modelryx-converter", "--host", "0.0.0.0", "--port", "8090"]
+    networks:
+      default:
+        aliases: ["freecad-analyzer"]
     environment:
       MODELRYX_INTERNAL_WORKER_KEY: ${MODELRYX_INTERNAL_WORKER_KEY:?Set MODELRYX_INTERNAL_WORKER_KEY in .env}
     restart: unless-stopped
@@ -167,8 +168,6 @@ services:
       <<: *app-environment
       MODELRYX_DATABASE_URL: postgresql://modelryx:modelryx@db-test:5432/modelryx_test
       MODELRYX_ENVIRONMENT: test
-      MODELRYX_AUTOCAD_WORKER_URL: ""
-      MODELRYX_INVENTOR_WORKER_URL: ""
     user: "100:101"
     volumes:
       - test-object-data:/var/lib/modelryx/objects

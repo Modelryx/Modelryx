@@ -151,9 +151,6 @@ export function AdminConsole({
       const saved = await api<CadWorkerSettings>('/admin/cad-workers', 'PUT', {
         freecad_url: String(data.get('freecadUrl') ?? '').trim() || null,
         freecad_analyzer_url: String(data.get('freecadAnalyzerUrl') ?? '').trim() || null,
-        autocad_url: String(data.get('autocadUrl') ?? '').trim() || null,
-        inventor_url: String(data.get('inventorUrl') ?? '').trim() || null,
-        nx_url: String(data.get('nxUrl') ?? '').trim() || null,
       });
       setCadWorkerSettings(saved);
       setCadWorkerSettingsSaved(true);

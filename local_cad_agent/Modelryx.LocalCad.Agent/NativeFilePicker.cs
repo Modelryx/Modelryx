@@ -3,19 +3,56 @@ using System.Runtime.InteropServices;
 
 namespace Modelryx.LocalCad.Agent;
 
+internal sealed record CadFileSelection(string Path, WorkerFormat? Worker);
+internal sealed record CadFileFilter(string CadSystem, string Name, string[] Extensions, WorkerFormat[] Workers)
+{
+    public string Patterns => string.Join(';', Extensions.Select(extension => "*" + extension));
+    public string Label => $"{Name} ({(CadSystem == "freecad" ? "*.FCStd" : Patterns)})";
+}
+
 internal static class NativeFilePicker
 {
-    public static string? PickCadFile() => OperatingSystem.IsWindows()
-        ? WindowsPicker.Pick()
-        : LinuxPicker.Pick();
-
-    public static Task<string?> PickCadFileAsync()
+    internal static IReadOnlyList<CadFileFilter> BuildFilters(IReadOnlyList<WorkerFormat> formats)
     {
-        if (!OperatingSystem.IsWindows()) return Task.FromResult(PickCadFile());
-        var completion = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var filters = formats.GroupBy(worker => System.Text.RegularExpressions.Regex.Replace(
+                worker.CadSystem.ToLowerInvariant(), "[^a-z0-9]", ""))
+            .Select(group => new CadFileFilter(group.Key, group.Key switch
+            {
+                "freecad" => "FreeCAD", "inventor" => "Inventor", "autocad" => "AutoCAD",
+                _ => group.First().CadSystem,
+            }, group.SelectMany(worker => worker.SourceExtensions)
+                .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(extension => extension, StringComparer.OrdinalIgnoreCase)
+                .ToArray(), group.ToArray())).ToList();
+        if (!filters.Any(filter => filter.CadSystem == "freecad"))
+            filters.Add(new CadFileFilter("freecad", "FreeCAD", [".fcstd"], []));
+        return filters.OrderBy(filter => filter.CadSystem switch
+            { "freecad" => 0, "inventor" => 1, "autocad" => 2, _ => 3 })
+            .ThenBy(filter => filter.Name, StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    internal static CadFileSelection SelectFile(string path, CadFileFilter filter)
+    {
+        var extension = System.IO.Path.GetExtension(path);
+        if (!filter.Extensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Select a file supported by the {filter.Name} file type.");
+        var matches = filter.Workers.Where(worker => worker.SourceExtensions.Contains(
+            extension, StringComparer.OrdinalIgnoreCase)).ToArray();
+        if (matches.Length > 1)
+            throw new InvalidOperationException($"More than one registered {filter.Name} worker supports this extension. Disable the conflicting registration before selecting this file.");
+        return new CadFileSelection(path, matches.SingleOrDefault());
+    }
+
+    public static CadFileSelection? PickCadFile(IReadOnlyList<WorkerFormat> formats) => OperatingSystem.IsWindows()
+        ? WindowsPicker.Pick(formats)
+        : LinuxPicker.Pick(formats);
+
+    public static Task<CadFileSelection?> PickCadFileAsync(IReadOnlyList<WorkerFormat> formats)
+    {
+        if (!OperatingSystem.IsWindows()) return Task.FromResult(PickCadFile(formats));
+        var completion = new TaskCompletionSource<CadFileSelection?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var thread = new Thread(() =>
         {
-            try { completion.SetResult(WindowsPicker.Pick()); }
+            try { completion.SetResult(WindowsPicker.Pick(formats)); }
             catch (Exception error) { completion.SetException(error); }
         })
         {
@@ -29,16 +66,37 @@ internal static class NativeFilePicker
 
     private static class LinuxPicker
     {
-        public static string? Pick()
+        public static CadFileSelection? Pick(IReadOnlyList<WorkerFormat> formats)
         {
+            var filters = BuildFilters(formats);
             if (FindOnPath("zenity") is { } zenity)
-                return Run(zenity,
+            {
+                // Zenity's file selection output omits the active filter. Choose the system first
+                // so a shared DWG extension cannot silently select the wrong native adapter.
+                var name = filters.Count == 1 ? filters[0].Label : Run(zenity,
+                    new[] { "--list", "--title=Open CAD File", "--text=Select CAD system", "--column=CAD system" }
+                        .Concat(filters.Select(filter => filter.Label)));
+                if (name is null) return null;
+                var filter = filters.Single(filter => filter.Label == name);
+                var path = Run(zenity,
                     ["--file-selection", "--title=Open CAD File", "--modal",
-                     "--file-filter=CAD files | *.FCStd *.fcstd *.dwg *.dxf *.iam *.ipt *.idw *.ipn *.prt"]);
+                     $"--file-filter={filter.Name} | {filter.Patterns.Replace(';', ' ')}"]);
+                return path is null ? null : SelectFile(path, filter);
+            }
             if (FindOnPath("kdialog") is { } kdialog)
-                return Run(kdialog,
+            {
+                var choice = filters.Count == 1 ? "0" : Run(kdialog,
+                    new[] { "--title", "Open CAD File", "--menu", "Select CAD system" }
+                        .Concat(filters.SelectMany((filter, index) => new[] { index.ToString(), filter.Label })));
+                if (choice is null) return null;
+                if (!int.TryParse(choice, out var index) || index < 0 || index >= filters.Count)
+                    throw new InvalidDataException("The CAD system selection is invalid.");
+                var filter = filters[index];
+                var path = Run(kdialog,
                     ["--getopenfilename", Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                     "CAD files (*.FCStd *.fcstd *.dwg *.dxf *.iam *.ipt *.idw *.ipn *.prt)", "--title", "Open CAD File"]);
+                     $"{filter.Patterns.Replace(';', ' ')}|{filter.Name}", "--title", "Open CAD File"]);
+                return path is null ? null : SelectFile(path, filter);
+            }
             throw new InvalidOperationException(
                 "No supported Linux file picker was found. Install zenity or kdialog.");
         }
@@ -85,7 +143,7 @@ internal static class NativeFilePicker
         private const uint SigDnFileSystemPath = 0x80058000;
         private const int Cancelled = unchecked((int)0x800704C7);
 
-        public static string? Pick()
+        public static CadFileSelection? Pick(IReadOnlyList<WorkerFormat> formats)
         {
             var owner = CreateWindowExW(WsExTopmost | WsExToolWindow, "STATIC", "Modelryx",
                 0, 0, 0, 1, 1, nint.Zero, nint.Zero, GetModuleHandleW(null), nint.Zero);
@@ -96,18 +154,23 @@ internal static class NativeFilePicker
                 var dialog = (IFileOpenDialog)new FileOpenDialog();
                 dialog.SetTitle("Open CAD File");
                 dialog.SetOptions(FosForceFileSystem | FosPathMustExist | FosFileMustExist);
-                var filters = new[]
-                {
-                    new FilterSpec("CAD files", "*.FCStd;*.fcstd;*.dwg;*.dxf;*.iam;*.ipt;*.idw;*.ipn;*.prt"),
-                    new FilterSpec("All files", "*.*"),
-                };
-                dialog.SetFileTypes((uint)filters.Length, filters);
+                var filters = BuildFilters(formats);
+                var specs = filters.Select(filter => new FilterSpec(filter.Label, filter.Patterns)).ToArray();
+                dialog.SetFileTypes((uint)specs.Length, specs);
+                dialog.SetFileTypeIndex(1);
                 var result = dialog.Show(owner);
                 if (result == Cancelled) return null;
                 Marshal.ThrowExceptionForHR(result);
+                dialog.GetFileTypeIndex(out var selectedIndex);
+                if (selectedIndex < 1 || selectedIndex > filters.Count)
+                    throw new InvalidDataException("The selected CAD file type is invalid.");
                 dialog.GetResult(out var item);
                 item.GetDisplayName(SigDnFileSystemPath, out var pointer);
-                try { return Marshal.PtrToStringUni(pointer); }
+                try
+                {
+                    var path = Marshal.PtrToStringUni(pointer);
+                    return path is null ? null : SelectFile(path, filters[(int)selectedIndex - 1]);
+                }
                 finally { Marshal.FreeCoTaskMem(pointer); }
             }
             finally
@@ -157,4 +220,5 @@ internal static class NativeFilePicker
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
         private static extern nint GetModuleHandleW(string? moduleName);
     }
+
 }

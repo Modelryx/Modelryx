@@ -85,19 +85,6 @@ export type CadWorkerConnectionStatus = {
   readiness_detail: string | null;
 };
 
-export type CadLicenseInfo = {
-  status: 'VERIFIED' | 'ERROR' | 'UNVERIFIED';
-  detail: string;
-  lastVerifiedAt: string | null;
-};
-
-export type NxDevelopmentCapabilities = {
-  enabled: boolean;
-  documentKinds: string[];
-  capabilities: string[];
-  detail: string;
-};
-
 export type CadWorkerStatus = {
   freecad: CadWorkerConnectionStatus;
   freecad_analyzer: CadWorkerConnectionStatus;

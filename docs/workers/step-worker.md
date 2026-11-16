@@ -80,7 +80,7 @@ artifact, capability, or metrics routes.
 
 API contract, authentication, idempotency, queue saturation, cancellation, restart recovery,
 retention, conversion, and output validation tests live under `workers/step/tests`. Use the
-repository [testing guide](../operations/testing.md) for the full platform qualification sequence.
+repository [testing guide](../development/testing.md) for the full platform qualification sequence.
 
 ## Related documents
 

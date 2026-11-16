@@ -11,7 +11,14 @@ internal sealed record AgentSettings(
     string? AutoCadPreprocessorDll = null,
     string? NxDirectory = null,
     string? NxPreprocessorExecutable = null,
+    ExternalPreprocessor[]? ExternalPreprocessors = null,
     string[]? AllowedOrigins = null);
+
+internal sealed record ExternalPreprocessor(
+    string Id, string CadSystem, string Version, string Executable, string[] Extensions);
+
+public sealed record WorkerFormat(string Id, string CadSystem, string WorkerName,
+    string WorkerVersion, string[] SourceExtensions);
 
 internal sealed class AgentConfiguration
 {
@@ -80,6 +87,21 @@ internal sealed class AgentConfiguration
         Candidate("autocad_worker", "src", "Modelryx.AutoCAD.Preprocessor", "bin", "Release", "net10.0-windows", "Modelryx.AutoCAD.Preprocessor.dll"));
 
     public IEnumerable<string> AllowedOrigins => _settings.AllowedOrigins ?? [];
+
+    public ExternalPreprocessor? FindExternal(string id, string system, string extension)
+    {
+        var matches = (_settings.ExternalPreprocessors ?? [])
+            .Where(worker => string.Equals(worker.Id, id, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(worker.CadSystem, system, StringComparison.OrdinalIgnoreCase)
+                && (worker.Extensions ?? []).Contains(extension, StringComparer.OrdinalIgnoreCase))
+            .ToArray();
+        if (matches.Length > 1) throw new InvalidDataException("Duplicate local preprocessor registration.");
+        return matches.SingleOrDefault();
+    }
+
+    public string RequireExternalExecutable(ExternalPreprocessor worker) =>
+        FirstExistingFile(worker.Executable)
+        ?? throw new InvalidOperationException($"Local preprocessor '{worker.Id}' is not installed. Install it and try again.");
 
     public string RequireNxPreprocessor() => RequireFile(
         "MODELRYX_NX_PREPROCESSOR_EXE", _settings.NxPreprocessorExecutable,

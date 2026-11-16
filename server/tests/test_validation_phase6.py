@@ -99,6 +99,20 @@ def test_geometry_rules_accept_positive_consistent_metrics() -> None:
     )
 
 
+def test_drawing_without_solid_geometry_does_not_block_validation() -> None:
+    metadata = {
+        "native": {"document_type": "drawing"},
+        "quality": {"geometry": "not_applicable"},
+        "geometry": {
+            "bounding_box": {"x_mm": 0, "y_mm": 0, "z_mm": 0},
+            "shape": {"volume_mm3": 0, "surface_area_mm2": 0},
+        },
+    }
+    assert geometry_findings(metadata) == []
+    metadata["native"]["document_type"] = "part"
+    assert any(finding.blocking for finding in geometry_findings(metadata))
+
+
 def test_unverified_array_geometry_warns_instead_of_claiming_pass_or_failure() -> None:
     value = {
         "geometry": {
@@ -134,6 +148,21 @@ def test_point_and_curve_only_part_is_a_non_blocking_limitation() -> None:
     assert [item.code for item in findings] == ["BODY_GEOMETRY_UNAVAILABLE"]
     assert findings[0].severity == "WARNING"
     assert findings[0].blocking is False
+
+
+def test_surface_only_model_does_not_require_solid_volume() -> None:
+    metadata = {
+        "geometry": {
+            "bounding_box": {"x_mm": 10, "y_mm": 20, "z_mm": 30},
+            "shape": {"volume_mm3": 0, "surface_area_mm2": 100},
+        },
+        "quality": {"warnings": ["Surface-only model; no solid bodies were found."]},
+    }
+    assert not any(f.blocking for f in geometry_findings(metadata))
+    metadata["geometry"]["shape"]["surface_area_mm2"] = 0
+    assert any(f.blocking for f in geometry_findings(metadata))
+    metadata["quality"]["warnings"] = []
+    assert any(f.code == "GEOMETRY_ZERO_VOLUME" for f in geometry_findings(metadata))
 
 
 def test_similarity_is_suppressed_only_by_blocking_metadata_or_geometry() -> None:

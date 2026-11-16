@@ -1,3 +1,6 @@
+> Historical design plan, not the current runtime contract. See the running OpenAPI schema
+> and [current API guide](../docs/development/api.md) for implemented behavior.
+
 # Edit Item Revision: Assembly Reconciliation Plan
 
 ## Purpose

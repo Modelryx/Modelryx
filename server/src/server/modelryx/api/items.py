@@ -242,31 +242,39 @@ def list_items(
         predicate &= func.lower(Item.status).in_([value.lower() for value in item_statuses])
     if cad_systems is not None:
         named = [value.lower() for value in cad_systems if value]
-        matches = [Item.current_revision_id.in_(
-            select(Revision.id).where(func.lower(Revision.cad_system).in_(named))
-        )]
+        matches = [
+            Item.current_revision_id.in_(
+                select(Revision.id).where(func.lower(Revision.cad_system).in_(named))
+            )
+        ]
         if "" in cad_systems:
             matches.append(Item.current_revision_id.is_(None))
-            matches.append(Item.current_revision_id.in_(
-                select(Revision.id).where(
-                    or_(Revision.cad_system.is_(None), Revision.cad_system == "")
+            matches.append(
+                Item.current_revision_id.in_(
+                    select(Revision.id).where(
+                        or_(Revision.cad_system.is_(None), Revision.cad_system == "")
+                    )
                 )
-            ))
+            )
         predicate &= or_(*matches)
     facets = None
     if include_facets:
         facets = {
-            "item_types": list(db.scalars(
-                select(Item.part_type).where(facet_predicate).distinct()
-            )),
-            "item_statuses": list(db.scalars(
-                select(Item.status).where(facet_predicate).distinct()
-            )),
-            "cad_systems": list(db.scalars(
-                select(Revision.cad_system).select_from(Item)
-                .outerjoin(Revision, Item.current_revision_id == Revision.id)
-                .where(facet_predicate).distinct()
-            )),
+            "item_types": list(
+                db.scalars(select(Item.part_type).where(facet_predicate).distinct())
+            ),
+            "item_statuses": list(
+                db.scalars(select(Item.status).where(facet_predicate).distinct())
+            ),
+            "cad_systems": list(
+                db.scalars(
+                    select(Revision.cad_system)
+                    .select_from(Item)
+                    .outerjoin(Revision, Item.current_revision_id == Revision.id)
+                    .where(facet_predicate)
+                    .distinct()
+                )
+            ),
         }
     total = db.scalar(select(func.count()).select_from(Item).where(predicate)) or 0
     ordering = Item.updated_at.desc() if include_archived else Item.part_number
@@ -286,9 +294,11 @@ def list_items(
     revisions_by_id = {
         revision.id: revision
         for revision in db.scalars(
-            select(Revision).where(Revision.id.in_(
-                [item.current_revision_id for item in rows if item.current_revision_id]
-            ))
+            select(Revision).where(
+                Revision.id.in_(
+                    [item.current_revision_id for item in rows if item.current_revision_id]
+                )
+            )
         )
     }
     responses = []
@@ -299,9 +309,9 @@ def list_items(
             checkout_status = "CHECKED_OUT_BY_ME"
         elif item_checkouts:
             checkout_status = "CHECKED_OUT_BY_OTHER"
-        responses.append(item_response(
-            item, checkout_status, revisions_by_id.get(item.current_revision_id)
-        ))
+        responses.append(
+            item_response(item, checkout_status, revisions_by_id.get(item.current_revision_id))
+        )
     return ItemListResponse(items=responses, total=total, limit=limit, offset=offset, facets=facets)
 
 
@@ -510,11 +520,12 @@ def release_item_revision(
     """Release the current ready revision and freeze its authoritative content."""
     require_engineer(principal)
     item = get_item_or_404(db, item_id)
-    revision = db.scalar(
-        select(Revision).where(Revision.id == revision_id).with_for_update()
-    )
+    revision = db.scalar(select(Revision).where(Revision.id == revision_id).with_for_update())
     if revision is None or revision.part_id != item.id:
         raise HTTPException(status_code=404, detail="Item revision not found")
+    actor = user_for_principal(db, principal)
+    if revision.created_by != actor.id and not principal.has_role("reviewer"):
+        raise HTTPException(status_code=403, detail="Only the revision creator or a reviewer can release it")
     if revision.lifecycle_state == "RELEASED":
         checkout_status = revision_checkout_status(db, revision.id, principal)
         return item_revision_response(revision, checkout_status, db)
@@ -575,7 +586,6 @@ def release_item_revision(
     )
     if invalid_authoritative is not None:
         raise HTTPException(status_code=409, detail="All authoritative files must be verified")
-    actor = user_for_principal(db, principal)
     now = datetime.now(UTC)
     for previous in db.scalars(
         select(Revision).where(
@@ -686,11 +696,14 @@ def copy_item_revision(
 
                 target_artifact = source_artifact
                 if source_relation.relation_type in {"SPECIFICATION", "DRAWING"}:
-                    latest_generation = db.scalar(
-                        select(func.max(Artifact.generation)).where(
-                            Artifact.artifact_key == source_artifact.artifact_key
+                    latest_generation = (
+                        db.scalar(
+                            select(func.max(Artifact.generation)).where(
+                                Artifact.artifact_key == source_artifact.artifact_key
+                            )
                         )
-                    ) or 0
+                        or 0
+                    )
                     target_artifact = Artifact(
                         artifact_key=source_artifact.artifact_key,
                         attachment_id=source_artifact.attachment_id,
@@ -829,6 +842,18 @@ def copy_item_revision(
             ".step": "STEP_TO_MODELRYX",
             ".stp": "STEP_TO_MODELRYX",
         }.get(copied_extension)
+        if copied_primary_file is not None and copied_extension not in {".step", ".stp"}:
+            from modelryx.services.external_workers import (
+                JOB_TYPE,
+                AmbiguousWorkerError,
+                matching_worker,
+            )
+
+            try:
+                if matching_worker(db, copied_primary_file.original_filename, revision.cad_system):
+                    copied_processing_type = JOB_TYPE
+            except AmbiguousWorkerError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
         if copied_primary_file is not None and copied_processing_type is not None:
             revision.state = "PROCESSING"
             db.add(
@@ -838,9 +863,7 @@ def copy_item_revision(
                     type=copied_processing_type,
                     state="PENDING",
                     attempt_count=0,
-                    idempotency_key=(
-                        f"{copied_extension.lstrip('.')}-preview:{snapshot.id}"
-                    ),
+                    idempotency_key=(f"{copied_extension.lstrip('.')}-preview:{snapshot.id}"),
                     available_at=now,
                 )
             )
@@ -958,6 +981,49 @@ def read_item_revision(
         revision_checkout_status(db, revision.id, principal),
         db,
     )
+
+
+@router.get("/items/{item_id}/revisions/{revision_id}/action-availability")
+def revision_action_availability(
+    item_id: uuid.UUID, revision_id: uuid.UUID, db: Db, principal: Actor
+) -> dict:
+    from modelryx.api.revision_approvals import actor_is_eligible
+    from modelryx.services.artifact_content import current_artifact_files
+    from modelryx.services.external_workers import AmbiguousWorkerError, matching_worker
+
+    revision = readable_item_revision(db, item_id, revision_id, principal)
+    actor = user_for_principal(db, principal)
+    snapshot = db.scalar(select(RevisionContentSnapshot).where(
+        RevisionContentSnapshot.revision_id == revision.id
+    ).order_by(RevisionContentSnapshot.sequence.desc()))
+    approvals = list(db.scalars(select(RevisionApprovalRequest).where(
+        RevisionApprovalRequest.revision_id == revision.id,
+        RevisionApprovalRequest.snapshot_id == (snapshot.id if snapshot else None),
+    )))
+    assigned = any(actor_is_eligible(approval, actor.id, principal.role) for approval in approvals)
+    can_review = any(approval.status == "PENDING" and actor_is_eligible(
+        approval, actor.id, principal.role) for approval in approvals)
+    source_files = current_artifact_files(
+        db, revision.id, artifact_types={"CAD_MODEL", "CAD_ASSEMBLY", "DRAWING", "CAD_DRAWING", "STEP"}
+    )
+    filenames = [file.original_filename for file in source_files if file.role == "PRIMARY"]
+    if not filenames:
+        filenames = [file.original_filename for file in source_files]
+    built_in = any(Path(name).suffix.casefold() in {".fcstd", ".step", ".stp"} for name in filenames)
+    try:
+        worker_configured = built_in or any(
+            matching_worker(db, name, revision.cad_system) is not None for name in filenames
+        )
+    except AmbiguousWorkerError:
+        worker_configured = False
+    return {
+        "is_creator": revision.created_by == actor.id,
+        "is_assigned_reviewer": assigned,
+        "can_review": can_review,
+        "can_release": revision.created_by == actor.id or principal.has_role("reviewer"),
+        "can_generate": principal.has_role("designer", "administrator"),
+        "worker_configured": worker_configured,
+    }
 
 
 @router.get(

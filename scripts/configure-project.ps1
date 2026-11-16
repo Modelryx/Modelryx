@@ -1,25 +1,29 @@
 [CmdletBinding()]
 param(
-    [string]$AutoCadInstallDir = "",
-    [string]$InventorInstallDir = "",
     [string]$FreeCadCmd = "",
     [string]$AdminUsername = "",
     [string]$AdminPassword = "",
     [string]$WorkerKey = "",
     [string]$JwtSecret = "",
-    [string]$AutoCadWorkerUrl = "http://host.docker.internal:5080",
-    [string]$InventorWorkerUrl = "http://host.docker.internal:5091",
+    [string]$PostgresPassword = "",
+    [int]$PostgresPort = 5432,
+    [string]$Environment = "",
+    [Alias("CadAnalyzerUrl")][string]$FreeCadPreprocessorUrl = "",
+    [string]$FreeCadWorkerUrl = "",
+    [string]$AiGatewayBaseUrl = "",
+    [string]$AiGatewayApiKey = "",
+    [string]$AiChatModel = "",
+    [string]$AiEmbeddingModel = "",
     [string]$WindowsServerUrl = "http://127.0.0.1:8000",
     [string]$WindowsStepWorkerUrl = "http://127.0.0.1:8080",
     [switch]$NonInteractive,
-    [switch]$SkipAutoCad,
-    [switch]$SkipInventor,
-    [switch]$BuildCadAdapters
+    [switch]$InstallLocalCadAgent
 )
 
 $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+$RetiredCadSettings = @("MODELRYX_AUTOCAD_WORKER_URL", "MODELRYX_INVENTOR_WORKER_URL", "MODELRYX_NX_WORKER_URL", "MODELRYX_NX_ALLOW_UNQUALIFIED_PROCESSING")
 
 function Get-EnvMap([string]$Path)
 {
@@ -49,6 +53,7 @@ function Write-EnvFile([string]$TemplatePath, [string]$DestinationPath, [hashtab
             continue
         }
         $Name = ($Text -split "=", 2)[0].Trim()
+        if ($Name -in $RetiredCadSettings) { continue }
         $Value = if ($Overrides.ContainsKey($Name)) { $Overrides[$Name] }
             elseif ($Existing.ContainsKey($Name)) { $Existing[$Name] }
             else { ($Text -split "=", 2)[1] }
@@ -63,7 +68,7 @@ function Write-EnvFile([string]$TemplatePath, [string]$DestinationPath, [hashtab
     }
     foreach ($Name in $Existing.Keys | Sort-Object)
     {
-        if (-not $Written.ContainsKey($Name) -and -not $Overrides.ContainsKey($Name)) {
+        if ($Name -notin $RetiredCadSettings -and -not $Written.ContainsKey($Name) -and -not $Overrides.ContainsKey($Name)) {
             $Lines.Add("$Name=$($Existing[$Name])")
         }
     }
@@ -78,7 +83,7 @@ function New-RandomSecret([int]$Bytes = 48)
     $Buffer = New-Object byte[] $Bytes
     $Generator = [Security.Cryptography.RandomNumberGenerator]::Create()
     try { $Generator.GetBytes($Buffer) } finally { $Generator.Dispose() }
-    return [Convert]::ToBase64String($Buffer)
+    return [Convert]::ToBase64String($Buffer).TrimEnd('=').Replace('+', '-').Replace('/', '_')
 }
 
 function Read-Value([string]$Label, [string]$Default)
@@ -88,22 +93,6 @@ function Read-Value([string]$Label, [string]$Default)
     $Value = Read-Host "$Label$Display"
     if ([string]::IsNullOrWhiteSpace($Value)) { return $Default }
     return $Value.Trim().Trim('"')
-}
-
-function Find-AutodeskInstall([string]$Product, [string]$ExecutableRelativePath)
-{
-    $Roots = @($env:ProgramFiles, ${env:ProgramFiles(x86)}, "F:\Autodesk") |
-        Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -LiteralPath $_) }
-    foreach ($Root in $Roots)
-    {
-        $Base = if ((Split-Path -Leaf $Root) -ieq "Autodesk") { $Root } else { Join-Path $Root "Autodesk" }
-        if (-not (Test-Path -LiteralPath $Base)) { continue }
-        $Match = Get-ChildItem -LiteralPath $Base -Directory -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -like "$Product *" -and (Test-Path -LiteralPath (Join-Path $_.FullName $ExecutableRelativePath)) } |
-            Sort-Object Name -Descending | Select-Object -First 1
-        if ($Match) { return $Match.FullName }
-    }
-    return ""
 }
 
 function Find-FreeCadCommand
@@ -129,7 +118,36 @@ function Assert-HttpUrl([string]$Name, [string]$Value)
     }
 }
 
+function Test-ProductionSecret([string]$Value, [int]$Minimum)
+{
+    $Normalized = $Value.Trim().ToLowerInvariant()
+    if ($Normalized.Length -lt $Minimum -or $Normalized -in @("admin", "password", "changeme") -or
+        $Normalized -match '^(replace-|change-this-|ci-only-|local-validation-)') { return $false }
+    return (@($Normalized.ToCharArray() | Select-Object -Unique).Count -ge 8)
+}
+
 $RootEnv = Get-EnvMap (Join-Path $ProjectRoot ".env")
+if (-not $Environment) {
+    $Environment = if ($RootEnv.ContainsKey("MODELRYX_ENVIRONMENT")) { $RootEnv["MODELRYX_ENVIRONMENT"] } else { "development" }
+}
+$Environment = Read-Value "Environment (development, test, production)" $Environment
+if ($Environment -notin @("development", "test", "production")) { throw "Environment must be development, test, or production." }
+if ($PostgresPort -lt 1 -or $PostgresPort -gt 65535) { throw "PostgresPort must be between 1 and 65535." }
+if (-not $PSBoundParameters.ContainsKey("PostgresPort") -and $RootEnv.ContainsKey("MODELRYX_POSTGRES_PORT")) {
+    if (-not [int]::TryParse($RootEnv["MODELRYX_POSTGRES_PORT"], [ref]$PostgresPort) -or $PostgresPort -lt 1 -or $PostgresPort -gt 65535) { throw "Existing MODELRYX_POSTGRES_PORT is invalid." }
+}
+if (-not $PostgresPassword) {
+    if ($RootEnv.ContainsKey("POSTGRES_PASSWORD") -and $RootEnv["POSTGRES_PASSWORD"]) {
+        $PostgresPassword = $RootEnv["POSTGRES_PASSWORD"]
+        if ($PostgresPassword -like "replace-*") { throw "Existing POSTGRES_PASSWORD is a placeholder. Set -PostgresPassword explicitly after checking the database credentials." }
+    } else { $PostgresPassword = New-RandomSecret }
+}
+if ($PSBoundParameters.ContainsKey("PostgresPassword") -and $RootEnv.ContainsKey("POSTGRES_PASSWORD") -and
+    $RootEnv["POSTGRES_PASSWORD"] -and $RootEnv["POSTGRES_PASSWORD"] -ne $PostgresPassword) {
+    Write-Warning "Changing POSTGRES_PASSWORD here does not change credentials in an existing PostgreSQL volume. Update the database separately before using the new password."
+}
+# Compose interpolates the password into a database URL and dotenv file.
+if ($PostgresPassword -notmatch '^[A-Za-z0-9_-]{16,}$') { throw "PostgresPassword must be at least 16 URL-safe characters (letters, digits, underscore, or hyphen)." }
 if ([string]::IsNullOrWhiteSpace($WorkerKey))
 {
     $WorkerKey = if ($RootEnv.ContainsKey("MODELRYX_INTERNAL_WORKER_KEY") -and
@@ -152,13 +170,14 @@ $AdminUsername = Read-Value "Bootstrap administrator username" $(if ($AdminUsern
 if ([string]::IsNullOrWhiteSpace($AdminPassword))
 {
     if ($RootEnv.ContainsKey("MODELRYX_BOOTSTRAP_ADMIN_PASSWORD") -and
-        -not [string]::IsNullOrWhiteSpace($RootEnv["MODELRYX_BOOTSTRAP_ADMIN_PASSWORD"]))
+        -not [string]::IsNullOrWhiteSpace($RootEnv["MODELRYX_BOOTSTRAP_ADMIN_PASSWORD"]) -and
+        $RootEnv["MODELRYX_BOOTSTRAP_ADMIN_PASSWORD"] -notlike "replace-*")
     {
         $AdminPassword = $RootEnv["MODELRYX_BOOTSTRAP_ADMIN_PASSWORD"]
     }
     elseif ($NonInteractive)
     {
-        $AdminPassword = "admin"
+        $AdminPassword = New-RandomSecret
     }
     else
     {
@@ -170,36 +189,13 @@ if ([string]::IsNullOrWhiteSpace($AdminPassword))
     }
 }
 
-if (-not $SkipAutoCad)
-{
-    if ([string]::IsNullOrWhiteSpace($AutoCadInstallDir)) {
-        $AutoCadInstallDir = Find-AutodeskInstall "AutoCAD" "accoreconsole.exe"
-    }
-    $AutoCadInstallDir = Read-Value "AutoCAD installation directory" $AutoCadInstallDir
-    if ([string]::IsNullOrWhiteSpace($AutoCadInstallDir)) { throw "AutoCAD was not found. Pass -SkipAutoCad or -AutoCadInstallDir." }
-    $AutoCadInstallDir = [IO.Path]::GetFullPath($AutoCadInstallDir)
-    foreach ($Required in @("accoreconsole.exe", "AcDbMgd.dll"))
-    {
-        if (-not (Test-Path -LiteralPath (Join-Path $AutoCadInstallDir $Required))) {
-            throw "AutoCAD file was not found: $(Join-Path $AutoCadInstallDir $Required)"
-        }
-    }
+if ($Environment -eq "production") {
+    if (-not (Test-ProductionSecret $AdminPassword 16)) { throw "Production administrator password must satisfy the server's password policy." }
+    if (-not (Test-ProductionSecret $JwtSecret 32)) { throw "Production JWT secret must satisfy the server's secret policy." }
+    if (-not (Test-ProductionSecret $WorkerKey 32)) { throw "Production worker key must satisfy the server's secret policy." }
 }
-
-if (-not $SkipInventor)
-{
-    if ([string]::IsNullOrWhiteSpace($InventorInstallDir)) {
-        $InventorInstallDir = Find-AutodeskInstall "Inventor" "Bin\Inventor.exe"
-    }
-    $InventorInstallDir = Read-Value "Inventor installation directory" $InventorInstallDir
-    if ([string]::IsNullOrWhiteSpace($InventorInstallDir)) { throw "Inventor was not found. Pass -SkipInventor or -InventorInstallDir." }
-    $InventorInstallDir = [IO.Path]::GetFullPath($InventorInstallDir)
-    foreach ($Required in @("Bin\Inventor.exe", "Bin\Public Assemblies\Autodesk.Inventor.Interop.dll"))
-    {
-        if (-not (Test-Path -LiteralPath (Join-Path $InventorInstallDir $Required))) {
-            throw "Inventor file was not found: $(Join-Path $InventorInstallDir $Required)"
-        }
-    }
+foreach ($Secret in @($AdminPassword, $JwtSecret, $WorkerKey)) {
+    if ($Secret -match '[\r\n$#"'']') { throw "Secrets cannot contain newlines, dollar signs, hash signs, or quotes in dotenv files." }
 }
 
 if ([string]::IsNullOrWhiteSpace($FreeCadCmd))
@@ -217,85 +213,76 @@ if (-not [string]::IsNullOrWhiteSpace($FreeCadCmd))
     }
 }
 
-$AutoCadWorkerUrl = Read-Value "AutoCAD URL visible from Docker" $AutoCadWorkerUrl
-$InventorWorkerUrl = Read-Value "Inventor URL visible from Docker" $InventorWorkerUrl
-Assert-HttpUrl "AutoCAD worker URL" $AutoCadWorkerUrl
-Assert-HttpUrl "Inventor worker URL" $InventorWorkerUrl
 Assert-HttpUrl "Windows Modelryx server URL" $WindowsServerUrl
 Assert-HttpUrl "Windows STEP worker URL" $WindowsStepWorkerUrl
 
 $RootOverrides = @{
+    POSTGRES_PASSWORD = $PostgresPassword
+    MODELRYX_POSTGRES_PORT = "$PostgresPort"
+    MODELRYX_ENVIRONMENT = $Environment
     MODELRYX_JWT_SECRET = $JwtSecret
     MODELRYX_BOOTSTRAP_ADMIN_USERNAME = $AdminUsername
     MODELRYX_BOOTSTRAP_ADMIN_PASSWORD = $AdminPassword
     MODELRYX_INTERNAL_WORKER_KEY = $WorkerKey
-    MODELRYX_AUTOCAD_WORKER_URL = $AutoCadWorkerUrl.TrimEnd('/')
-    MODELRYX_INVENTOR_WORKER_URL = $InventorWorkerUrl.TrimEnd('/')
     MODELRYX_FREECAD_CMD = $FreeCadCmd
+}
+if (-not $PSBoundParameters.ContainsKey("FreeCadPreprocessorUrl") -and
+    -not $RootEnv.ContainsKey("MODELRYX_FREECAD_PREPROCESSOR_URL") -and
+    $RootEnv.ContainsKey("MODELRYX_CAD_ANALYZER_URL")) {
+    $RootOverrides["MODELRYX_FREECAD_PREPROCESSOR_URL"] = $RootEnv["MODELRYX_CAD_ANALYZER_URL"]
+}
+$OptionalSettings = @{
+    FreeCadPreprocessorUrl = "MODELRYX_FREECAD_PREPROCESSOR_URL"; FreeCadWorkerUrl = "MODELRYX_FREECAD_WORKER_URL"
+    AiGatewayBaseUrl = "MODELRYX_AI_GATEWAY_BASE_URL"
+    AiGatewayApiKey = "MODELRYX_AI_GATEWAY_API_KEY"; AiChatModel = "MODELRYX_AI_CHAT_MODEL"
+    AiEmbeddingModel = "MODELRYX_AI_EMBEDDING_MODEL"
+}
+foreach ($Parameter in $OptionalSettings.Keys) {
+    if ($PSBoundParameters.ContainsKey($Parameter)) {
+        $Value = [string](Get-Variable -Name $Parameter -ValueOnly)
+        if ($Parameter -match 'Url$' -and $Value) { Assert-HttpUrl $Parameter $Value }
+        if ($Value -match '[\r\n$#"'']') { throw "$Parameter contains characters unsupported in dotenv values." }
+        $RootOverrides[$OptionalSettings[$Parameter]] = $Value
+    }
 }
 Write-EnvFile (Join-Path $ProjectRoot ".env.example") (Join-Path $ProjectRoot ".env") $RootOverrides
 
 $ServerOverrides = @{}
 foreach ($Name in $RootOverrides.Keys) { $ServerOverrides[$Name] = $RootOverrides[$Name] }
+[void]$ServerOverrides.Remove("POSTGRES_PASSWORD")
+[void]$ServerOverrides.Remove("MODELRYX_POSTGRES_PORT")
+$ServerEnv = Get-EnvMap (Join-Path $ProjectRoot "server\.env")
+$ExistingServerUrl = $ServerEnv["MODELRYX_DATABASE_URL"]
+if ($ExistingServerUrl -and $ExistingServerUrl -notmatch '@db:5432/' -and
+    -not $PSBoundParameters.ContainsKey("PostgresPassword") -and -not $PSBoundParameters.ContainsKey("PostgresPort")) {
+    $ServerOverrides["MODELRYX_DATABASE_URL"] = $ExistingServerUrl
+} else {
+    $ServerOverrides["MODELRYX_DATABASE_URL"] = "postgresql+psycopg://modelryx:${PostgresPassword}@127.0.0.1:${PostgresPort}/modelryx"
+}
+$ServerOverrides["MODELRYX_STORAGE_ROOT"] = "data/objects"
+$ServerOverrides["MODELRYX_SERVER_URL"] = $WindowsServerUrl
+$ServerOverrides["MODELRYX_STEP_WORKER_URL"] = $WindowsStepWorkerUrl
 Write-EnvFile (Join-Path $ProjectRoot "server\.env.example") (Join-Path $ProjectRoot "server\.env") $ServerOverrides
-
-if (-not $SkipAutoCad)
-{
-    $AutoCadPlugin = Join-Path $ProjectRoot "autocad_worker\artifacts\autocad-2027\Modelryx.bundle\Contents\Windows\Modelryx.AutoCAD.Plugin.dll"
-    $AutoCadOverrides = @{
-        Worker__ApiKey = $WorkerKey
-        ContractWorker__CoreConsole = (Join-Path $AutoCadInstallDir "accoreconsole.exe")
-        ContractWorker__PluginDll = $AutoCadPlugin
-        StepWorker__ServiceUrl = $WindowsStepWorkerUrl
-        StepWorker__ApiKey = $WorkerKey
-        MODELRYX_SERVER_URL = $WindowsServerUrl
-        MODELRYX_INTERNAL_WORKER_KEY = $WorkerKey
-        MODELRYX_AUTOCAD_CORE_CONSOLE = (Join-Path $AutoCadInstallDir "accoreconsole.exe")
-        MODELRYX_AUTOCAD_PRODUCT = "ACAD"
-        MODELRYX_STEP_TO_GLB_URL = $WindowsStepWorkerUrl
-    }
-    Write-EnvFile (Join-Path $ProjectRoot "autocad_worker\.env.example") (Join-Path $ProjectRoot "autocad_worker\.env") $AutoCadOverrides
-}
-
-if (-not $SkipInventor)
-{
-    $InventorAdapter = Join-Path $ProjectRoot "inventor_worker\src\Modelryx.Inventor.Adapter\bin\Release\net8.0-windows\Modelryx.Inventor.Adapter.exe"
-    $InventorOverrides = @{
-        Worker__ApiKey = $WorkerKey
-        Worker__AdapterExecutable = $InventorAdapter
-        StepWorker__ServiceUrl = $WindowsStepWorkerUrl
-        StepWorker__ApiKey = $WorkerKey
-        MODELRYX_INVENTOR_EXE = (Join-Path $InventorInstallDir "Bin\Inventor.exe")
-        MODELRYX_SERVER_URL = $WindowsServerUrl
-        MODELRYX_INTERNAL_WORKER_KEY = $WorkerKey
-        MODELRYX_STEP_WORKER_URL = $WindowsStepWorkerUrl
-    }
-    Write-EnvFile (Join-Path $ProjectRoot "inventor_worker\.env.example") (Join-Path $ProjectRoot "inventor_worker\.env") $InventorOverrides
-}
 
 function Escape-Xml([string]$Value) { return [Security.SecurityElement]::Escape($Value) }
 $Properties = New-Object System.Collections.Generic.List[string]
 $Properties.Add('<Project>')
 $Properties.Add('  <PropertyGroup>')
-if (-not $SkipAutoCad) { $Properties.Add("    <AutoCadSdkDir>$(Escape-Xml $AutoCadInstallDir)</AutoCadSdkDir>") }
-if (-not $SkipInventor) { $Properties.Add("    <InventorInstallDir>$(Escape-Xml $InventorInstallDir)</InventorInstallDir>") }
 if (-not [string]::IsNullOrWhiteSpace($FreeCadCmd)) { $Properties.Add("    <FreeCadCmd>$(Escape-Xml $FreeCadCmd)</FreeCadCmd>") }
 $Properties.Add('  </PropertyGroup>')
 $Properties.Add('</Project>')
 [IO.File]::WriteAllLines((Join-Path $ProjectRoot ".modelryx.local.props"), $Properties, $Utf8NoBom)
 Write-Host "Configured $(Join-Path $ProjectRoot '.modelryx.local.props')"
 
-if ($BuildCadAdapters)
-{
-    if (-not $SkipAutoCad) { & (Join-Path $ProjectRoot "autocad_worker\scripts\build-autocad-bundle.ps1") }
-    if (-not $SkipInventor) {
-        dotnet build (Join-Path $ProjectRoot "inventor_worker\src\Modelryx.Inventor.Adapter\Modelryx.Inventor.Adapter.csproj") --configuration Release
-        if ($LASTEXITCODE) { throw "Inventor adapter build failed with exit code $LASTEXITCODE." }
-    }
+if ($InstallLocalCadAgent) {
+    $AgentInstaller = Join-Path $ProjectRoot "local_cad_agent\install-windows.ps1"
+    if ($FreeCadCmd) { & $AgentInstaller -FreeCadCommand $FreeCadCmd }
+    else { & $AgentInstaller }
 }
 
 Write-Host ""
 Write-Host "Modelryx configuration is ready."
 Write-Host "1. Start Docker services: docker compose up --build"
-if (-not $SkipAutoCad) { Write-Host "2. Start AutoCAD worker: .\autocad_worker\scripts\start-autocad-server.ps1" }
-if (-not $SkipInventor) { Write-Host "3. Start Inventor worker: .\inventor_worker\scripts\start-inventor-server.ps1" }
+if (-not $InstallLocalCadAgent) { Write-Host "Local CAD selection requires the agent; use -InstallLocalCadAgent or see local_cad_agent/README.md." }
+Write-Host "Optional AI and remote FreeCAD service settings can be passed as parameters or configured in .env."
+if ($NonInteractive -and -not $PSBoundParameters.ContainsKey("AdminPassword")) { Write-Host "The generated bootstrap administrator password is stored in .env." }

@@ -37,8 +37,12 @@ export function RevisionImpactPanel({
   const relevantJobs = (jobs.data ?? []).filter(
     (job) => !snapshotId || job.snapshot_id === snapshotId
   );
-  const active = relevantJobs.filter((job) => ['PENDING', 'RUNNING'].includes(job.state));
-  const failed = relevantJobs.filter((job) => job.state === 'FAILED');
+  // The API returns newest jobs first. A retry supersedes older attempts of the same type.
+  const latestJobs = [...new Map(
+    [...relevantJobs].reverse().map((job) => [job.type, job])
+  ).values()];
+  const active = latestJobs.filter((job) => ['PENDING', 'RUNNING'].includes(job.state));
+  const failed = latestJobs.filter((job) => job.state === 'FAILED');
   const parents = new Map(
     (whereUsed.data?.items ?? []).map((row) => [row.parent_revision.id, row])
   );
@@ -66,12 +70,12 @@ export function RevisionImpactPanel({
           {job.type.replaceAll('_', ' ')}: {job.error_detail || 'Processing failed'}
         </p>
       ))}
-      {relevantJobs
+      {latestJobs
         .flatMap((job) => job.diagnostics_json?.warnings ?? [])
         .slice(0, 3)
         .map((warning, index) => (
-          <p className="revision-impact-warning" key={`warning-${index}`}>
-            {String(warning)}
+          <p className="revision-impact-notice" key={`warning-${index}`}>
+            {typeof warning === 'string' ? warning : JSON.stringify(warning)}
           </p>
         ))}
       {!whereUsed.loading && !whereUsed.error && (

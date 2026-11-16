@@ -8,7 +8,7 @@ ENV PATH=/opt/conda/envs/modelryx-worker/bin:$PATH \
     LD_LIBRARY_PATH=/opt/conda/envs/modelryx-worker/lib \
     PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
     MODELRYX_CONVERTER_SCRIPT=/app/converter/fcstd_to_modelryx_glb.py \
-    MODELRYX_FREECAD_ANALYZER_SCRIPT=/app/preprocessor/modelryx_freecad_preprocessor.py
+    MODELRYX_FREECAD_PREPROCESSOR_SCRIPT=/app/preprocessor/modelryx_freecad_preprocessor.py
 
 WORKDIR /app
 COPY worker-sdk /tmp/worker-sdk

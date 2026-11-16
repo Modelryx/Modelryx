@@ -226,6 +226,9 @@ export function PropertiesSection({
   const features = record(partMetadata.features);
   const featureSummary = record(features.summary);
   const assembly = record(partMetadata.assembly);
+  const nativeComponents = Array.isArray(assembly.components)
+    ? assembly.components.map(record)
+    : [];
   const quality = record(partMetadata.quality);
   const source = record(partMetadata.source);
   const drawings = Array.isArray(partMetadata.drawings) ? partMetadata.drawings.map(record) : [];
@@ -938,6 +941,36 @@ export function PropertiesSection({
             <section className="item-revision-panel">
               <h3>Assembly</h3>
               <PropertyTable values={assemblyRows} />
+              {nativeComponents.length > 0 && (
+                <details>
+                  <summary>Native component evidence ({nativeComponents.length})</summary>
+                  <p className="muted">
+                    These occurrences come from the CAD worker. Managed BOM relationships are
+                    maintained separately.
+                  </p>
+                  {nativeComponents.map((component, index) => (
+                    <section key={`${String(component.occurrence_id ?? 'component')}-${index}`}>
+                      <h4>
+                        {String(
+                          component.name ?? component.occurrence_id ?? `Component ${index + 1}`
+                        )}
+                      </h4>
+                      <PropertyTable
+                        values={rows([
+                          ['Occurrence', component.occurrence_id],
+                          ['Parent occurrence', component.parent_occurrence_id],
+                          ['Referenced document', component.dependency_document],
+                          ['Reference status', component.dependency_status],
+                          ['Part number', component.part_number],
+                          ['Revision', component.revision],
+                          ['Quantity', component.quantity],
+                          ['Suppressed', component.suppressed],
+                        ])}
+                      />
+                    </section>
+                  ))}
+                </details>
+              )}
             </section>
           )}
           {drawingSummary.length > 0 && (

@@ -122,7 +122,7 @@ def test_unconfigured_cad_servers_report_not_configured() -> None:
     assert response.json()["nx"]["configuration_source"] == "ADMIN_DISABLED"
 
 
-def test_cad_worker_configuration_reports_environment_default() -> None:
+def test_external_worker_configuration_requires_admin_registration() -> None:
     class Db:
         def scalars(self, _query):
             return []
@@ -134,10 +134,7 @@ def test_cad_worker_configuration_reports_environment_default() -> None:
     )
     configurations = admin._cad_worker_configurations(Db(), settings)
     assert configurations["autocad_url"] == (None, "NOT_CONFIGURED")
-    assert configurations["nx_url"] == (
-        "https://nx.internal.example:5092",
-        "ENVIRONMENT_DEFAULT",
-    )
+    assert configurations["nx_url"] == (None, "NOT_CONFIGURED")
 
 
 def test_probe_rejects_reachable_worker_with_wrong_contract(monkeypatch) -> None:

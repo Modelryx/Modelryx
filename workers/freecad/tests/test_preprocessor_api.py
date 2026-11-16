@@ -8,35 +8,54 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "converter"))
-import analyzer_api
+import preprocessor_api
+
+
+def test_preprocessor_health_and_capabilities(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("MODELRYX_INTERNAL_WORKER_KEY", "test-key")
+    script = tmp_path / "preprocessor.py"
+    script.touch()
+    monkeypatch.setattr(preprocessor_api, "PREPROCESSOR", script)
+    client = TestClient(preprocessor_api.app)
+    assert client.get("/ready").status_code == 200
+    assert client.get("/api/v1/capabilities").status_code == 401
+    response = client.get("/api/v1/capabilities", headers={"X-Modelryx-Worker-Key": "test-key"})
+    assert response.json() == {
+        "contractVersion": "1.0",
+        "cadSystem": "freecad",
+        "dependencyAnalysis": True,
+    }
+    script.unlink()
+    assert client.get("/ready").status_code == 503
 
 
 def test_analyzer_validates_credentials_and_root_path(monkeypatch) -> None:
     monkeypatch.setenv("MODELRYX_INTERNAL_WORKER_KEY", "test-key")
-    analyzer_api._require_key("test-key")
+    preprocessor_api._require_key("test-key")
     assert (
-        str(analyzer_api._root_path(base64.b64encode(b"Assembly.FCStd").decode()))
+        str(preprocessor_api._root_path(base64.b64encode(b"Assembly.FCStd").decode()))
         == "Assembly.FCStd"
     )
-    assert analyzer_api.health() == {"status": "ok"}
+    assert preprocessor_api.health() == {"status": "ok"}
 
 
 def test_analyzer_rejects_traversal_and_bad_credentials(monkeypatch) -> None:
     monkeypatch.setenv("MODELRYX_INTERNAL_WORKER_KEY", "test-key")
     with pytest.raises(HTTPException) as bad_key:
-        analyzer_api._require_key("wrong")
+        preprocessor_api._require_key("wrong")
     assert bad_key.value.status_code == 401
     with pytest.raises(HTTPException) as traversal:
-        analyzer_api._root_path(base64.b64encode(b"../Assembly.FCStd").decode())
+        preprocessor_api._root_path(base64.b64encode(b"../Assembly.FCStd").decode())
     assert traversal.value.status_code == 422
 
 
 def test_analyzer_rejects_missing_credential(monkeypatch) -> None:
     monkeypatch.setenv("MODELRYX_INTERNAL_WORKER_KEY", "test-key")
     with pytest.raises(HTTPException) as failure:
-        analyzer_api._require_key(None)
+        preprocessor_api._require_key(None)
     assert failure.value.status_code == 401
 
 
@@ -48,11 +67,11 @@ def test_analyzer_reports_preprocessor_timeout(monkeypatch) -> None:
     def timeout(*_args, **_kwargs):
         raise subprocess.TimeoutExpired("freecad", 300)
 
-    monkeypatch.setattr(analyzer_api, "_run_preprocessor", timeout)
+    monkeypatch.setattr(preprocessor_api, "_run_preprocessor", timeout)
     with pytest.raises(HTTPException) as failure:
-        analyzer_api._analyze_content(
+        preprocessor_api._analyze_content(
             archive_bytes.getvalue(),
-            analyzer_api._root_path(base64.b64encode(b"Assembly.FCStd").decode()),
+            preprocessor_api._root_path(base64.b64encode(b"Assembly.FCStd").decode()),
         )
     assert failure.value.status_code == 504
     assert failure.value.detail["code"] == "FREECAD_ANALYSIS_TIMEOUT"
@@ -87,9 +106,9 @@ def test_analyzer_rejects_ambiguous_archive_paths(members, detail) -> None:
             archive.writestr(name, content)
 
     with pytest.raises(HTTPException) as failure:
-        analyzer_api._analyze_content(
+        preprocessor_api._analyze_content(
             archive_bytes.getvalue(),
-            analyzer_api._root_path(base64.b64encode(b"Assembly.FCStd").decode()),
+            preprocessor_api._root_path(base64.b64encode(b"Assembly.FCStd").decode()),
         )
 
     assert failure.value.status_code == 422
@@ -97,11 +116,11 @@ def test_analyzer_rejects_ambiguous_archive_paths(members, detail) -> None:
 
 
 def test_analyzer_streams_request_with_bounded_size(monkeypatch) -> None:
-    monkeypatch.setattr(analyzer_api, "MAX_ARCHIVE_BYTES", 8)
-    received = analyzer_api._checked_archive_size(0, 5)
+    monkeypatch.setattr(preprocessor_api, "MAX_ARCHIVE_BYTES", 8)
+    received = preprocessor_api._checked_archive_size(0, 5)
     assert received == 5
     with pytest.raises(HTTPException) as failure:
-        analyzer_api._checked_archive_size(received, 4)
+        preprocessor_api._checked_archive_size(received, 4)
 
     assert failure.value.status_code == 413
     assert failure.value.detail == "CAD analysis package is too large"
@@ -110,7 +129,7 @@ def test_analyzer_streams_request_with_bounded_size(monkeypatch) -> None:
 @pytest.mark.parametrize("value", ["invalid", "-1"])
 def test_analyzer_rejects_invalid_declared_archive_size(value) -> None:
     with pytest.raises(HTTPException) as failure:
-        analyzer_api._declared_archive_size(value)
+        preprocessor_api._declared_archive_size(value)
     assert failure.value.status_code == 400
     assert failure.value.detail == "Invalid Content-Length header"
 
@@ -129,8 +148,8 @@ def test_analyzer_resolves_windows_root_path_casing(monkeypatch) -> None:
             [root, output_root], 0, stdout='{"kind":"assembly"}\n', stderr=""
         )
 
-    monkeypatch.setattr(analyzer_api, "_run_preprocessor", completed)
-    report = analyzer_api._analyze_content(
+    monkeypatch.setattr(preprocessor_api, "_run_preprocessor", completed)
+    report = preprocessor_api._analyze_content(
         archive_bytes.getvalue(), PurePosixPath("assemblies/main.fcstd")
     )
 
@@ -153,9 +172,9 @@ def test_analyzer_returns_sanitized_structured_failure(monkeypatch) -> None:
             stderr=f"traceback\nCould not open {workspace / 'source' / 'secret.FCStd'}\x00",
         )
 
-    monkeypatch.setattr(analyzer_api, "_run_preprocessor", failed)
+    monkeypatch.setattr(preprocessor_api, "_run_preprocessor", failed)
     with pytest.raises(HTTPException) as failure:
-        analyzer_api._analyze_content(archive_bytes.getvalue(), PurePosixPath("Assembly.FCStd"))
+        preprocessor_api._analyze_content(archive_bytes.getvalue(), PurePosixPath("Assembly.FCStd"))
 
     assert failure.value.status_code == 422
     assert failure.value.detail["code"] == "FREECAD_ANALYSIS_FAILED"
@@ -185,9 +204,9 @@ def test_terminate_process_tree_uses_windows_tree_kill(monkeypatch) -> None:
         calls.append((args, kwargs))
         return subprocess.CompletedProcess(args, 0)
 
-    monkeypatch.setattr(analyzer_api.os, "name", "nt")
-    monkeypatch.setattr(analyzer_api.subprocess, "run", run)
-    analyzer_api._terminate_process_tree(Process())
+    monkeypatch.setattr(preprocessor_api.os, "name", "nt")
+    monkeypatch.setattr(preprocessor_api.subprocess, "run", run)
+    preprocessor_api._terminate_process_tree(Process())
 
     assert calls[0][0] == ["taskkill", "/PID", "321", "/T", "/F"]
     assert calls[0][1]["check"] is False
@@ -209,7 +228,9 @@ def test_windows_tree_kill_failure_falls_back_to_kill(monkeypatch) -> None:
         def wait(self, timeout):
             calls.append("wait")
 
-    monkeypatch.setattr(analyzer_api.os, "name", "nt")
-    monkeypatch.setattr(analyzer_api.subprocess, "run", lambda args, **_: subprocess.CompletedProcess(args, 1))
-    analyzer_api._terminate_process_tree(Process())
+    monkeypatch.setattr(preprocessor_api.os, "name", "nt")
+    monkeypatch.setattr(
+        preprocessor_api.subprocess, "run", lambda args, **_: subprocess.CompletedProcess(args, 1)
+    )
+    preprocessor_api._terminate_process_tree(Process())
     assert calls == ["kill", "wait"]

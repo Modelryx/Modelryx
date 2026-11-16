@@ -159,13 +159,17 @@ def process_staging_workflow(db: Session, staging_id: uuid.UUID, settings: Setti
     if report.status not in {"READY", "READY_WITH_WARNINGS"}:
         staging = db.get(StagingSession, staging_id)
         assert staging is not None
+        blockers = [finding.title for finding in report.findings if finding.blocking]
+        detail = f"Validation status is {report.status}"
+        if blockers:
+            detail += ": " + "; ".join(blockers[:5])
         set_workflow(
             staging,
             state="REVIEW_REQUIRED",
             stage="VALIDATION",
             progress_percent=75,
             commit_id=commit_id,
-            error_detail=f"Validation status is {report.status}",
+            error_detail=detail,
         )
         db.commit()
         return

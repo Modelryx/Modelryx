@@ -1,4 +1,5 @@
 import asyncio
+import json
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Literal
@@ -22,6 +23,7 @@ from modelryx.services.checkout_notifications import (
     create_checkout_expiry_notifications,
     record_checkout_notification_run,
 )
+from modelryx.services.external_workers import PREFIX, registered_workers, validate_capabilities
 from modelryx.services.freecad_settings import FREECAD_ANALYZER_KEY, FREECAD_WORKER_KEY
 from modelryx.services.item_purge import (
     item_storage_keys,
@@ -222,11 +224,12 @@ def _cad_worker_configurations(
         )
     }
     defaults = {
-        "autocad_url": settings.autocad_worker_url if settings else None,
-        "inventor_url": settings.inventor_worker_url if settings else None,
-        "nx_url": settings.nx_worker_url if settings else None,
+        "autocad_url": None,
+        "inventor_url": None,
+        "nx_url": None,
         "freecad_url": getattr(settings, "freecad_worker_url", None),
-        "freecad_analyzer_url": getattr(settings, "cad_analyzer_url", None),
+        "freecad_analyzer_url": getattr(settings, "freecad_preprocessor_url", None)
+        or getattr(settings, "cad_analyzer_url", None),
     }
     configurations = {}
     for field, key in CAD_WORKER_SETTING_KEYS.items():
@@ -488,12 +491,11 @@ def update_cad_worker_settings(
 ) -> CadWorkerSettingsResponse:
     require_admin(principal)
     actor = user_for_principal(db, principal)
-    values = {
-        "autocad_url": _worker_url(payload.autocad_url, "AutoCAD worker URL"),
-        "inventor_url": _worker_url(payload.inventor_url, "Inventor worker URL"),
-        "nx_url": _worker_url(payload.nx_url, "Siemens NX worker URL"),
-    }
+    values = {}
     for field, label in (
+        ("autocad_url", "AutoCAD worker URL"),
+        ("inventor_url", "Inventor worker URL"),
+        ("nx_url", "Siemens NX worker URL"),
         ("freecad_url", "FreeCAD worker URL"),
         ("freecad_analyzer_url", "FreeCAD analyzer URL"),
     ):
@@ -532,6 +534,141 @@ def update_cad_worker_settings(
     )
     db.commit()
     return CadWorkerSettingsResponse(**_cad_worker_urls(db, settings))
+
+
+class ExternalWorkerUpdate(BaseModel):
+    url: str = Field(min_length=1, max_length=1500)
+    enabled: bool = True
+
+
+@router.get("/external-workers")
+def list_external_workers(db: Db, principal: Actor) -> list[dict]:
+    require_admin(principal)
+    return registered_workers(db)
+
+
+@router.get("/external-workers/status")
+async def external_worker_status(db: Db, principal: Actor, settings: Config) -> list[dict]:
+    """Probe registered workers without exposing credentials or guessing their CAD system."""
+    require_admin(principal)
+    workers = registered_workers(db)
+
+    async def probe(worker: dict) -> dict:
+        result = {
+            "id": worker["id"],
+            "cadSystem": worker["capabilities"]["cadSystem"],
+            "url": worker["url"],
+            "availability": "DISABLED" if not worker["enabled"] else "OFFLINE",
+            "checkedAt": datetime.now(UTC).isoformat(),
+            "detail": None,
+        }
+        if not worker["enabled"]:
+            return result
+        if not settings.internal_worker_key:
+            result["detail"] = "The internal worker key is not configured."
+            return result
+        try:
+            async with httpx.AsyncClient(timeout=3.0, follow_redirects=False) as client:
+                readiness = await client.get(f"{worker['url']}/ready")
+                readiness.raise_for_status()
+                response = await client.get(
+                    f"{worker['url']}/api/v1/capabilities",
+                    headers={"X-Modelryx-Worker-Key": settings.internal_worker_key},
+                )
+                response.raise_for_status()
+                if validate_capabilities(response.json()) != worker["capabilities"]:
+                    result["availability"] = "CHANGED"
+                    result["detail"] = "Worker capabilities changed. Re-register the worker."
+                else:
+                    result["availability"] = "ONLINE"
+        except (httpx.HTTPError, ValueError, TypeError):
+            result["detail"] = "Worker readiness or capability check failed."
+        return result
+
+    return list(await asyncio.gather(*(probe(worker) for worker in workers)))
+
+
+@router.put("/external-workers/{worker_id}")
+async def register_external_worker(
+    worker_id: str,
+    payload: ExternalWorkerUpdate,
+    request: Request,
+    db: Db,
+    principal: Actor,
+    settings: Config,
+) -> dict:
+    require_admin(principal)
+    import re
+
+    if not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", worker_id):
+        raise HTTPException(422, "Worker ID must be a lowercase identifier")
+    url = _worker_url(payload.url, "Worker URL")
+    key = PREFIX + worker_id
+    row = db.get(ApplicationSetting, key)
+    if row is not None and not payload.enabled:
+        try:
+            previous = json.loads(row.value)
+            if previous["url"] != url:
+                raise ValueError("Cannot change the URL while disabling a worker")
+            capabilities = validate_capabilities(previous["capabilities"])
+        except (ValueError, KeyError, TypeError) as exc:
+            raise HTTPException(422, f"Invalid stored worker: {exc}") from exc
+    else:
+        if not settings.internal_worker_key:
+            raise HTTPException(503, "The internal worker key is not configured")
+        try:
+            async with httpx.AsyncClient(timeout=5.0, follow_redirects=False) as client:
+                response = await client.get(
+                    f"{url}/api/v1/capabilities",
+                    headers={"X-Modelryx-Worker-Key": settings.internal_worker_key},
+                )
+                response.raise_for_status()
+                capabilities = validate_capabilities(response.json())
+        except (httpx.HTTPError, ValueError, TypeError) as exc:
+            raise HTTPException(422, f"Worker capability check failed: {exc}") from exc
+    value = {"url": url, "enabled": payload.enabled, "capabilities": capabilities}
+    encoded = json.dumps(value, separators=(",", ":"))
+    if len(encoded) > 2000:
+        raise HTTPException(422, "Worker configuration is too large")
+    actor = user_for_principal(db, principal)
+    if row is None:
+        db.add(ApplicationSetting(key=key, value=encoded, updated_by=actor.id))
+    else:
+        row.value = encoded
+        row.updated_by = actor.id
+        row.updated_at = datetime.now(UTC)
+    record_audit(
+        db,
+        actor_id=actor.id,
+        action="external_worker.updated",
+        entity_type="application_settings",
+        entity_id=uuid.uuid5(uuid.NAMESPACE_URL, key),
+        request_id=request.state.request_id,
+        details={"worker_id": worker_id, "enabled": payload.enabled},
+    )
+    db.commit()
+    return {"id": worker_id, **value}
+
+
+@router.delete("/external-workers/{worker_id}", status_code=204)
+def delete_external_worker(worker_id: str, request: Request, db: Db, principal: Actor):
+    require_admin(principal)
+    key = PREFIX + worker_id
+    row = db.get(ApplicationSetting, key)
+    if row is None:
+        raise HTTPException(404, "Worker not found")
+    actor = user_for_principal(db, principal)
+    db.delete(row)
+    record_audit(
+        db,
+        actor_id=actor.id,
+        action="external_worker.deleted",
+        entity_type="application_settings",
+        entity_id=uuid.uuid5(uuid.NAMESPACE_URL, key),
+        request_id=request.state.request_id,
+        details={"worker_id": worker_id},
+    )
+    db.commit()
 
 
 @router.post(

@@ -12,6 +12,22 @@ installer does not compile source code and does not require a .NET SDK on the us
 
 ## Install
 
+External workers are registered separately in Modelryx administration and on each user's machine.
+After installing the agent, run the worker's preprocessor registration script with the same worker
+ID used in administration. It copies the preprocessor into the agent's `app/preprocessors` folder
+and records its executable and extensions in `app/settings.json`. The Open CAD File dialog uses the
+server's registered formats and dispatches to the corresponding locally installed preprocessor.
+
+The file-type list has one entry per CAD system, such as **FreeCAD (*.FCStd)**,
+**Inventor (*.iam;*.idw;*.ipn;*.ipt;*.dwg;*.dxf)** and **AutoCAD (*.dwg;*.dxf)**.
+The extensions come from enabled worker capabilities. There is no combined CAD-format or
+All files entry. Select the originating CAD system for a shared DWG/DXF extension; the agent
+keeps that choice for preprocessing and the server receives the selected worker's CAD system.
+FreeCAD remains available through its built-in local path without an external registration.
+Duplicate matching registrations within the selected CAD system still report a conflict.
+On Linux, choose the CAD system before its file dialog because the native picker does not
+return its selected filter.
+
 Windows (per-user installation and `modelryx-cad://` protocol registration):
 
 ```powershell

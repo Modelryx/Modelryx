@@ -6,7 +6,7 @@ Security guidelines and best practices for Modelryx.
 
 - **[worker-security.md](worker-security.md)** - CAD worker security model
   - Worker authentication
-  - HMAC-based signing
+  - Shared-key headers and TLS boundaries
   - Authorization policies
   - Secure communication
   - Security best practices

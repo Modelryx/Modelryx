@@ -31,8 +31,8 @@ See [DEVELOPMENT.md](./DEVELOPMENT.md) for complete setup instructions.
 
 Quick start:
 ```bash
-# Install dependencies and start services
-docker compose up -d
+# Configure .env secrets as described in DEVELOPMENT.md, then start services
+docker compose up -d --build
 
 # Start frontend dev server (in another terminal)
 cd front-end && npm install && npm run dev
@@ -113,7 +113,7 @@ export function ItemSearch({ query, onSearch, isLoading }: SearchProps): React.R
 
 - **Imports:** Organize logically (React, UI libraries, local components, utilities)
 - **Props:** Define interfaces ending with `Props`
-- **CSS:** Use CSS modules (`ComponentName.module.css`)
+- **CSS:** Follow the existing stylesheets and component conventions in `front-end/src`.
 
 #### SQL & Database
 
@@ -121,18 +121,9 @@ export function ItemSearch({ query, onSearch, isLoading }: SearchProps): React.R
 - **Naming:** Snake_case for table/column names
 - **Comments:** Document non-obvious logic
 
-```sql
--- Query to find items by workspace with latest revision
-SELECT 
-    i.id,
-    i.name,
-    ir.created_at,
-    ir.revision_number
-FROM items i
-JOIN item_revisions ir ON i.id = ir.item_id
-WHERE i.workspace_id = $1
-ORDER BY ir.created_at DESC;
-```
+Use mapped SQLAlchemy entities and the actual constraints/indexes in `server/src/server/modelryx/models`.
+Do not add copied workspace/revision DDL that does not match the current models. Database initialization
+creates a fresh schema or verifies a matching one; schema changes need a qualified upgrade process.
 
 ### Commit Messages
 
@@ -155,13 +146,13 @@ test: add tests for worker HTTP contract validation
 
 Before submitting a pull request:
 
-1. **Run existing tests** (see [TESTING.md](./docs/TESTING.md))
+1. **Run relevant tests** (see [testing guide](./docs/development/testing.md))
    ```bash
    # Python (server & workers)
-   cd server && pytest
+   docker compose -p modelryx-check --env-file .env.example --profile test run --build --rm test pytest -q
    
    # TypeScript (frontend)
-   cd front-end && npm test
+   cd front-end && npm run typecheck && npm run build
    ```
 
 2. **Add tests for your changes**
@@ -171,14 +162,14 @@ Before submitting a pull request:
 
 3. **Verify no regressions**
    ```bash
-   # Run full test suite before opening PR
+   # Select the suites appropriate to the change from docs/development/testing.md
    ```
 
 4. **Lint your code**
    ```bash
    # Python
-   black server/
-   ruff check server/ --fix
+   python -m ruff check server/src/server server/tests
+   python -m ruff format --check server/src/server server/tests
    
    # TypeScript
    cd front-end && npm run lint
