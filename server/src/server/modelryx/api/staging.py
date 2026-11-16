@@ -1507,8 +1507,8 @@ def mark_staging_ready(
             revision is None
             or revision.part_id != proposal.destination.item_id
             or checkout is None
-            or checkout.base_snapshot_id != latest_snapshot.id
             or latest_snapshot is None
+            or checkout.base_snapshot_id != latest_snapshot.id
             or latest_snapshot.id != proposal.destination.base_snapshot_id
         ):
             raise HTTPException(

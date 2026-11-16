@@ -63,6 +63,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run test:upload
+      - run: npm run test:api
       - run: npm run build
       - name: Lint frontend
         run: npm run lint

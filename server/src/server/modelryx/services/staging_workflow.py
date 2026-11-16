@@ -8,6 +8,7 @@ from starlette.requests import Request
 
 from modelryx.core.auth import Principal
 from modelryx.core.config import Settings
+from modelryx.core.roles import effective_role, roles_for_user
 from modelryx.models import StagingFile, StagingSession, User
 
 
@@ -128,13 +129,13 @@ def _request() -> Request:
 
 
 def _principal(user: User) -> Principal:
-    role = user.role or "designer"
+    roles = tuple(sorted(roles_for_user(user)))
     return Principal(
         subject=user.external_subject,
         display_name=user.display_name,
-        role=role,
+        role=effective_role(roles),
         auth_version=user.auth_version or 0,
-        roles=("designer",) if role == "engineer" else (role,),
+        roles=roles,
     )
 
 

@@ -96,8 +96,8 @@ def _cad_root_path(request: Request) -> tuple[str, str]:
 
 
 def _require_cad_editor(principal: Principal) -> None:
-    if principal.role not in {"engineer", "administrator"}:
-        raise HTTPException(status_code=403, detail="CAD sessions require engineer permission")
+    if not principal.has_role("designer", "administrator"):
+        raise HTTPException(status_code=403, detail="CAD sessions require designer permission")
 
 
 @router.post("/cad/analyze")

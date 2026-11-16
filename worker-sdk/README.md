@@ -198,11 +198,11 @@ Workers may omit unsupported preferred outputs, and must not return unrequested 
 ### Current optional-output integration limit
 
 Modelryx's generic result allowlist currently accepts `native-snapshot`, `part-metadata`,
-`model-preview`, `glb` and `drawing-pdf`. Its preferred-output selection can also request
-`component-geometry` for assemblies and `drawing-representations` for related drawings, but
-returning those bundles currently fails generic result validation. Native worker export support
-and server publication support are therefore separate qualification requirements. The dedicated
-FreeCAD PFG path has its own publication behavior; this limitation does not redefine its archive.
+`model-preview`, `glb` and `drawing-pdf`. Preferred-output selection requests only supported
+roles. Workers may advertise `component-geometry` or `drawing-representations`, but these bundles
+are not requested until generic publication supports them. Native worker export support and
+server publication support are separate qualification requirements. The dedicated FreeCAD PFG
+path has its own publication behavior; this limitation does not redefine its archive.
 
 ## Local preprocessor contract
 

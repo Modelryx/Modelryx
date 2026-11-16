@@ -139,9 +139,17 @@ export function bomOccurrenceIds(changes: ComparisonChange[]): string[] {
 }
 
 export function ComparisonPage({ embedded = false }: { embedded?: boolean } = {}) {
+  const { itemId = '', revisionId = '' } = useParams();
+  return (
+    <ComparisonWorkspace key={`${itemId}:${embedded ? revisionId : ''}`} embedded={embedded} />
+  );
+}
+
+function ComparisonWorkspace({ embedded }: { embedded: boolean }) {
   const { itemId, revisionId: selectedRevisionId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const comparisonRequest = useRef(0);
   const [item, setItem] = useState<Item>();
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [fromId, setFromId] = useState(searchParams.get('from') ?? '');
@@ -155,12 +163,38 @@ export function ComparisonPage({ embedded = false }: { embedded?: boolean } = {}
   const [impacts, setImpacts] = useState<ImpactCandidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const queryFrom = searchParams.get('from') ?? '';
+  const queryTo = searchParams.get('to') ?? '';
+  const lastQuery = useRef({ from: queryFrom, to: queryTo });
+
+  useEffect(
+    () => () => {
+      comparisonRequest.current += 1;
+    },
+    []
+  );
+  useEffect(() => {
+    if (lastQuery.current.from === queryFrom && lastQuery.current.to === queryTo) return;
+    lastQuery.current = { from: queryFrom, to: queryTo };
+    if (queryFrom === fromId && queryTo === toId) return;
+    comparisonRequest.current += 1;
+    setComparison(undefined);
+    setExplanation(undefined);
+    setImpacts([]);
+    const target = queryTo || (embedded ? selectedRevisionId : revisions[0]?.id) || '';
+    const targetIndex = revisions.findIndex((row) => row.id === target);
+    setFromId(queryFrom || revisions[targetIndex + 1]?.id || '');
+    setToId(target);
+    setLoading(false);
+  }, [queryFrom, queryTo, fromId, toId, embedded, selectedRevisionId, revisions]);
 
   useEffect(() => {
     if (!itemId) return;
+    let live = true;
     setLoading(true);
     Promise.all([api<Item>(`/items/${itemId}`), api<Revision[]>(`/items/${itemId}/revisions`)])
       .then(([loadedItem, loadedRevisions]) => {
+        if (!live) return;
         setItem(loadedItem);
         setRevisions(loadedRevisions);
         const targetId = toId || loadedRevisions[0]?.id || '';
@@ -169,14 +203,20 @@ export function ComparisonPage({ embedded = false }: { embedded?: boolean } = {}
         if (!fromId)
           setFromId(loadedRevisions[targetIndex + 1]?.id ?? loadedRevisions[1]?.id ?? '');
       })
-      .catch((reason) =>
-        setError(reason instanceof Error ? reason.message : 'Unable to load revisions')
-      )
-      .finally(() => setLoading(false));
+      .catch((reason) => {
+        if (live) setError(reason instanceof Error ? reason.message : 'Unable to load revisions');
+      })
+      .finally(() => {
+        if (live) setLoading(false);
+      });
+    return () => {
+      live = false;
+    };
   }, [itemId]);
 
   const runComparison = async () => {
     if (!itemId || !fromId || !toId || fromId === toId) return;
+    const requestId = ++comparisonRequest.current;
     setLoading(true);
     setError('');
     setExplanation(undefined);
@@ -188,6 +228,7 @@ export function ComparisonPage({ embedded = false }: { embedded?: boolean } = {}
         'POST',
         { from_revision_id: fromId, to_revision_id: toId, domains: requestedDomains }
       );
+      if (requestId !== comparisonRequest.current) return;
       setComparison(result);
       navigate(
         embedded && selectedRevisionId
@@ -196,12 +237,17 @@ export function ComparisonPage({ embedded = false }: { embedded?: boolean } = {}
         { replace: true }
       );
       api<WhereUsed>(`/items/${itemId}/revisions/${toId}/where-used`)
-        .then((response) => setImpacts(response.items))
-        .catch(() => setImpacts([]));
+        .then((response) => {
+          if (requestId === comparisonRequest.current) setImpacts(response.items);
+        })
+        .catch(() => {
+          if (requestId === comparisonRequest.current) setImpacts([]);
+        });
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Unable to compare revisions');
+      if (requestId === comparisonRequest.current)
+        setError(reason instanceof Error ? reason.message : 'Unable to compare revisions');
     } finally {
-      setLoading(false);
+      if (requestId === comparisonRequest.current) setLoading(false);
     }
   };
   useEffect(() => {
@@ -209,16 +255,17 @@ export function ComparisonPage({ embedded = false }: { embedded?: boolean } = {}
   }, [fromId, toId]);
   const requestExplanation = async (level: ComparisonExplanation['level']) => {
     if (!comparison) return;
+    const requestId = comparisonRequest.current;
     try {
-      setExplanation(
-        await api<ComparisonExplanation>(
-          `/revision-comparisons/${comparison.id}/explanations`,
-          'POST',
-          { level }
-        )
+      const result = await api<ComparisonExplanation>(
+        `/revision-comparisons/${comparison.id}/explanations`,
+        'POST',
+        { level }
       );
+      if (requestId === comparisonRequest.current) setExplanation(result);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Unable to explain comparison');
+      if (requestId === comparisonRequest.current)
+        setError(reason instanceof Error ? reason.message : 'Unable to explain comparison');
     }
   };
   const changed = comparison?.domains.flatMap(visibleChanges) ?? [];
@@ -265,6 +312,10 @@ export function ComparisonPage({ embedded = false }: { embedded?: boolean } = {}
           <select
             value={fromId}
             onChange={(event) => {
+              comparisonRequest.current += 1;
+              setLoading(false);
+              setExplanation(undefined);
+              setImpacts([]);
               setComparison(undefined);
               setFromId(event.target.value);
             }}
@@ -284,6 +335,10 @@ export function ComparisonPage({ embedded = false }: { embedded?: boolean } = {}
           <select
             value={toId}
             onChange={(event) => {
+              comparisonRequest.current += 1;
+              setLoading(false);
+              setExplanation(undefined);
+              setImpacts([]);
               setComparison(undefined);
               setToId(event.target.value);
             }}

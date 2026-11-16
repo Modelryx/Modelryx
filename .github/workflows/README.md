@@ -33,7 +33,8 @@ coverage data and XML reports are written under `/tmp`, which is writable by the
 non-root test user. Coverage is required after passing tests; when tests fail before coverage is
 written, collection warns and preserves the original test failure.
 
-Frontend CI runs `npm run test:upload` for the neutral upload contract. It does not
+Frontend CI runs `npm run test:api` for authenticated API requests and
+`npm run test:upload` for the neutral upload contract. It does not
 install Playwright or run browser tests.
 
 ## Required checks

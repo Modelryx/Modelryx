@@ -1085,7 +1085,7 @@ def merge_related_drawing_metadata(part_metadata: dict, manifest: dict) -> dict:
             "stable_id": stable_id,
             "filename": str(drawing.get("file") or f"drawing-{index:04d}.pdf"),
             "mime_type": "application/pdf",
-            "worker_contract_version": "related-drawing-drawing-v1",
+            "worker_contract_version": "related-drawing-v1",
             "sections": [],
             "entities": [],
         }
@@ -1513,11 +1513,14 @@ def preferred_cad_outputs(
         outputs.append("drawing-representations")
     if document_kind == "assembly":
         outputs.append("component-geometry")
-    return (
-        outputs
-        if supported_roles is None
-        else [role for role in outputs if role in supported_roles]
-    )
+    # Request only roles accepted by generic result validation and publication.
+    # Advertising a bundle capability must not make otherwise valid jobs fail.
+    publishable = {"glb", "drawing-pdf"}
+    return [
+        role
+        for role in outputs
+        if role in publishable and (supported_roles is None or role in supported_roles)
+    ]
 
 
 def process_external_cad_job(db: Session, job: ProcessingJob, settings: Settings) -> None:

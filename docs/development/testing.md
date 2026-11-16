@@ -103,3 +103,10 @@ dotnet run --project local_cad_agent/tests/Modelryx.LocalCad.Agent.Tests
 
 External adapter implementations and native application qualification belong in the worker's
 repository. The platform tests the shared protocol and artifact publication boundary.
+
+
+## Frontend API client contract
+
+`npm --prefix front-end run test:api` checks that authenticated requests stay under the
+configured API URL, JSON payloads retain falsy values, and expired sessions clear credentials
+and notify the sign-in flow. These checks run in Platform CI alongside the upload contract.

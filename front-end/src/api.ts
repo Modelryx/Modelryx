@@ -1,3 +1,5 @@
+import { serverApiUrl } from './workflow-api';
+
 export type Session = {
   subject: string;
   display_name: string;
@@ -153,7 +155,7 @@ export type Upload = {
 const server = () => localStorage.getItem('modelryx-server')?.replace(/\/$/, '') || '';
 export async function api<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   const token = localStorage.getItem('modelryx-token');
-  const response = await fetch(`${server()}/api/v1${path}`, {
+  const response = await fetch(serverApiUrl(path), {
     method,
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),

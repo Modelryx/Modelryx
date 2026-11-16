@@ -485,10 +485,24 @@ const token = () => localStorage.getItem('modelryx-token');
 const serverUrl = () => localStorage.getItem('modelryx-server') ?? '';
 
 export function serverApiUrl(path: string): string {
-  if (/^https?:\/\//i.test(path)) return path;
-  const server = serverUrl().replace(/\/$/, '');
-  const apiPath = path.startsWith('/api/v1') ? path : `/api/v1${path}`;
-  return `${server}${apiPath}`;
+  const server = serverUrl().replace(/\/+$/, '');
+  const base = new URL(server || window.location.origin);
+  const apiPath =
+    path === '/api/v1' || path.startsWith('/api/v1/')
+      ? path
+      : `/api/v1${path.startsWith('/') ? path : `/${path}`}`;
+  const url = /^https?:\/\//i.test(path) ? path : `${server}${apiPath}`;
+  const resolved = new URL(url, base);
+  const apiPrefix = `${base.pathname.replace(/\/+$/, '')}/api/v1`;
+  if (
+    resolved.origin !== base.origin ||
+    resolved.username ||
+    resolved.password ||
+    (resolved.pathname !== apiPrefix && !resolved.pathname.startsWith(`${apiPrefix}/`))
+  ) {
+    throw new Error('The server returned an unsupported API address.');
+  }
+  return url;
 }
 
 export class ApiError extends Error {
@@ -525,9 +539,9 @@ export async function api<T>(path: string, method = 'GET', body?: unknown): Prom
     method,
     headers: {
       ...(token() ? { Authorization: `Bearer ${token()}` } : {}),
-      ...(body ? { 'Content-Type': 'application/json' } : {}),
+      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
     },
-    body: body ? JSON.stringify(body) : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
   if (!response.ok) {

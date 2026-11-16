@@ -113,5 +113,7 @@ def login(payload: LoginRequest, request: Request, db: Db, settings: Config) -> 
 
 def secrets_match_bootstrap(payload: LoginRequest, username: str, settings: Settings) -> bool:
     return secrets.compare_digest(
-        username, settings.bootstrap_admin_username
-    ) and secrets.compare_digest(payload.password, settings.bootstrap_admin_password)
+        username.encode("utf-8"), settings.bootstrap_admin_username.encode("utf-8")
+    ) and secrets.compare_digest(
+        payload.password.encode("utf-8"), settings.bootstrap_admin_password.encode("utf-8")
+    )

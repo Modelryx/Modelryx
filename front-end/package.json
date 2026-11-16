@@ -8,6 +8,7 @@
     "dev": "vite --host 0.0.0.0",
     "typecheck": "tsc --noEmit",
     "test:upload": "node scripts/test-neutral-upload.mjs",
+    "test:api": "node scripts/test-api-contract.mjs",
     "build": "tsc --noEmit && vite build",
     "lint": "eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",

@@ -8,7 +8,7 @@ required checks are repository settings; a workflow failure alone does not confi
 [ci.yml](workflows/ci.yml) runs for pull requests and pushes to `main` and `develop`:
 
 - Backend API and database tests run in an isolated Compose test database.
-- Frontend checks cover the lockfile, TypeScript, neutral upload contracts, production build,
+- Frontend checks cover the lockfile, TypeScript, API client and neutral upload contracts, production build,
   ESLint, and Prettier.
 - Worker SDK tests cover the protocol and repository configuration/export checks.
 - FreeCAD checks cover unit tests, a native image build, and native release gates.
