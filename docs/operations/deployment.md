@@ -53,7 +53,7 @@ the embedded runtime. STEP retains its built-in service path.
 ## Frontend and networking
 
 In `front-end/`, run `npm ci` and `npm run build`; serve `dist/` with SPA fallback to `index.html`.
-Vite port 5174 is the development server, not production hosting. Users enter the API URL in the
+Vite port 5173 is the development server, not production hosting. Users enter the API URL in the
 login form. Configure the frontend's exact CORS origin and the Local CAD Agent's allowed origins.
 
 Terminate HTTPS at an ingress/reverse proxy to API port 8000. Worker authentication is the shared
@@ -77,9 +77,9 @@ previews. Inspect `docker compose ps` and logs. Operations shows configured work
 FreeCAD upload preflight follows the selected remote/embedded route. Native qualification is
 separate from liveness and cannot be inferred from an ONLINE card alone.
 
-## Backup and monitoring
+## Operational limitations and monitoring
 
-Follow [matched database/object backups](backup-strategy.md), retain source/configuration versions
-and qualify isolated restores. Store secrets separately. `docker compose down -v` deletes volumes
-and is not a normal restart. Monitor capacity, queues, errors and retained-job disk use. Read
+The first published version does not include built-in backup or restore support.
+Full backup and recovery support may be added in a future release.
+`docker compose down -v` deletes volumes and is not a normal restart. Monitor capacity, queues, errors and retained-job disk use. Read
 worker/SDK limitations before promising publication of every optional native output role.

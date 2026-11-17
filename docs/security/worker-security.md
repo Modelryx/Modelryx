@@ -54,6 +54,6 @@ Liveness does not establish licensing or extraction accuracy; readiness checks v
 Qualify native fixtures and supported runtimes. Report missing data and ambiguous geometry mapping
 rather than guessing. Propagate cancellation/timeouts to owned processes and retain bounded logs.
 
-See [deployment](../operations/deployment.md), [backup/recovery](../operations/backup-strategy.md),
+See [deployment](../operations/deployment.md),
 [OpenAPI](../../worker-sdk/contract/openapi.yaml), [FreeCAD](../../workers/freecad/README.md) and
 [security reporting](../../SECURITY_POLICY.md).

@@ -7,14 +7,24 @@
 
 ## What is Modelryx?
 
-Modelryx is a web-based platform for managing CAD (Computer-Aided Design) data with integrated support for multiple CAD systems. It provides:
+**Modelryx is an open-source, AI-powered engineering data management platform** that brings together multi-CAD integration, product data management (PDM), intelligent engineering search, and automated CAD processing.
 
-- **Unified CAD Management** - Store, version, and organize CAD files from multiple sources
-- **Automated Processing** - Convert and analyze CAD data with containerized processing workers
-- **Collaboration** - Team-based access control, commenting, and approval workflows
-- **Extensible Architecture** - Build custom CAD workers for your tools and formats
-- **Modern Web UI** - React-based browser interface for seamless interaction
-- **REST API** - Full programmatic access for automation and integration
+Designed for engineering teams, Modelryx provides a unified environment to manage CAD models, product structures, revisions, and engineering information throughout the product development process.
+
+By combining traditional PDM capabilities with AI-assisted engineering workflows and an extensible CAD processing architecture, Modelryx helps teams organize engineering data, discover relevant information, automate repetitive tasks, and make better-informed engineering decisions.
+
+## Core Capabilities
+
+- **AI-Powered Engineering Intelligence** — Search engineering data using natural language, interact with a context-aware AI assistant, and obtain grounded explanations of engineering information.
+
+- **Product Data Management (PDM)** — Manage items, revisions, assemblies, CAD files, metadata, and engineering relationships.
+- **Multi-CAD Integration** — Work with different CAD systems through a unified data model and extensible CAD worker architecture.
+- **Automated CAD Processing** — Extract metadata, analyze geometry, validate engineering data, and generate visualization representations.
+- **Engineering Collaboration** — Support shared engineering information, access control, and team workflows.
+- **3D Visualization** — Explore and inspect CAD models directly in a modern web interface.
+- **Open and Extensible Architecture** — Integrate additional CAD systems, engineering tools, and external services through workers and REST APIs.
+
+Modelryx is designed to evolve beyond traditional CAD data management toward a broader, AI-enabled product lifecycle management (PLM) platform.
 
 ## Key Features
 
@@ -31,7 +41,7 @@ Modelryx is a web-based platform for managing CAD (Computer-Aided Design) data w
 
 Modelryx follows a microservices architecture with these components:
 
-- **Frontend**: React 18+ with TypeScript on Vite, run locally at http://localhost:5174
+- **Frontend**: React 18+ with TypeScript on Vite, run locally at http://localhost:5173
 - **API Server**: FastAPI application on port 8000 with OpenAPI documentation
 - **Database**: PostgreSQL 17 with pgvector for vector operations
 - **CAD Workers**: Containerized processing workers for format conversion and analysis
@@ -50,12 +60,50 @@ See the [platform architecture documentation](docs/architecture/platform-archite
 - **Python** v3.11+ (for server and workers)
 - Sufficient memory and disk for native CAD workloads; the default FreeCAD service limit is 8 GiB per container.
 
-### 1. Clone & Configure
+### 1. Clone the repository
 
 ```bash
 # Clone the repository
 git clone https://github.com/Modelryx/Modelryx.git
 cd Modelryx
+```
+
+### 2. Configure the project
+
+On Windows, run the configuration helper from the repository root in PowerShell:
+
+```powershell
+.\scripts\configure-project.ps1
+```
+
+The helper prompts for the environment, bootstrap administrator credentials, and an
+optional local FreeCAD executable. It generates missing database, JWT, and worker
+secrets and creates or updates these local configuration files:
+
+| File | Purpose |
+|------|---------|
+| `.env` | Docker Compose settings and shared service credentials |
+| `server/.env` | Host Python API settings, including a localhost database connection |
+| `.modelryx.local.props` | Local FreeCAD executable path for MSBuild tooling |
+
+Existing settings are generally preserved; explicit parameters override them. To
+generate configuration without prompts, use:
+
+```powershell
+.\scripts\configure-project.ps1 -NonInteractive
+```
+
+If no administrator password is already configured, this mode generates one and
+stores it in `.env`. Read `MODELRYX_BOOTSTRAP_ADMIN_PASSWORD` there before signing in.
+Use `-PostgresPort 5433` if the default host database port is occupied. To install
+the optional Windows Local CAD Agent for local file selection, add
+`-InstallLocalCadAgent`; see the [agent guide](local_cad_agent/README.md).
+
+For manual configuration (including Linux and macOS), copy the root template and
+generate a separate value for each required secret:
+
+```bash
+cp .env.example .env
 
 # Generate secure environment variables
 python3 << 'EOF'
@@ -66,12 +114,34 @@ print(f"MODELRYX_INTERNAL_WORKER_KEY={secrets.token_urlsafe(32)}")
 print(f"MODELRYX_BOOTSTRAP_ADMIN_PASSWORD={secrets.token_urlsafe(16)}")
 EOF
 
-# Copy to .env and edit as needed
-cp .env.example .env
-# nano .env  # Edit and fill in the generated values
+# Edit .env and replace the corresponding placeholders with these values
 ```
 
-### 2. Start the backend and frontend
+Before starting services, review these settings in `.env`:
+
+| Setting | What to configure |
+|---------|-------------------|
+| `POSTGRES_PASSWORD` | Database password; use a generated URL-safe value |
+| `MODELRYX_JWT_SECRET` | Secret used to sign authentication tokens |
+| `MODELRYX_INTERNAL_WORKER_KEY` | Shared authentication key used by the API and CAD workers |
+| `MODELRYX_BOOTSTRAP_ADMIN_USERNAME`, `MODELRYX_BOOTSTRAP_ADMIN_PASSWORD` | Credentials for the initial administrator account |
+| `MODELRYX_ENVIRONMENT` | `development` for local setup; `production` enables stricter secret validation |
+| `MODELRYX_POSTGRES_PORT` | Host PostgreSQL port (default `5432`) |
+| `MODELRYX_SERVER_URL` | Server address reachable by clients (default `http://localhost:8000`) |
+| `MODELRYX_CORS_ORIGINS` | JSON array of permitted frontend origins (default `["http://localhost:5173"]`) |
+
+Keep configuration files containing credentials private and out of version control.
+Changing `POSTGRES_PASSWORD` in a file does not update an existing database's
+password; update the database credentials separately. For a host Python API, also
+configure `server/.env` as described in [DEVELOPMENT.md](DEVELOPMENT.md#host-python-api).
+Optional AI settings are covered in [AI Support](#ai-support), and external FreeCAD
+setup is covered in the [FreeCAD worker guide](workers/freecad/README.md).
+
+After editing configuration on an existing deployment, run `docker compose up -d`
+to recreate affected services; a plain restart does not apply changed Compose
+environment variables.
+
+### 3. Start the backend and frontend
 
 Start the API, database, and workers from the repository root:
 
@@ -87,18 +157,48 @@ npm ci
 npm run dev
 ```
 
-Open http://localhost:5174. The frontend is a React and TypeScript application
+Open http://localhost:5173. The frontend is a React and TypeScript application
 served by Vite, with hot reload during development. On the login screen, use
 `http://localhost:8000` as the server URL. For a production frontend build, run
 `npm run build` in `front-end`; deploy the generated `dist` files with a web
 server configured for single-page application routing. Configure the API's
 `MODELRYX_CORS_ORIGINS` for the deployed frontend origin.
 
-### 3. Login
+### 4. Login
 
 Use your configured bootstrap credentials:
 - **Username:** `MODELRYX_BOOTSTRAP_ADMIN_USERNAME` (template: `admin`)
 - **Password:** (from MODELRYX_BOOTSTRAP_ADMIN_PASSWORD in .env)
+
+## AI Support
+
+Modelryx supports an optional OpenAI-compatible AI gateway for:
+
+- **Natural-language engineering search** - Interpret requests as validated search filters, with optional embeddings for semantic retrieval.
+- **Context-aware assistance** - Ask about item metadata, revision history, assemblies, validation findings, and the selected model using authorized project data.
+- **Grounded answers and explanations** - Retrieve engineering knowledge and explain revision comparisons or validation findings using supporting evidence.
+
+Configure the gateway in `.env` before starting the API:
+
+```dotenv
+MODELRYX_AI_GATEWAY_BASE_URL=https://your-gateway.example/v1
+MODELRYX_AI_GATEWAY_API_KEY=replace-me
+MODELRYX_AI_CHAT_MODEL=your-chat-model
+MODELRYX_AI_EMBEDDING_MODEL=your-embedding-model
+MODELRYX_AI_EMBEDDING_DIMENSIONS=1536
+```
+
+The gateway must support the OpenAI-compatible `/chat/completions` and `/embeddings`
+operations for the corresponding features. Embeddings must have 1536 dimensions to
+match the database schema. Keep gateway credentials on the server.
+
+AI configuration is optional. Without a gateway, structured search, lexical retrieval,
+revision comparison, validation, and BOM analysis remain available; generated answers
+and vector retrieval require the corresponding gateway configuration. AI requests
+respect existing access controls, and generated explanations do not change engineering
+records. Check `/api/v1/ai/status` for configuration and indexing status.
+
+See the [AI documentation](docs/ai/README.md) for capabilities, setup, and limitations.
 
 ## Development Setup
 
@@ -129,8 +229,10 @@ For production deployment:
 
 1. **Read [deployment.md](docs/operations/deployment.md)** - Complete deployment guide
 2. **Review [security best practices](docs/security/worker-security.md)** - Worker authentication and security
-3. **Configure backups** - Back up matched database and object-volume content and test recovery
-4. **Set up monitoring** - Health checks and logging
+3. **Set up monitoring** - Health checks and logging
+
+The first published version does not include built-in backup or restore support.
+Full backup and recovery support may be added in a future release.
 
 Quick start:
 ```bash
@@ -170,6 +272,7 @@ Example workers included:
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** - How to contribute
 - **[quick-reference.md](docs/quick-reference.md)** - Developer & operator quick reference
 - **[docs/README.md](docs/README.md)** - Documentation index
+- **[docs/ai/README.md](docs/ai/README.md)** - AI capabilities, gateway configuration, and limitations
 - **[docs/development/api.md](docs/development/api.md)** - REST API reference
 - **[docs/operations/deployment.md](docs/operations/deployment.md)** - Production deployment
 - **[docs/security/worker-security.md](docs/security/worker-security.md)** - Worker security model
@@ -188,7 +291,7 @@ modelryx/
 |-- worker-sdk/          # Native HTTP protocol and validation helpers
 |-- local_cad_agent/     # Native file dialog and client preprocessor dispatch
 |-- docs/                # Documentation
-|-- scripts/             # Configuration, verification and backup utilities
+|-- scripts/             # Configuration and verification utilities
 |-- compose.yaml         # Docker Compose orchestration
 ```
 

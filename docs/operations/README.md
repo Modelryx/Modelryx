@@ -11,11 +11,8 @@ Guides for deploying, managing, and maintaining Modelryx in production environme
   - Health check endpoints
   - Service selection and operational verification
 
-- **[backup-strategy.md](backup-strategy.md)** - Backup and disaster recovery
-  - Backup procedures and scheduling
-  - Data recovery processes
-  - Disaster recovery planning
-  - Backup verification
+The first published version does not include built-in backup or restore support.
+Full backup and recovery support may be added in a future release.
 
 - **[database.md](database.md)** - Database schema and configuration
   - Database schema overview

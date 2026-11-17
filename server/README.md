@@ -9,7 +9,7 @@ in `../front-end`; native conversion code is in `../workers` or separate worker 
 Follow [the root development guide](../DEVELOPMENT.md). Configure `.env` and run Compose from
 the repository root. Run `npm ci` and `npm run dev` separately from `front-end/`.
 
-- Frontend: [localhost:5174](http://localhost:5174)
+- Frontend: [localhost:5173](http://localhost:5173)
 - API: [localhost:8000](http://localhost:8000)
 - API reference: [docs](http://localhost:8000/docs)
 - Schema: [openapi.json](http://localhost:8000/openapi.json)

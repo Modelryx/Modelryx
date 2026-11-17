@@ -366,7 +366,7 @@ internal static class Program
 
     private static HashSet<string> BuildAllowedOrigins()
     {
-        const string localOrigins = "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174,http://localhost:8000,http://127.0.0.1:8000";
+        const string localOrigins = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8000,http://127.0.0.1:8000";
         var environment = Environment.GetEnvironmentVariable("MODELRYX_ALLOWED_ORIGINS");
         var configured = string.IsNullOrWhiteSpace(environment)
             ? AgentConfiguration.Load().AllowedOrigins.Append(localOrigins)

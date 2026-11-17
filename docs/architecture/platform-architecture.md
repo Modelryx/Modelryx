@@ -59,7 +59,7 @@ licensing, operating-system, and failure-isolation requirements.
 | `workers/step/` | Standalone authenticated STEP geometry and metadata service |
 | `worker-sdk/` | Native worker HTTP contract, manifest validation and conformance probe |
 | `local_cad_agent/` | Native file dialog, CAD-system selection and installed client preprocessor dispatch |
-| `scripts/` | Project configuration, verification, public export and database backup/restore utilities |
+| `scripts/` | Project configuration, verification and public export utilities |
 | `docs/` | Cross-component current architecture, integrations, product specifications |
 
 Component-specific build and installation instructions belong in each component's `README.md` or

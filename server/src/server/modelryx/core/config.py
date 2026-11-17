@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     bootstrap_admin_username: str = "admin"
     bootstrap_admin_password: str = "change-this-admin-password"
     bootstrap_admin_display_name: str = "Modelryx Administrator"
-    cors_origins: list[str] = ["http://localhost:5173", "http://localhost:5174"]
+    cors_origins: list[str] = ["http://localhost:5173"]
     log_level: str = "INFO"
     max_upload_bytes: int = 2 * 1024 * 1024 * 1024
     max_assembly_files: int = 500

@@ -14,7 +14,7 @@ docker compose logs -f db
 ```
 
 Run `npm ci` then `npm run dev` separately from `front-end/`.
-Open [localhost:5174](http://localhost:5174) and enter the API address and configured credentials.
+Open [localhost:5173](http://localhost:5173) and enter the API address and configured credentials.
 API checks: [liveness](http://localhost:8000/health/live),
 [readiness](http://localhost:8000/health/ready), [OpenAPI](http://localhost:8000/docs).
 
@@ -53,7 +53,7 @@ There is no frontend `npm test` command.
 - Native selection/preprocessors: [agent README](../local_cad_agent/README.md).
 - REST API: [reference](development/api.md).
 - Fresh database: [initialization](operations/database-initialization.md).
-- Backup: [database and objects](operations/backup-strategy.md).
+- Built-in backup and restore support is not included in the first published version.
 - Optional S3 utilities: [scope](development/s3-operations.md).
 
 `docker compose down -v` deletes persistent volumes; it is not a normal restart command.

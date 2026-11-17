@@ -1,7 +1,7 @@
 # Server development
 
 Use [the root development guide](../DEVELOPMENT.md) for setup. Run Compose from the repository
-root and the frontend from `front-end/`. The UI uses **5174** with strict port checking;
+root and the frontend from `front-end/`. The UI uses **5173** with strict port checking;
 the API uses **8000**. Enter the reachable API address and valid credentials in the sign-in form.
 
 For host Python development, install the SDK and server editable packages, configure the host
@@ -13,7 +13,7 @@ python -m uvicorn modelryx.api.main:app --reload --port 8000
 ```
 
 Initialization creates a fresh schema or verifies a matching one. There is no automatic
-migration command. Keep both database and object-volume backups before schema changes.
+migration command. Built-in backup and restore support is not included in the first published version.
 
 For Docker-backed changes, run from the repository root:
 
@@ -24,8 +24,8 @@ docker compose up -d --build api general-worker
 For environment-only changes, recreate the affected containers rather than restarting them.
 On an initialized deployment use `docker compose up -d --no-deps api general-worker`.
 Allow exact frontend origins through `MODELRYX_CORS_ORIGINS`, e.g.
-`["http://localhost:5174","http://192.168.1.20:5174"]`. Browser localhost is the client machine.
+`["http://localhost:5173","http://192.168.1.20:5173"]`. Browser localhost is the client machine.
 
 See [testing](../docs/development/testing.md), [API](../docs/development/api.md),
-[worker protocol](../worker-sdk/README.md) and [backup/recovery](../docs/operations/backup-strategy.md).
+[worker protocol](../worker-sdk/README.md).
 The frontend has typecheck/build/lint scripts, not an `npm test` script.

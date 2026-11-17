@@ -26,10 +26,9 @@ CAD worker APIs and integration guidance for the open-source platform.
 - **[new-cad-worker-guide.md](./workers/new-cad-worker-guide.md)** - Guide for implementing custom CAD workers
 
 ### [Operations](./operations/)
-Production deployment, backup, and database management.
+Production deployment and database management.
 
 - **[deployment.md](./operations/deployment.md)** - Production deployment and operations
-- **[backup-strategy.md](./operations/backup-strategy.md)** - Backup automation, recovery procedures, and disaster recovery planning
 - **[database.md](./operations/database.md)** - Database schema and data model
 
 ### [Development](./development/)
@@ -60,11 +59,11 @@ Security guidelines and best practices.
 ### Deploying to Production?
 
 1. **Review deployment guide:** [operations/deployment.md](./operations/deployment.md)
-2. **Plan backups and recovery:** [operations/backup-strategy.md](./operations/backup-strategy.md)
+2. **Review release limitations:** Built-in backup and restore support is not included in the first published version.
 3. **Understand system requirements:** Hardware, ports, PostgreSQL setup
 4. **Secure CAD workers:** [security/worker-security.md](./security/worker-security.md)
 5. **Configure environment variables:** Secrets, CORS, TLS
-6. **Set up monitoring:** Health checks, logging, backups
+6. **Set up monitoring:** Health checks and logging
 7. **Test deployment:** Health check endpoints, sample API calls
 
 ### Contributing Code?
@@ -78,7 +77,7 @@ Security guidelines and best practices.
 
 ## All Documentation Categories
 
-- **[operations/](./operations/)** - Deployment, backup, and database management
+- **[operations/](./operations/)** - Deployment and database management
 - **[development/](./development/)** - Testing, API reference, and development guides
 - **[security/](./security/)** - Security guidelines and worker authentication
 - **[architecture/](./architecture/)** - System design and data models
@@ -101,7 +100,7 @@ modelryx/
 │   ├── architecture/    # System architecture
 │   ├── ai/              # AI subsystem
 │   └── workers/         # Worker guides
-├── scripts/             # Utility scripts (backup, deploy)
+├── scripts/             # Configuration and verification utilities
 └── compose.yaml         # Docker Compose configuration
 ```
 

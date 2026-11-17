@@ -37,9 +37,9 @@ create tables from old copied DDL. Keep real connection strings in ignored envir
 - Checkouts, approvals, audit, validation, search and optional AI/index records have their own
   mapped entities; use the models/OpenAPI schemas for exact fields.
 
-Application storage uses `LocalStorageProvider`. Back up PostgreSQL and `object-data` together;
-one alone is not a complete recovery. See [backup/recovery](backup-strategy.md). The optional S3
-helper is not a selectable application storage backend.
+Application storage uses `LocalStorageProvider`, with metadata in PostgreSQL and files in
+`object-data`. The first published version does not include built-in backup or restore support.
+The optional S3 helper is not a selectable application storage backend.
 
 ## Tests
 

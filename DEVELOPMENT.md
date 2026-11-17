@@ -34,8 +34,8 @@ npm ci
 npm run dev
 ```
 
-Open [localhost:5174](http://localhost:5174), enter `http://localhost:8000` as the API address,
-and sign in using configured credentials. Vite uses port 5174 with strict port checking.
+Open [localhost:5173](http://localhost:5173), enter `http://localhost:8000` as the API address,
+and sign in using configured credentials. Vite uses port 5173 with strict port checking.
 It does not silently choose another port. The frontend runs outside Docker.
 
 Rebuild changed API/general-worker code from the repository root:
@@ -99,11 +99,11 @@ API liveness is `/health/live`; database readiness is `/health/ready`.
 
 The frontend chooses its API in the sign-in form, not a required `VITE_API_URL` variable.
 For LAN use, enter the server's reachable address and add the exact frontend origin to
-`MODELRYX_CORS_ORIGINS`, e.g. `http://192.168.1.20:5174`. The Local CAD Agent separately checks
+`MODELRYX_CORS_ORIGINS`, e.g. `http://192.168.1.20:5173`. The Local CAD Agent separately checks
 allowed browser origins; see its [guide](local_cad_agent/README.md).
 
 Do not use `docker compose down -v` as troubleshooting: it deletes persistent volumes.
-Read [backup/recovery](docs/operations/backup-strategy.md) before database or storage changes.
+The first published version does not include built-in backup or restore support.
 
 
 ## External worker boundary
