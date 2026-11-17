@@ -4,6 +4,8 @@ The new frontend uses the Modelryx API for sign-in, Home, Library, engineering s
 
 Run `npm ci` and `npm run dev` in this folder, then open http://localhost:5173. The API must allow the frontend origin via `MODELRYX_CORS_ORIGINS`; configure additional LAN origins explicitly and recreate the API container. Enter the reachable API address in the sign-in form. Run `npm run typecheck` and `npm run build` to verify.
 
+The development server binds to loopback by default. See [tooling security](../docs/development/tooling-security.md) for deliberate LAN access and the current development-dependency advisory.
+
 `DataTable` accepts TanStack column definitions, data, a stable `getRowId`, and optional per-row actions. It provides column visibility and sizing, sorting, client-side pagination, loading/error/empty states, right-click menus, Shift+F10 and an action button. The Library uses server-side pagination, sorting and multi-select filters. Structure loads one assembly level at a time; other tables paginate and sort supplied rows locally. Set `enableHiding: false` for required columns.
 
 The 3D preview implementation lives in `src/viewer`. PDF previews use the browser PDF viewer.

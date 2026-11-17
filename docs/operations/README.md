@@ -20,6 +20,8 @@ Full backup and recovery support may be added in a future release.
   - Model ownership and connection configuration
   - Troubleshooting
 
+- **[third-party-licensing.md](third-party-licensing.md)** - Dependency licenses and release packaging
+
 ## Quick Links
 
 - **[Back to Documentation Index](../README.md)**

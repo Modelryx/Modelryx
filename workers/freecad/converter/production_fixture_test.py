@@ -23,6 +23,7 @@ from modelryx.cad.plans import resolve_parameter_change
 from fcstd_to_modelryx_glb import convert_fcstd_to_modelryx_package, extract_fcstd_part_metadata
 from execute_cad_plan import execute, sha256_file
 from document_health import recompute_for_extraction
+from modelryx_freecad_shared import close_document_safely, wait_for_techdraw_tasks
 
 
 SUPPORTED_FREECAD_VERSION = ("1", "1", "3")
@@ -33,9 +34,10 @@ def save_document(path: Path, builder) -> None:
     try:
         builder(document)
         document.recompute()
+        wait_for_techdraw_tasks(document)
         document.saveAs(str(path))
     finally:
-        FreeCAD.closeDocument(document.Name)
+        close_document_safely(document, FreeCAD)
 
 
 def convert(root: Path, name: str) -> tuple[dict, dict, trimesh.Scene]:
@@ -164,7 +166,7 @@ def verify_reliability_fixtures(root: Path) -> None:
         assert succeeded and error is None
         assert any(d["code"] == "RECOMPUTE_CHANGED_PLACEMENTS" for d in diagnostics)
     finally:
-        FreeCAD.closeDocument(document.Name)
+        close_document_safely(document, FreeCAD)
     assert sha256_file(source) == source_hash
 
     import fcstd_to_modelryx_glb as converter

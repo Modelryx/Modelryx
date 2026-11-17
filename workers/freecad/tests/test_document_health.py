@@ -267,3 +267,57 @@ def test_document_inspector_isolates_unreadable_object_and_checks_remaining_shap
         ("features", "FEATURE_SUPPORT_INSPECTION_FAILED"),
         ("geometry", "FEATURE_SUPPORT_INSPECTION_FAILED"),
     }
+
+
+@pytest.mark.parametrize("completed", [True, False])
+def test_close_waits_for_native_drawing_tasks(monkeypatch, completed):
+    from modelryx_freecad_shared import close_document_safely
+
+    events = []
+    def wait(timeout):
+        events.append(("wait", timeout))
+        return completed
+
+    pool = SimpleNamespace(waitForDone=wait)
+    qt = SimpleNamespace(QThreadPool=SimpleNamespace(globalInstance=lambda: pool))
+    monkeypatch.setitem(sys.modules, "PySide", SimpleNamespace(QtCore=qt))
+    document = SimpleNamespace(Name="Drawing", Objects=[
+        SimpleNamespace(TypeId="TechDraw::DrawViewDetail"),
+    ])
+    freecad = SimpleNamespace(closeDocument=lambda name: events.append(("close", name)))
+    if completed:
+        close_document_safely(document, freecad)
+        assert events == [("wait", 30_000), ("close", "Drawing")]
+    else:
+        with pytest.raises(TimeoutError, match="TechDraw"):
+            close_document_safely(document, freecad)
+        assert events == [("wait", 30_000)]
+
+
+def test_plain_document_close_does_not_require_qt(monkeypatch):
+    from modelryx_freecad_shared import close_document_safely
+
+    monkeypatch.setitem(sys.modules, "PySide", None)
+    closed = []
+    document = SimpleNamespace(Name="Part", Objects=[SimpleNamespace(TypeId="Part::Box")])
+    close_document_safely(document, SimpleNamespace(closeDocument=closed.append))
+    assert closed == ["Part"]
+
+
+def test_close_base_document_waits_for_other_open_drawing(monkeypatch):
+    from modelryx_freecad_shared import close_document_safely
+
+    events = []
+    pool = SimpleNamespace(waitForDone=lambda timeout: events.append("wait") or True)
+    qt = SimpleNamespace(QThreadPool=SimpleNamespace(globalInstance=lambda: pool))
+    monkeypatch.setitem(sys.modules, "PySide", SimpleNamespace(QtCore=qt))
+    base = SimpleNamespace(Name="Base", Objects=[SimpleNamespace(TypeId="Part::Box")])
+    drawing = SimpleNamespace(Name="Drawing", Objects=[
+        SimpleNamespace(TypeId="TechDraw::DrawViewDetail"),
+    ])
+    freecad = SimpleNamespace(
+        listDocuments=lambda: {"Base": base, "Drawing": drawing},
+        closeDocument=lambda name: events.append(name),
+    )
+    close_document_safely(base, freecad)
+    assert events == ["wait", "Base"]

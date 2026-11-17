@@ -79,6 +79,7 @@ from part_metadata_normalizer import (
 )
 from modelryx_freecad_shared import (
     WORKBENCH_MODULES,
+    close_document_safely,
     assembly_capability_statuses,
     assembly_model,
     fcstd_document_provenance,
@@ -2915,7 +2916,7 @@ def extract_fcstd_part_metadata(input_path: str, output_path: str) -> str:
         metadata_path.parent.mkdir(parents=True, exist_ok=True)
         metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     finally:
-        FreeCAD.closeDocument(document.Name)
+        close_document_safely(document, FreeCAD)
     return str(metadata_path)
 
 
@@ -3081,7 +3082,7 @@ def convert_fcstd_to_modelryx_package(
                 shutil.copyfile(preview_path, fcstd_path.with_suffix(".model-preview.json"))
             report_progress("CONVERSION_COMPLETE", 70, "Native FreeCAD conversion completed.")
     finally:
-        FreeCAD.closeDocument(document.Name)
+        close_document_safely(document, FreeCAD)
     return str(pfg_path)
 
 

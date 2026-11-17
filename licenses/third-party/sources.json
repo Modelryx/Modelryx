@@ -1,0 +1,161 @@
+{
+  "FreeCAD-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD/1.1.3/LICENSE",
+    "sha256": "7ffe1954587c77dfba1cf8eb9b2ea743671fa6e63f9e7a2f258119d42e14eefe"
+  },
+  "OCCT-LGPL-2.1.txt": {
+    "url": "https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/V7_9_0/LICENSE_LGPL_21.txt",
+    "sha256": "e237fa56668030e928551ddd60f05df5fe957f75eab874bbd017e085ed722e7c"
+  },
+  "OCCT-exception.txt": {
+    "url": "https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/V7_9_0/OCCT_LGPL_EXCEPTION.txt",
+    "sha256": "04580a884ea6cea294402649ff7b5cbb167d47462d1340a4ed33e550db10a81b"
+  },
+  "pythonocc-core-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/tpaviot/pythonocc-core/7.9.0/LICENSE",
+    "sha256": "f97bc4bb9b7ae8a653941073678b5c7775e8de44a01c3bcc21e7cdc148b90e61"
+  },
+  "GPL-3.0.txt": {
+    "url": "https://www.gnu.org/licenses/gpl-3.0.txt",
+    "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+  },
+  "Psycopg-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/psycopg/psycopg/3.2.13/LICENSE.txt",
+    "sha256": "e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118"
+  },
+  "NumPy-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/numpy/numpy/v2.3.4/LICENSE.txt",
+    "sha256": "1be1df33863f97a7bc1c4d67980bd6c69c9a6fef0a5ee76e6ad6cb91e56e8491"
+  },
+  "SciPy-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/scipy/scipy/v1.16.3/LICENSE.txt",
+    "sha256": "221e59f5e910fd7f94e44f0dac77436a11338c285c6346232e4a850a50da0e94"
+  },
+  "trimesh-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/mikedh/trimesh/4.9.0/LICENSE.md",
+    "sha256": "fe27b5ef8710676cc85255da28a32f394e2ef3f4ce47075a1c732a9ea1d7bd03"
+  },
+  "Pillow-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/python-pillow/Pillow/12.0.0/LICENSE",
+    "sha256": "17f240ae101143707e5e7303a5d800450d9ccc7475b463cedb555cefdb3c6ece"
+  },
+  "Miniforge-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/conda-forge/miniforge/25.9.1-0/LICENSE",
+    "sha256": "e94d14f078d66b1cc18d9c4180634ec6f70c10761123b86c26c442d6598bdf97"
+  },
+  "dotnet-runtime-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/dotnet/runtime/v8.0.0/LICENSE.TXT",
+    "sha256": "cfc21f5e8bd655ae997eec916138b707b1d290b83272c02a95c9f821b8c87310"
+  },
+  "dotnet-runtime-THIRD-PARTY-NOTICES.txt": {
+    "url": "https://raw.githubusercontent.com/dotnet/runtime/v8.0.0/THIRD-PARTY-NOTICES.TXT",
+    "sha256": "7238e7fd468427aa3fe45b1d0cee1c3e2d93ff96692820768521e9780225d473"
+  },
+  "pgvector-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/pgvector/pgvector/v0.8.0/LICENSE",
+    "sha256": "7449dc28f1492a706dc19d88669bc8f2695baf49234d4784b1e0e092938f0a00"
+  },
+  "PostgreSQL-COPYRIGHT.txt": {
+    "url": "https://raw.githubusercontent.com/postgres/postgres/REL_17_0/COPYRIGHT",
+    "sha256": "9bf20ee493926a7e17a74bc7f05089fbc014269667b1540bc35a6b194a40c9de"
+  },
+  "Draco-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/google/draco/1.5.6/LICENSE",
+    "sha256": "d3709b0fb4b8a94bbb1d02b8a2e484f258b0d9c5c5a01f940391f3fe662cd1a4"
+  },
+  "Draco-AUTHORS.txt": {
+    "url": "https://raw.githubusercontent.com/google/draco/1.5.6/AUTHORS",
+    "sha256": "7399754545fa82fbf402e3e91d50de0b63772870fd807c48dd9af25c042efb10"
+  },
+  "npm-tanstack-react-table-LICENSE.txt": {
+    "package": "@tanstack/react-table",
+    "version": "8.21.3",
+    "url": "https://registry.npmjs.org/@tanstack/react-table/-/react-table-8.21.3.tgz",
+    "archive_member": "package/LICENSE",
+    "sha256": "9db3f8ddd7031ab264b99bec49c221155d0c8649b53dd4aa007f2041d36cdf5f"
+  },
+  "npm-tanstack-table-core-LICENSE.txt": {
+    "package": "@tanstack/table-core",
+    "version": "8.21.3",
+    "url": "https://registry.npmjs.org/@tanstack/table-core/-/table-core-8.21.3.tgz",
+    "archive_member": "package/LICENSE",
+    "sha256": "9db3f8ddd7031ab264b99bec49c221155d0c8649b53dd4aa007f2041d36cdf5f"
+  },
+  "npm-cookie-LICENSE.txt": {
+    "package": "cookie",
+    "version": "1.1.1",
+    "url": "https://registry.npmjs.org/cookie/-/cookie-1.1.1.tgz",
+    "archive_member": "package/LICENSE",
+    "sha256": "c02110eedc16c7114f1a9bdc026c65626ce1d9c7e27fd51a8e0feee8a48a6858"
+  },
+  "npm-fflate-LICENSE.txt": {
+    "package": "fflate",
+    "version": "0.8.3",
+    "url": "https://registry.npmjs.org/fflate/-/fflate-0.8.3.tgz",
+    "archive_member": "package/LICENSE",
+    "sha256": "0a1df3a083d0c010560aa342e87959c8c1070e6fd54545741f083f22d0c8b551"
+  },
+  "npm-js-tokens-LICENSE.txt": {
+    "package": "js-tokens",
+    "version": "4.0.0",
+    "url": "https://registry.npmjs.org/js-tokens/-/js-tokens-4.0.0.tgz",
+    "archive_member": "package/LICENSE",
+    "sha256": "2213d91c606205c71eb051a199478cdc2adde945893404d7f1421436dd6d5cc1"
+  },
+  "npm-loose-envify-LICENSE.txt": {
+    "package": "loose-envify",
+    "version": "1.4.0",
+    "url": "https://registry.npmjs.org/loose-envify/-/loose-envify-1.4.0.tgz",
+    "archive_member": "package/LICENSE",
+    "sha256": "4eb7543b08d955a6d23fcc224601d43ff566e775be918805e26210d7f6eb4893"
+  },
+  "npm-react-LICENSE.txt": {
+    "package": "react",
+    "version": "18.3.1",
+    "url": "https://registry.npmjs.org/react/-/react-18.3.1.tgz",
+    "archive_member": "package/LICENSE",
+    "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85"
+  },
+  "npm-react-dom-LICENSE.txt": {
+    "package": "react-dom",
+    "version": "18.3.1",
+    "url": "https://registry.npmjs.org/react-dom/-/react-dom-18.3.1.tgz",
+    "archive_member": "package/LICENSE",
+    "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85"
+  },
+  "npm-react-router-LICENSE.txt": {
+    "package": "react-router",
+    "version": "7.18.5",
+    "url": "https://registry.npmjs.org/react-router/-/react-router-7.18.5.tgz",
+    "archive_member": "package/LICENSE.md",
+    "sha256": "77c9ee6a9c5d5782fb0c50b50d101189116314c14f7df0a1b0d385fc96a7ba49"
+  },
+  "npm-react-router-dom-LICENSE.txt": {
+    "package": "react-router-dom",
+    "version": "7.18.5",
+    "url": "https://registry.npmjs.org/react-router-dom/-/react-router-dom-7.18.5.tgz",
+    "archive_member": "package/LICENSE.md",
+    "sha256": "77c9ee6a9c5d5782fb0c50b50d101189116314c14f7df0a1b0d385fc96a7ba49"
+  },
+  "npm-scheduler-LICENSE.txt": {
+    "package": "scheduler",
+    "version": "0.23.2",
+    "url": "https://registry.npmjs.org/scheduler/-/scheduler-0.23.2.tgz",
+    "archive_member": "package/LICENSE",
+    "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85"
+  },
+  "npm-set-cookie-parser-LICENSE.txt": {
+    "package": "set-cookie-parser",
+    "version": "2.7.3",
+    "url": "https://registry.npmjs.org/set-cookie-parser/-/set-cookie-parser-2.7.3.tgz",
+    "archive_member": "package/LICENSE",
+    "sha256": "c5c6c5183a789d122f267c405f685037efb87e27fcde28ab1dd7378a2d2f5962"
+  },
+  "npm-three-LICENSE.txt": {
+    "package": "three",
+    "version": "0.160.1",
+    "url": "https://registry.npmjs.org/three/-/three-0.160.1.tgz",
+    "archive_member": "package/LICENSE",
+    "sha256": "852e0e8699169bf9f6fdc6bda3e682d078dcbc738b5d33e74df594721bff271d"
+  }
+}

@@ -18,6 +18,8 @@ Guides for developing with and contributing to Modelryx.
   - Test coverage
   - Running tests locally
 
+- **[tooling-security.md](tooling-security.md)** - Development-server exposure and unresolved build-tool advisories
+
 ## Quick Links
 
 - **[Back to Documentation Index](../README.md)**

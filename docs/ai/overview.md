@@ -61,6 +61,31 @@ work; vector retrieval and generated explanations are unavailable or use determi
 `GET /api/v1/ai/status` reports whether chat and embedding configuration is available and how many
 revision documents are indexed.
 
+## Data sent to the configured gateway
+
+When chat or embeddings are enabled, requests leave the Modelryx server for the
+operator-configured gateway. Treat that gateway as a recipient of engineering
+data and review its retention, training, access and data-location policies before
+using confidential project information.
+
+- Embedding requests include searchable document text and user search queries.
+  Document text is derived from revision metadata and authorized knowledge sources.
+- Generated retrieval answers include the question plus retrieved source titles
+  and document contents.
+- Structured chat features can include search text, engineering filters, compact
+  source/candidate metadata and similarity scores, validation findings, or
+  deterministic revision differences and supporting evidence, depending on the
+  requested feature. These payloads can contain identifiers and engineering values.
+- Gateway authentication uses server-side credentials. Do not put provider keys in
+  frontend configuration or share real credentials in example files.
+
+The gateway client sends JSON payloads; raw CAD file upload is not part of these
+chat/embedding client methods. Extracted CAD information can still be sensitive.
+Modelryx access checks do not determine a third-party provider's data-use policy.
+Use synthetic data to validate the integration and leave the optional gateway
+unconfigured when external processing is not permitted. See
+`services/ai.py` and the feature-specific callers for the current request shapes.
+
 ## Retrieval projections
 
 Modelryx derives searchable documents from readable Revision metadata, Artifacts, BOM structure,

@@ -1,5 +1,10 @@
 # Modelryx FreeCAD worker
 
+Native document closure waits up to 30 seconds for pending TechDraw tasks before
+freeing drawing or referenced base objects. A timeout fails the operation; the
+isolated worker deadline remains responsible for terminating stalled native work.
+This applies to extraction, controlled edits, and dependency preprocessing.
+
 ## Reference external worker
 
 This is the in-repository reference for designing other CAD workers. Native extraction and

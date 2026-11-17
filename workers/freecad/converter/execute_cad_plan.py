@@ -13,11 +13,17 @@ import argparse
 import json
 import math
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
+source_shared = Path(__file__).resolve().parents[1] / "shared"
+if source_shared.is_dir():
+    sys.path.insert(0, str(source_shared))
+
 from freecad_material import material_name
 from document_health import check_document_object_limit
+from modelryx_freecad_shared import close_document_safely
 from worker_io import check_native_document_size, sha256_file
 
 PROPERTY_MAP = {
@@ -417,7 +423,7 @@ def execute(plan_path: Path, source: Path, output: Path, report_path: Path) -> N
             raise ValueError("FreeCAD did not save the result")
         # Verify the persisted native artifact for every supported edit, not just
         # the in-memory result. Reopening must not repair it through recompute.
-        FreeCAD.closeDocument(document.Name)
+        close_document_safely(document, FreeCAD)
         document = None
         reopened = FreeCAD.openDocument(str(output))
         try:
@@ -450,7 +456,7 @@ def execute(plan_path: Path, source: Path, output: Path, report_path: Path) -> N
                 raise ValueError("Saved feature creation postcondition failed")
             geometry = saved_geometry
         finally:
-            FreeCAD.closeDocument(reopened.Name)
+            close_document_safely(reopened, FreeCAD)
         report_path.write_text(
             json.dumps(
                 {
@@ -469,7 +475,7 @@ def execute(plan_path: Path, source: Path, output: Path, report_path: Path) -> N
         )
     finally:
         if document is not None:
-            FreeCAD.closeDocument(document.Name)
+            close_document_safely(document, FreeCAD)
 
 
 def main() -> int:

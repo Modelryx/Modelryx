@@ -7,35 +7,35 @@
 
 ## What is Modelryx?
 
-**Modelryx is an open-source, AI-powered engineering data management platform** that brings together multi-CAD integration, product data management (PDM), intelligent engineering search, and automated CAD processing.
+**Modelryx is an open-source, AI-powered engineering data management platform** that combines product data management (PDM), multi-CAD integration, intelligent engineering search, and automated CAD processing.
 
-Designed for engineering teams, Modelryx provides a unified environment to manage CAD models, product structures, revisions, and engineering information throughout the product development process.
+Designed for engineering teams, Modelryx provides a unified environment to manage CAD models, product structures, revisions, and engineering information. By integrating AI-assisted workflows with an extensible CAD processing architecture, Modelryx helps teams organize engineering data, automate repetitive tasks, and make better-informed engineering decisions.
 
-By combining traditional PDM capabilities with AI-assisted engineering workflows and an extensible CAD processing architecture, Modelryx helps teams organize engineering data, discover relevant information, automate repetitive tasks, and make better-informed engineering decisions.
-
-## Core Capabilities
-
-- **AI-Powered Engineering Intelligence** — Search engineering data using natural language, interact with a context-aware AI assistant, and obtain grounded explanations of engineering information.
-
-- **Product Data Management (PDM)** — Manage items, revisions, assemblies, CAD files, metadata, and engineering relationships.
-- **Multi-CAD Integration** — Work with different CAD systems through a unified data model and extensible CAD worker architecture.
-- **Automated CAD Processing** — Extract metadata, analyze geometry, validate engineering data, and generate visualization representations.
-- **Engineering Collaboration** — Support shared engineering information, access control, and team workflows.
-- **3D Visualization** — Explore and inspect CAD models directly in a modern web interface.
-- **Open and Extensible Architecture** — Integrate additional CAD systems, engineering tools, and external services through workers and REST APIs.
-
-Modelryx is designed to evolve beyond traditional CAD data management toward a broader, AI-enabled product lifecycle management (PLM) platform.
+Built on an open and extensible architecture, Modelryx establishes a foundation for evolving from CAD/PDM management toward broader product lifecycle management (PLM).
 
 ## Key Features
 
-- **Multi-CAD Support** - Built-in support for FreeCAD and STEP formats, extensible to others
-- **Version Control** - Track revisions, assemblies, and metadata
-- **3D Preview** - Real-time GLB/3D model previewing and interaction
-- **Worker Framework** - Extensible system for adding new CAD formats and tools
-- **Containerized Deployment** - PostgreSQL backend and persistent local object storage
-- **Security** - JWT user authentication, role-based access, shared-key worker authentication
-- **APIs** - Complete REST API for programmatic access
-- **Open Source** - Apache 2.0 licensed, community-driven
+- **AI-Powered Engineering Intelligence** — Natural-language engineering search, optional semantic retrieval, context-aware assistance, and grounded explanations of engineering data.
+
+- **Product Data Management (PDM)** — Manage engineering items, revisions, assemblies, CAD files, metadata, and product relationships.
+
+- **Multi-CAD Integration** — Built-in FreeCAD and STEP processing, with an extensible framework for integrating additional CAD systems.
+
+- **Automated CAD Processing** — Extract engineering metadata, analyze geometry, validate CAD data, and generate visualization representations using specialized processing workers.
+
+- **Interactive 3D Visualization** — Preview and inspect CAD models directly in the browser using GLB-based visualization.
+
+- **Engineering Collaboration** — Team-based access control, commenting, and approval workflows.
+
+- **Extensible Worker Framework** — Develop and deploy custom CAD workers using containerized, native, or external processing services.
+
+- **Modern Web Interface** — React and TypeScript frontend for managing engineering data and interacting with CAD models.
+
+- **REST API and Integration** — Programmatic access for external applications, automation, and engineering system integration.
+
+- **Flexible Deployment** — Docker-based deployment with PostgreSQL, pgvector, and persistent local file storage.
+
+- **Open Source** — Apache 2.0 licensed and designed for community contributions.
 
 ## Architecture
 
@@ -50,6 +50,17 @@ Modelryx follows a microservices architecture with these components:
 Frontend -> REST API (FastAPI) -> PostgreSQL + CAD Workers + Local Object Storage
 
 See the [platform architecture documentation](docs/architecture/platform-architecture.md) for detailed design.
+
+## Initial release scope
+
+Modelryx is in development ahead of its first public release. Built-in CAD
+processing covers FreeCAD (`.FCStd`) and STEP; additional CAD systems require
+independently deployed workers and their own runtime licenses. See the component
+guides for environment requirements and processing limitations.
+
+Database setup supports fresh-schema initialization and matching-schema checks.
+Automatic schema upgrades and built-in backup/restore are outside the initial
+release scope. A public release version and date have not yet been assigned.
 
 ## Quick Start
 
@@ -317,9 +328,11 @@ modelryx/
 
 Modelryx is licensed under the **Apache License 2.0** - see [LICENSE](LICENSE) for details.
 
-The platform includes integrations with:
-- **FreeCAD** - LGPL v2.1 (open source)
-- **STEP format** - Open standard (ISO 10303)
+Third-party components retain their own licenses. Modelryx uses FreeCAD,
+Open CASCADE Technology, pythonocc-core, and other independently licensed software.
+See [third-party notices](THIRD_PARTY_NOTICES.md) for acknowledgments and
+[license texts](licenses/third-party/README.md). Before distributing images or
+executables, follow the [third-party release guidance](docs/operations/third-party-licensing.md).
 
 ## Getting Help
 

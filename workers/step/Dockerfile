@@ -1,4 +1,5 @@
-FROM condaforge/miniforge3:latest
+# Update the release tag and verified multi-platform digest together.
+FROM condaforge/miniforge3:25.9.1-0@sha256:7ddae459669444129323a431fed8959e8972700dfb43c790d22abaeab85ff9d1
 COPY environment.yml /tmp/environment.yml
 RUN conda env create -f /tmp/environment.yml && conda clean --all -y
 WORKDIR /app

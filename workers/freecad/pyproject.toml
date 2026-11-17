@@ -1,6 +1,6 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = [".", "converter"]
+pythonpath = [".", "converter", "shared"]
 
 [tool.ruff]
 line-length = 100

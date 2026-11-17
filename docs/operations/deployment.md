@@ -79,6 +79,13 @@ separate from liveness and cannot be inferred from an ONLINE card alone.
 
 ## Operational limitations and monitoring
 
+Health probes are configured for the service role in Compose: the API and database
+use their readiness checks, and standalone FreeCAD has its own probe. The shared
+API/worker images do not define one generic Dockerfile `HEALTHCHECK`, because the
+same image can run a long-lived API, a processing worker, or a one-shot command.
+Other orchestrators must configure equivalent role-specific supervision and
+worker-heartbeat monitoring; a running process alone is not a readiness guarantee.
+
 The first published version does not include built-in backup or restore support.
 Full backup and recovery support may be added in a future release.
 `docker compose down -v` deletes volumes and is not a normal restart. Monitor capacity, queues, errors and retained-job disk use. Read

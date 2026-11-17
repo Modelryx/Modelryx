@@ -172,6 +172,7 @@ function SignIn({ onSession }: { onSession: (session: Session) => void }) {
         <Button type="submit" disabled={busy}>
           {busy ? 'Signing in…' : 'Sign in'}
         </Button>
+        <a href={`${import.meta.env.BASE_URL}third-party-licenses.txt`}>Open-source licenses</a>
       </form>
     </main>
   );
@@ -1201,6 +1202,7 @@ function Shell({ session, signOut }: { session: Session; signOut: () => void }) 
           <span className="brand-mark">P</span> Modelryx <span className="tag">NEW UI</span>
         </Link>
         <div className="top-actions">
+          <a href={`${import.meta.env.BASE_URL}third-party-licenses.txt`}>Open-source licenses</a>
           <span>{session.display_name}</span>
           <Button
             variant="secondary"

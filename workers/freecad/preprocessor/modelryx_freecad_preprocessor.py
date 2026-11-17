@@ -36,6 +36,7 @@ if source_shared.is_dir():
 from modelryx_freecad_shared import (
     WORKBENCH_MODULES,
     assembly_model,
+    close_document_safely,
     fcstd_document_provenance,
     module_available,
     workbench_module_issue,
@@ -957,7 +958,7 @@ def main() -> int:
 
     def close_document(document: Any) -> None:
         opened.pop(document.Name, None)
-        freecad_runtime.closeDocument(document.Name)
+        close_document_safely(document, freecad_runtime)
 
     (
         document_type,

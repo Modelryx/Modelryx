@@ -48,6 +48,10 @@ For environment-only changes on an initialized deployment, recreate affected ser
 `docker compose up -d --no-deps api general-worker`. A plain restart does not apply changed
 Compose environment variables. Do not skip initialization on a fresh deployment.
 
+The frontend dev server binds to `localhost` (loopback) by default. For trusted LAN development,
+use `npm run dev -- --host 0.0.0.0` and configure exact CORS and Local CAD Agent origins.
+Review [tooling security](docs/development/tooling-security.md) before exposing development tools.
+
 ## Run without embedded FreeCAD
 
 ```powershell

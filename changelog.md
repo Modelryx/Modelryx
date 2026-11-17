@@ -1,132 +1,55 @@
 # Changelog
 
-This file retains historical release notes. For the current implemented contract and deployment
-instructions, use the README, component guides and running OpenAPI schema.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+Changes for the first public release are tracked under Unreleased. Package versions
+currently identify the development series as 0.1.0; a public release version and
+date have not yet been assigned. Earlier pre-publication notes were development
+summaries, not evidence of a shipped 1.0.0 release.
 
 ## [Unreleased]
 
 ### Added
-- (Planned features and improvements go here)
+
+- CAD data management API and React/TypeScript frontend, with PostgreSQL/pgvector
+  and persistent local object storage.
+- Built-in FreeCAD and STEP processing, plus an external CAD worker contract and
+  a worker SDK. Proprietary worker implementations are maintained separately.
+- Optional OpenAI-compatible gateway configuration for AI-assisted features.
+- PowerShell project configuration helper and manual environment setup guidance.
+- Third-party license reference collection, notices, and release packaging guidance.
+- Frontend license notices delivered with the production build.
 
 ### Changed
-- Reviewed setup, API, security, database and worker documentation against current source;
-  corrected external/embedded routing and removed obsolete protocol and migration examples.
 
-### Deprecated
-- (Soon-to-be removed features)
-
-### Removed
-- (Removed features)
+- Reviewed setup, API, security, database, and worker documentation against current
+  source and corrected obsolete protocol and migration examples.
+- Clarified external versus embedded FreeCAD processing and CAD-session limits.
 
 ### Fixed
-- (Bug fixes)
 
-### Security
-- (Security vulnerability fixes)
+- Wait for pending TechDraw background work before closing native documents in
+  extraction, controlled CAD edits, and dependency preprocessing. This prevents
+  base-view objects being freed while detail-view tasks still use them.
+- Bind the frontend development server to loopback by default; trusted LAN access
+  requires an explicit host override.
+- Pin the STEP worker Miniforge base by release tag and digest.
 
----
+### Removed
 
-## [1.0.0] - 2026-11-11
+- Database backup, restore, and backup-verification scripts. Built-in backup and
+  restore support is deferred beyond the first public release.
 
-### Added
+### Limitations
 
-#### Core Platform
-- **Aggregated Health Check Endpoints** - `/health`, `/health/live`, `/health/ready` for production monitoring and Kubernetes deployment
-- **Timeout Configuration** - Externalized timeout settings for CAD processing, worker heartbeats, and AI requests
-- **Connection Pool Configuration** - Database connection pool settings for production deployments
+- Database initialization creates a fresh schema or verifies a matching schema;
+  there is no shipped Alembic migration or automatic upgrade workflow.
+- Worker authentication uses the contract's shared-key mechanism. The platform
+  does not claim HMAC request signing or cryptographic replay prevention.
+- Native CAD output support depends on qualified worker runtimes. A health check
+  alone does not establish conversion correctness or native licensing suitability.
+- Third-party reference license texts are not a complete binary inventory. Image
+  and installer publication requires artifact-specific notice and source review.
 
-#### Documentation
-- **Reorganized Documentation Structure** - Logical categorization into Operations, Development, and Security folders
-- **Production Deployment Guide** - Complete deployment procedures with CAD worker resource requirements
-- **CAD Worker Security Model** - Detailed authentication and authorization framework
-- **Architecture Documentation** - Platform design, data model, and processing pipelines
-- **AI Subsystem Documentation** - Assistant capabilities, search functionality, and tool interfaces
-- **Development Guides** - Setup, testing, and API reference for developers
+## Contributing
 
-#### Infrastructure
-- **Docker Compose Configuration** - Complete orchestration for all components
-- **Environment Configuration** - Safe .env.example with all required variables
-- **Database Migrations** - Managed schema versioning with Alembic
-
-#### Code Quality
-- **ESLint Configuration** - TypeScript/JavaScript linting for frontend code quality
-- **Prettier Configuration** - Code formatting standards for consistency
-- **Testing Framework** - Comprehensive unit and integration test coverage
-
-### Features
-
-#### Backend (Python/FastAPI)
-- REST API with OpenAPI/Swagger documentation
-- PostgreSQL database with ORM and migrations
-- CAD worker coordination and artifact management
-- AI-assisted search and engineering workflows
-
-#### Frontend (React/TypeScript)
-- Modern UI for CAD model management
-- Real-time updates and collaboration features
-- Responsive design for desktop engineering workflows
-- Integration with AI features
-
-#### CAD Workers
-- FreeCAD integration for STEP conversion and metadata extraction
-- Generic STEP processor for model normalization
-- Extensible worker framework for custom CAD tools
-
-### Documentation
-
-- README with quick start and feature overview
-- DEVELOPMENT.md with local setup instructions
-- CONTRIBUTING.md with code style and contribution guidelines
-- 22+ detailed documentation files organized by category
-- API reference with example requests and responses
-- Deployment guide with production best practices
-- Security documentation with threat models and mitigations
-
-### Security
-
-- No hardcoded credentials or secrets
-- Externalized configuration with .env
-- HMAC-SHA256 worker authentication
-- JWT-based API authentication
-- Database connection pooling with timeout protection
-- Input validation and sanitization across all endpoints
-
----
-
-## Release Guidelines
-
-### Major Version (X.0.0)
-- Breaking changes to API or data model
-- Significant architectural changes
-- Major feature additions
-
-### Minor Version (X.Y.0)
-- New features (backward compatible)
-- Non-breaking API enhancements
-- Documentation improvements
-
-### Patch Version (X.Y.Z)
-- Bug fixes
-- Security updates
-- Performance improvements
-- Documentation typos
-
----
-
-## How to Contribute
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for:
-- How to submit pull requests
-- Code style guidelines
-- Testing requirements
-- Commit message conventions
-
-## Security
-
-See [security-policy.md](./SECURITY_POLICY.md) for information on:
-- How to report security vulnerabilities responsibly
-- Security best practices for deploying Modelryx
-- Known security considerations and mitigations
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development and contribution guidance.
+See [SECURITY_POLICY.md](SECURITY_POLICY.md) for private vulnerability reporting.

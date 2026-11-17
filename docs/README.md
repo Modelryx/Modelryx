@@ -42,6 +42,11 @@ Security guidelines and best practices.
 
 - **[worker-security.md](./security/worker-security.md)** - CAD worker shared-key authentication, transport and ownership boundaries
 
+## License information
+
+- [Third-party notices](../THIRD_PARTY_NOTICES.md) - Component acknowledgments and license references
+- [Third-party licensing](operations/third-party-licensing.md) - Source and binary release guidance
+
 ## Quick Reference
 
 - **[quick-reference.md](./quick-reference.md)** - Developer and operator quick reference guide

@@ -18,6 +18,37 @@ WORKBENCH_MODULES = {
 SOLVER_ASSEMBLY_MODELS = {"BUILTIN_ASSEMBLY", "ASSEMBLY3", "ASSEMBLY4", "A2PLUS"}
 
 
+def wait_for_techdraw_tasks(document: Any, timeout_ms: int = 30_000) -> None:
+    """Keep native drawing objects alive until their Qt background work finishes.
+
+    FreeCAD 1.1.3 can schedule detail-view work even in headless mode. Closing
+    the document first may destroy its base view while that work still uses it.
+    The worker process is isolated, so waiting for its global Qt pool also covers
+    tasks whose Python wrappers do not expose a per-view wait method.
+    """
+    if not any(
+        str(getattr(obj, "TypeId", "")).startswith("TechDraw::")
+        for obj in getattr(document, "Objects", ())
+    ):
+        return
+    from PySide import QtCore
+
+    if not QtCore.QThreadPool.globalInstance().waitForDone(timeout_ms):
+        raise TimeoutError("Timed out waiting for native TechDraw tasks before document closure")
+
+
+def close_document_safely(document: Any, freecad: Any) -> None:
+    # Do not close on timeout: the outer worker deadline can terminate the
+    # isolated process without freeing objects still in use by native threads.
+    # A drawing can reference a base view/shape in another open document.
+    # Drain its tasks before freeing that document as well.
+    list_documents = getattr(freecad, "listDocuments", None)
+    documents = list_documents().values() if callable(list_documents) else (document,)
+    for opened in documents:
+        wait_for_techdraw_tasks(opened)
+    freecad.closeDocument(document.Name)
+
+
 def module_available(name: str) -> bool:
     try:
         return importlib.util.find_spec(name) is not None
