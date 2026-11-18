@@ -128,6 +128,12 @@ EOF
 # Edit .env and replace the corresponding placeholders with these values
 ```
 
+For a second clone or a fresh test installation, first set a unique
+`COMPOSE_PROJECT_NAME` in its `.env`. Clones otherwise share the default
+`modelryx-platform` Docker project and existing data. See
+[multiple clones and Docker data](DEVELOPMENT.md#multiple-clones-and-existing-docker-data)
+for port conflicts and credential reuse.
+
 Before starting services, review these settings in `.env`:
 
 | Setting | What to configure |

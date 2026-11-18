@@ -9,7 +9,22 @@ concurrency:
 permissions:
   contents: read
 jobs:
+  changes:
+    name: Classify changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run_ci: ${{ steps.classify.outputs.run_ci }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Decide whether build and test jobs are needed
+        id: classify
+        run: python3 scripts/ci_changes.py
   backend:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.run_ci != 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -52,6 +67,8 @@ jobs:
         if: always()
         run: docker compose --profile test down --volumes
   frontend:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.run_ci != 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults: {run: {working-directory: front-end}}
@@ -71,6 +88,8 @@ jobs:
         run: npm run format:check
   worker-sdk:
     name: Worker SDK
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.run_ci != 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -78,9 +97,11 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
       - run: pip install "pytest>=8.3,<9" "pydantic-settings>=2.7,<3" "boto3>=1.35,<2" './worker-sdk[conformance]'
-      - run: python -m pytest -q worker-sdk/tests scripts/tests/test_configure_project.py scripts/tests/test_production_settings.py scripts/tests/test_s3_storage.py scripts/tests/test_license_notices.py
+      - run: python -m pytest -q worker-sdk/tests scripts/tests/test_configure_project.py scripts/tests/test_production_settings.py scripts/tests/test_s3_storage.py scripts/tests/test_license_notices.py scripts/tests/test_ci_changes.py
   freecad-worker:
     name: FreeCAD worker
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.run_ci != 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -110,6 +131,8 @@ jobs:
           docker run --rm modelryx-freecad-ci python /opt/modelryx-converter/process_tree_integration_test.py
   step-worker:
     name: STEP worker
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.run_ci != 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -168,6 +191,7 @@ jobs:
             docker rm --force modelryx-step-smoke
           fi
   repository-safety:
+    # Always scan documentation too: secrets can be accidentally committed there.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -189,6 +213,8 @@ jobs:
           POSTGRES_PASSWORD: modelryx-test-password
         run: docker compose config --quiet
   python-quality:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.run_ci != 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -199,6 +225,8 @@ jobs:
       - name: Lint Python
         run: python -m ruff check server/src server/tests
   security-scan:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.run_ci != 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:

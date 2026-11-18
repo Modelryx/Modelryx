@@ -17,6 +17,33 @@ Set `POSTGRES_PASSWORD`, `MODELRYX_JWT_SECRET`, `MODELRYX_INTERNAL_WORKER_KEY` a
 Production rejects insecure authentication defaults; see [deployment](docs/operations/deployment.md).
 Do not commit real environment files.
 
+## Multiple clones and existing Docker data
+
+The root Compose file declares `name: modelryx-platform`. Two clones use the same
+containers, network and persistent volumes by default, even in different folders.
+A new `.env` password does not change the password stored in an existing database
+volume; reusing that volume with newly generated credentials causes database
+authentication failures during initialization.
+
+For a fresh test installation, add a unique project name to the new clone's `.env`
+before starting it:
+
+```dotenv
+COMPOSE_PROJECT_NAME=modelryx-clone-test
+```
+
+Keep this setting for subsequent commands so they consistently target the test
+installation. An explicit `docker compose -p ...` overrides it. Separate projects
+have separate volumes, but the default host ports (5432, 8000 and 8080) still
+conflict if both stacks run at once. Stop the original stack from its folder with
+`docker compose down` before starting the test stack, or configure distinct host
+ports. Use `docker compose up -d --build` from the new clone after that.
+
+`docker compose down` retains persistent volumes. Do not add `-v` when preserving
+data. To continue an existing installation instead, retain its project name,
+database credentials and other deployment settings; a new clone alone does not
+create a new database or migrate its schema.
+
 ## Recommended split setup
 
 ```powershell

@@ -12,6 +12,13 @@
 Automatic workflows run on all pull requests and pushes to `main` and `develop`.
 Superseded runs for the same workflow/ref are cancelled. Jobs have explicit timeouts.
 
+Documentation-only changes skip the expensive build/test/Trivy jobs after a small
+change-classification job. Repository safety always runs. Build-consumed READMEs,
+license texts, code, configuration and unknown file types run full CI. Existing
+required-check names are preserved; job-level skips avoid pending required checks.
+See [the change policy](../WORKFLOWS.md#documentation-only-changes) for exact scope
+and event comparison behavior.
+
 ## Quality reports
 
 Full Ruff, ESLint, and frontend formatting checks are required. Existing lint
