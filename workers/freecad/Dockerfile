@@ -30,7 +30,7 @@ FROM base AS native-tests
 COPY vendor ./vendor
 COPY contracts ./contracts
 COPY tests ./tests
-COPY scripts/refresh-contracts.py ./scripts/refresh-contracts.py
+COPY scripts ./scripts
 COPY pyproject.toml ./pyproject.toml
 COPY requirements-test.txt ./requirements-test.txt
 RUN python -m pip install --no-cache-dir -r requirements-test.txt

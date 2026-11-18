@@ -287,3 +287,16 @@ the local file picker. The configured server must be reachable and advertise a v
 contract. The local preprocessor registration must match the returned worker ID (`freecad` for
 the standard URL-only FreeCAD service). Rebuild/reinstall and restart the local agent after
 updating its source. Local runtime and preprocessor installation are still required.
+
+
+### Native CI resource limits and termination diagnostics
+
+Each native release gate has its own CI step and runs with 4 GiB RAM, 8 GiB combined RAM/swap,
+2 CPUs, and one BLAS/OpenMP thread. Low-memory GitHub runners provision an additional 4 GiB
+swap file when available RAM is below 6 GiB and existing swap is below 4 GiB. Job cleanup removes
+only that job-owned swap file. These settings apply to CI, not the production worker.
+
+The gate wrapper retains Docker's exit status and `OOMKilled` flag before removing the
+container. Exit 137 means SIGKILL; it does not by itself establish an out-of-memory failure.
+On failure the workflow also reports host memory, disk and recent kernel diagnostics.
+The gate's original failure is preserved; no native test is skipped or retried automatically.

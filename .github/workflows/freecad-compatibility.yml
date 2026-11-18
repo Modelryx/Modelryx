@@ -30,8 +30,22 @@ jobs:
           docker build --file workers/freecad/Dockerfile --target native-tests
           --build-arg MODELRYX_FREECAD_VERSION=${{ matrix.freecad_version }}
           --tag modelryx-freecad-compat workers/freecad
-      - name: Test native metadata and dependency fixtures
+      - name: Prepare native test memory
+        run: bash workers/freecad/scripts/ci-memory.sh prepare
+      - name: Golden native fixtures
+        run: bash workers/freecad/scripts/run-native-gate.sh /app/converter/golden_integration_test.py modelryx-freecad-compat
+      - name: Nested dependency fixtures
+        run: bash workers/freecad/scripts/run-native-gate.sh /app/preprocessor/dependency_integration_test.py modelryx-freecad-compat
+      - name: Production native fixtures
+        run: bash workers/freecad/scripts/run-native-gate.sh /app/converter/production_fixture_test.py modelryx-freecad-compat --compatibility-candidate
+      - name: Process-tree cleanup fixtures
+        run: bash workers/freecad/scripts/run-native-gate.sh /app/tests/process_tree_integration_test.py modelryx-freecad-compat
+      - name: Native runner diagnostics
+        if: failure()
         run: |
-          docker run --rm modelryx-freecad-compat python /app/converter/golden_integration_test.py
-          docker run --rm modelryx-freecad-compat python /app/preprocessor/dependency_integration_test.py
-          docker run --rm modelryx-freecad-compat python /app/converter/production_fixture_test.py --compatibility-candidate
+          free -h
+          df -h /
+          sudo dmesg --ctime | tail -80 || true
+      - name: Clean up native test swap
+        if: always()
+        run: bash workers/freecad/scripts/ci-memory.sh cleanup

@@ -35,12 +35,25 @@ jobs:
       # The native builder avoids a second full image export/import via buildx load.
       - name: Build native FreeCAD worker image
         run: docker build --target native-tests --tag modelryx-freecad-ci .
-      - name: Run native FreeCAD release gates
+      - name: Prepare native test memory
+        run: bash scripts/ci-memory.sh prepare
+      - name: Golden native fixtures
+        run: bash scripts/run-native-gate.sh /app/converter/golden_integration_test.py modelryx-freecad-ci
+      - name: Nested dependency fixtures
+        run: bash scripts/run-native-gate.sh /app/preprocessor/dependency_integration_test.py modelryx-freecad-ci
+      - name: Production native fixtures
+        run: bash scripts/run-native-gate.sh /app/converter/production_fixture_test.py modelryx-freecad-ci
+      - name: Process-tree cleanup fixtures
+        run: bash scripts/run-native-gate.sh /app/tests/process_tree_integration_test.py modelryx-freecad-ci
+      - name: Native runner diagnostics
+        if: failure()
         run: |
-          docker run --rm modelryx-freecad-ci python /app/converter/golden_integration_test.py
-          docker run --rm modelryx-freecad-ci python /app/preprocessor/dependency_integration_test.py
-          docker run --rm modelryx-freecad-ci python /app/converter/production_fixture_test.py
-          docker run --rm modelryx-freecad-ci python /app/tests/process_tree_integration_test.py
+          free -h
+          df -h /
+          sudo dmesg --ctime | tail -80 || true
+      - name: Clean up native test swap
+        if: always()
+        run: bash scripts/ci-memory.sh cleanup
   worker-security:
     name: FreeCAD security
     runs-on: ubuntu-24.04

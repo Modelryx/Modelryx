@@ -24,3 +24,4 @@
 !pyproject.toml
 !scripts/
 !scripts/refresh-contracts.py
+!scripts/*.sh
