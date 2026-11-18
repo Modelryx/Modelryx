@@ -52,6 +52,48 @@ The frontend dev server binds to `localhost` (loopback) by default. For trusted 
 use `npm run dev -- --host 0.0.0.0` and configure exact CORS and Local CAD Agent origins.
 Review [tooling security](docs/development/tooling-security.md) before exposing development tools.
 
+## Enable Open CAD File for FreeCAD
+
+The **Open CAD File** button needs the **Local CAD Agent and a registered FreeCAD
+preprocessor on each user's local machine**, where the browser and CAD files are.
+Install FreeCAD there as well. The local preprocessor resolves referenced files
+and prepares an isolated upload package before sending it to the server. Starting
+the Docker services alone does not install these client components.
+
+For a Windows source installation:
+
+1. Install FreeCAD and the .NET 8 SDK. FreeCAD's Python environment must provide
+   NumPy, trimesh and Pillow; see the [FreeCAD preprocessor guide](workers/freecad/README.md#local-preprocessor-registration).
+2. Configure an enabled FreeCAD worker under **Administrator > External CAD
+   Workers** so the local dialog can discover `.FCStd` support. Note its exact
+   worker ID. See [standalone FreeCAD setup](workers/freecad/README.md#standalone-http-service)
+   for starting and registering the service.
+3. Run these commands from the repository root on the client machine:
+
+   ```powershell
+   .\local_cad_agent\install-windows.ps1
+   .\workers\freecad\scripts\build-preprocessor.ps1
+   .\workers\freecad\scripts\register-preprocessor.ps1 -WorkerId freecad
+   ```
+
+   Replace `freecad` with the exact ID from step 2 if different. The build command
+   creates the complete local executable distribution; the registration command
+   installs it into the agent's preprocessor directory and updates its settings.
+4. Restart the Local CAD Agent after registration so it reloads its settings.
+   Re-running `install-windows.ps1` preserves registered preprocessors. If native
+   runtime discovery fails, configure `MODELRYX_FREECAD_CMD` as described in the
+   FreeCAD guide and restart the agent. For LAN use, allow the exact frontend
+   origin in the agent settings as well as API CORS.
+5. In the browser, open the check-in workflow, click **Open CAD File**, select a
+   `.FCStd` file, and confirm dependency analysis completes and populates the file
+   list. Review any missing-reference errors before uploading.
+
+Installing the agent alone, including with the configuration helper's
+`-InstallLocalCadAgent` option, does not register the FreeCAD preprocessor executable.
+The server worker registration and client preprocessor registration are separate;
+their worker IDs must match. See the [Local CAD Agent guide](local_cad_agent/README.md)
+for configuration and Linux installation details.
+
 ## Run without embedded FreeCAD
 
 ```powershell

@@ -37,6 +37,12 @@ The existing embedded and URL-based PFG publication paths are retained.
 
 ### Local preprocessor registration
 
+This client installation is required for the browser's **Open CAD File** action
+with `.FCStd` files. Install it on each machine running the browser and holding the
+CAD files. The server's Docker `freecad-preprocessor` service is a separate
+component and does not install the local executable or Local CAD Agent.
+See the [complete client setup](../../DEVELOPMENT.md#enable-open-cad-file-for-freecad).
+
 The generic Local CAD Agent launches a registered executable with two arguments: source path and
 an empty output directory. It reads a JSON dependency report from stdout. Build and register the
 FreeCAD implementation on each Windows client after installing FreeCAD, .NET 8 and the agent:
@@ -48,6 +54,8 @@ FreeCAD implementation on each Windows client after installing FreeCAD, .NET 8 a
 
 Use the exact worker ID assigned in administration. `-InstallDirectory` selects another agent
 installation; `-PreprocessorDirectory` and `-Version` support a published distribution.
+The server registration must be enabled so the local file dialog discovers FreeCAD
+support. Restart the Local CAD Agent after registering the executable.
 `artifacts/preprocessor` contains the executable host, Python entry point, preprocessor,
 converter and shared modules. Copy the complete distribution. Set `MODELRYX_FREECAD_CMD` to
 FreeCAD's Python executable when automatic discovery is insufficient. The runtime also needs

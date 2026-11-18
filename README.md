@@ -181,6 +181,16 @@ Use your configured bootstrap credentials:
 - **Username:** `MODELRYX_BOOTSTRAP_ADMIN_USERNAME` (template: `admin`)
 - **Password:** (from MODELRYX_BOOTSTRAP_ADMIN_PASSWORD in .env)
 
+### 5. Enable Open CAD File for FreeCAD
+
+To use **Open CAD File** with `.FCStd` files, install FreeCAD, the Local CAD Agent,
+and a registered FreeCAD preprocessor on each user's local machine. Docker worker
+startup alone does not set up local file selection and dependency packaging.
+The client preprocessor must match an enabled server worker registration.
+
+Follow [Enable Open CAD File for FreeCAD](DEVELOPMENT.md#enable-open-cad-file-for-freecad)
+for prerequisites, installation commands, registration, and a verification step.
+
 ## AI Support
 
 Modelryx supports an optional OpenAI-compatible AI gateway for:

@@ -2,7 +2,12 @@
 
 The agent opens a native file dialog, runs dependency analysis on the user's computer,
 and returns an isolated CAD package to the browser. It listens on `127.0.0.1:47832`.
-FreeCAD preprocessing is included. Other CAD systems use independently installed preprocessors
+FreeCAD preprocessing scripts are supplied, but **Open CAD File** for `.FCStd`
+also requires a local FreeCAD runtime and a built/published FreeCAD preprocessor
+executable registered with this agent. Installing the agent alone does not
+register that executable. Follow the [client setup steps](../DEVELOPMENT.md#enable-open-cad-file-for-freecad)
+on each user's machine, including matching the server worker ID and restarting
+the agent after registration. Other CAD systems use independently installed preprocessors
 registered against an external worker ID; this repository contains no vendor SDK integration.
 
 ## Installation
