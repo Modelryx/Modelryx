@@ -1,0 +1,2 @@
+# Preserve upstream bytes and whitespace: sources.json verifies exact SHA-256.
+/licenses/third-party/*.txt -text -whitespace

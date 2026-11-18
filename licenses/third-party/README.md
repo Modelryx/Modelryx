@@ -13,3 +13,8 @@ The .NET third-party notice file is for the referenced runtime release, not ever
 These texts must remain verbatim. Add the exact package notices, copyright files,
 source information, and exceptions needed by each shipped artifact. Updating a
 dependency can require updating these documents as well.
+
+The root `.gitattributes` disables Git text conversion for these `.txt` files so
+their original bytes and recorded hashes survive LF and Windows CRLF checkouts.
+Keep that rule when updating the collection; include any byte-preserving license
+file changes in the same commit. CI tests both checkout modes.
