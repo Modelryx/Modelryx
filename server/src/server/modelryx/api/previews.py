@@ -33,6 +33,7 @@ from modelryx.models.schemas import ProcessingFileStatus, ProcessingJobResponse
 from modelryx.services.artifact_content import (
     artifact_files_for_snapshot,
     current_artifact_files,
+    has_published_derived_content,
     latest_content_snapshot_id,
 )
 from modelryx.services.glb_thumbnail import THUMBNAIL_NAME, render_glb_thumbnail
@@ -326,6 +327,8 @@ def retry_processing_job(
     previous = db.get(ProcessingJob, job_id)
     if previous is None:
         raise HTTPException(status_code=404, detail="Processing job not found")
+    if previous.type == "CAD_SESSION_EXECUTE":
+        raise HTTPException(status_code=409, detail="Controlled CAD editing is disabled")
     revision = db.get(Revision, previous.revision_id)
     if revision is None:
         raise HTTPException(status_code=404, detail="Revision not found")
@@ -356,7 +359,12 @@ def retry_processing_job(
         type=previous.type,
         idempotency_key=f"retry:{previous.type.lower()}:{previous.id}:{uuid.uuid4()}",
     )
-    revision.state = "PROCESSING"
+    if revision.state not in {"READY", "READY_WITH_WARNINGS"}:
+        revision.state = (
+            "READY_WITH_WARNINGS"
+            if has_published_derived_content(db, revision.id)
+            else "PROCESSING"
+        )
     db.add(job)
     actor = user_for_principal(db, principal)
     db.flush()

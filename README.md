@@ -234,19 +234,21 @@ editable packages for host Python development. The entry point is `modelryx.api.
 PostgreSQL must include pgvector. See [DEVELOPMENT.md](DEVELOPMENT.md) for database initialization,
 environment files, CORS, checks and the supported service names.
 
-### Run without embedded FreeCAD
+## External FreeCAD server
 
-```powershell
-docker compose stop freecad-worker freecad-preprocessor
-docker compose up -d --build api general-worker step-worker
-.\workers\freecad\scripts\start-freecad-server.ps1 -ListenAddress 0.0.0.0
-```
+The main Compose stack contains the API, database, general orchestrator and STEP service.
+FreeCAD runs only as a separate HTTP worker, without platform database or object-volume access.
+Copy `workers/freecad/.env.example` to `workers/freecad/.env` and set the shared worker key.
+Start it with `workers/freecad/scripts/start-freecad-server.ps1`; for Docker Desktop use
+`-ListenAddress 0.0.0.0`, then register `http://host.docker.internal:8090` in
+**Administrator > External CAD Workers**. Both services must use the same internal worker key.
+On another host use a reachable private/TLS URL. See [FreeCAD](workers/freecad/README.md).
 
-Register the standalone worker in **Administrator > External CAD Workers**. On Docker Desktop,
-its host URL is `http://host.docker.internal:8090`. Enabled matching FreeCAD registration takes
-precedence; without it, the dedicated standalone URL or embedded processing path remains.
-External failure does not automatically retry on embedded FreeCAD. CAD sessions still need the
-embedded runtime. See the [reference worker](workers/freecad/README.md).
+Extraction, metadata, geometry and previews run on the external server. Without a registration
+or configured external URL, FreeCAD processing is unavailable. Controlled CAD editing sessions
+are disabled in both UI and API for this release. Open CAD File requires the separately installed
+local preprocessor; it only resolves references, rebases copies and packages source documents.
+
 
 ## Deployment
 
@@ -313,7 +315,7 @@ modelryx/
 |-- server/              # Python/FastAPI backend API
 |-- front-end/           # React/TypeScript/Vite UI
 |-- workers/
-|   |-- freecad/         # Embedded and standalone FreeCAD reference worker
+|   |-- freecad/         # External FreeCAD worker and separate local preprocessor
 |   |-- step/            # STEP processor (built-in)
 |-- worker-sdk/          # Native HTTP protocol and validation helpers
 |-- local_cad_agent/     # Native file dialog and client preprocessor dispatch
@@ -330,7 +332,7 @@ modelryx/
 | Frontend | React 18+, TypeScript, Vite |
 | Database | PostgreSQL 17 with pgvector |
 | Object Storage | Persistent local filesystem |
-| Processing | General orchestrator, embedded FreeCAD or independent CAD/geometry services |
+| Processing | General orchestrator and independent CAD/geometry services |
 | CAD | FreeCAD SDK, STEP format processing |
 
 ## Community & Support

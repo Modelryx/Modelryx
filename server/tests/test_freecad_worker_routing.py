@@ -1,4 +1,4 @@
-"""FreeCAD external registration is opt-in; embedded processing remains the fallback."""
+"""FreeCAD selects an external registration or configured external service URL."""
 
 import pytest
 from fastapi import HTTPException
@@ -29,7 +29,7 @@ CAPABILITIES = external_workers.validate_capabilities(
 
 
 @pytest.mark.parametrize("enabled", [False, True])
-def test_freecad_registration_selects_external_or_embedded(monkeypatch, enabled):
+def test_freecad_registration_selects_generic_or_external_url_route(monkeypatch, enabled):
     worker = {
         "id": "freecad",
         "url": "https://freecad.example",
@@ -37,6 +37,10 @@ def test_freecad_registration_selects_external_or_embedded(monkeypatch, enabled)
         "capabilities": CAPABILITIES,
     }
     monkeypatch.setattr(external_workers, "registered_workers", lambda _db: [worker])
+    monkeypatch.setattr(
+        external_workers, "discover_workers",
+        lambda db, _settings: external_workers.registered_workers(db),
+    )
     expected = external_workers.JOB_TYPE if enabled else "FCSTD_TO_MODELRYX"
     for route in (_native_processing_type, preview_processing_type):
         assert route("Root.FCStd", "FreeCAD", object()) == expected
@@ -45,14 +49,18 @@ def test_freecad_registration_selects_external_or_embedded(monkeypatch, enabled)
     assert _external_assembly_worker(object(), "Root.FCStd", "FreeCAD") == (
         worker if enabled else None
     )
-    formats = external_formats(object(), None)
+    from types import SimpleNamespace
+
+    formats = external_formats(
+        object(), None, SimpleNamespace(internal_worker_key=None)
+    )
     assert bool(formats) == enabled
     if enabled:
         assert formats[0]["sourceExtensions"] == [".fcstd"]
         assert "url" not in formats[0]
 
 
-def test_freecad_conflicts_do_not_silently_use_embedded(monkeypatch):
+def test_freecad_conflicts_do_not_silently_select_another_route(monkeypatch):
     workers = [
         {
             "id": name,
@@ -63,6 +71,10 @@ def test_freecad_conflicts_do_not_silently_use_embedded(monkeypatch):
         for name in ("one", "two")
     ]
     monkeypatch.setattr(external_workers, "registered_workers", lambda _db: workers)
+    monkeypatch.setattr(
+        external_workers, "discover_workers",
+        lambda db, _settings: external_workers.registered_workers(db),
+    )
     for route in (_native_processing_type, preview_processing_type, _external_assembly_worker):
         with pytest.raises(HTTPException) as error:
             route_args = (
@@ -134,7 +146,7 @@ def test_upload_preflight_probes_selected_remote_without_embedded_heartbeat(
     assert "wait for an online worker" not in result.message
 
 
-def test_upload_preflight_uses_embedded_when_remote_is_admin_disabled(monkeypatch):
+def test_upload_preflight_requires_external_service_even_with_heartbeat(monkeypatch):
     import asyncio
     from types import SimpleNamespace
 
@@ -161,5 +173,5 @@ def test_upload_preflight_uses_embedded_when_remote_is_admin_disabled(monkeypatc
     )
     db = SimpleNamespace(get=lambda *_args: SimpleNamespace(value=""))
     result = asyncio.run(worker_health.worker_preflight("FREECAD", db, None, settings))
-    assert result.available and result.compatible
-    assert result.status == "BUSY"
+    assert not result.available and not result.compatible
+    assert result.status is None

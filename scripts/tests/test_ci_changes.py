@@ -30,7 +30,7 @@ def test_only_non_build_documentation_can_skip(paths):
     "licenses/third-party/npm-react-LICENSE.txt", "licenses/third-party/sources.json",
     "compose.yaml", ".env.example", ".github/workflows/ci.yml",
     "scripts/ci_changes.py", "front-end/package-lock.json", "server/src/main.py",
-    "docs/requirements.txt", "docs/example.py", "workers/freecad/fixture.svg",
+    "docs/requirements.txt", "docs/example.py",
 ])
 def test_build_inputs_and_unknown_files_run_ci(path):
     assert ci.requires_ci(["README.md", path])
@@ -130,3 +130,46 @@ def test_docs_only_event_emits_false(tmp_path, monkeypatch):
     monkeypatch.setattr(ci, "changed_paths", lambda *args: ["docs/guide.md"])
     ci.main()
     assert output.read_text(encoding="utf-8") == "run_ci=false\n"
+
+
+@pytest.mark.parametrize("path,expected", [
+    ("workers/freecad/converter/fcstd_to_modelryx_glb.py", True),
+    ("workers/freecad/vendor/worker-sdk/src/modelryx_worker_sdk/__init__.py", True),
+    ("workers/freecad/contracts/part_metadata_v1.json", True),
+    ("workers/freecad/Dockerfile", True),
+    ("workers/freecad/README.md", False),
+    ("workers/freecad/contracts/README.md", False),
+    ("worker-sdk/src/modelryx_worker_sdk/__init__.py", True),
+    ("worker-sdk/pyproject.toml", True),
+    ("worker-sdk/tests/test_manifest.py", True),
+    ("worker-sdk/README.md", False),
+    ("server/src/server/modelryx/metadata/service.py", False),
+    ("server/pyproject.toml", False),
+    ("front-end/src/main.tsx", False),
+    (".github/workflows/freecad.yml", False),
+    ("scripts/ci_changes.py", False),
+])
+def test_worker_and_sdk_inputs_trigger_freecad_workflow(path, expected):
+    import fnmatch
+
+    import yaml
+
+    workflow = Path(__file__).resolve().parents[2] / ".github/workflows/freecad.yml"
+    definition = yaml.load(workflow.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+    for event in ("push", "pull_request"):
+        patterns = definition["on"][event]["paths"]
+        included = False
+        for pattern in patterns:
+            excluded = pattern.startswith("!")
+            if fnmatch.fnmatchcase(path, pattern.lstrip("!")):
+                included = not excluded
+        assert included == expected
+
+
+@pytest.mark.parametrize("path", [
+    "workers/freecad/Dockerfile", "workers/freecad/converter/native.py",
+    "workers/freecad/vendor/worker-sdk/pyproject.toml", "workers/freecad/fixture.svg",
+])
+def test_freecad_only_changes_are_owned_by_the_worker_workflow(path):
+    assert not ci.requires_ci([path])
+    assert ci.requires_ci([path, "server/src/server/modelryx/api/main.py"])

@@ -11,7 +11,6 @@ required checks are repository settings; a workflow failure alone does not confi
 - Frontend checks cover the lockfile, TypeScript, API client and neutral upload contracts, production build,
   ESLint, and Prettier.
 - Worker SDK tests cover the protocol, configuration, license provenance, and change classification.
-- FreeCAD checks cover unit tests, a native image build, and native release gates.
 - STEP checks cover API, component-bundle, and GLB contracts, a cached container build,
   native converter tests, and an authenticated running-service smoke test.
 - Repository safety checks scan common credential patterns and validate Compose.
@@ -26,7 +25,7 @@ to a registry.
 Platform CI still starts for each matching event so required checks are reported.
 A lightweight `Classify changes` job compares the entire push range or the PR
 merge-base-to-head range. For documentation-only changes, it skips the backend,
-frontend, SDK, FreeCAD, STEP, Python-quality and Trivy jobs. Their existing check
+frontend, SDK, STEP, Python-quality and Trivy jobs. Their existing check
 names are unchanged; GitHub accepts conditionally skipped jobs for required-check
 purposes. The repository-safety job always runs, including the credential-pattern
 check and Compose validation, because documentation can contain leaked secrets.
@@ -35,14 +34,29 @@ Safe-to-skip changes are Markdown files except `server/README.md` and
 `worker-sdk/README.md`, plus static image/PDF/reStructuredText files under `docs/`.
 Those two READMEs are image/package inputs and still require CI. Code, tests,
 workflows, Compose/environment settings, `.gitattributes`, license texts/manifests,
-and unknown file types run full CI. Mixed documentation/code changes also run it.
+and unknown file types run full CI. Mixed documentation/platform-code changes also run it. FreeCAD-only changes skip platform build
+and test jobs because the independent worker workflow owns them; repository safety still runs.
 Missing comparison history, new branches, or classifier errors default to full CI.
 Rename comparisons include both old and new paths.
 
 Do not replace this with workflow-level `paths-ignore` on required workflows:
 [GitHub leaves checks pending when the whole workflow is filtered out](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/skip-workflow-runs).
-No branch ruleset changes are needed for the existing eight Platform CI checks.
+FreeCAD CI is path-filtered and must not be a globally required check for unrelated pull requests.
+Keep Platform CI checks required globally; require native worker checks through worker-specific
+review policy where supported.
 The manually dispatched FreeCAD compatibility workflow is unaffected.
+
+## FreeCAD CI
+
+[freecad.yml](workflows/freecad.yml) runs only for non-Markdown changes under
+`workers/freecad/` or `worker-sdk/` on pull requests and pushes to `main`/`develop`, plus manual dispatch.
+Changes in `server/`, `front-end/`, root scripts, or workflow files alone do
+not trigger it. After changing the workflow itself, use manual dispatch to validate it.
+
+The Docker context is the worker directory. Runtime and native tests use worker-owned versioned
+SDK/schema snapshots and do not install or import the platform. Worker dependency/configuration
+security scanning also runs in this workflow. Snapshot updates are explicit
+worker changes and therefore trigger native CI. See the [worker guide](../workers/freecad/README.md).
 
 ## FreeCAD compatibility
 

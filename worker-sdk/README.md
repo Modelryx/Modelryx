@@ -54,24 +54,18 @@ extension. More than one match is an error; neither registration order nor readi
 winner. Format discovery sent to the browser and Local CAD Agent contains worker identity
 and capabilities, not endpoint URLs or credentials. Administrators manage URLs separately.
 
-### FreeCAD embedded and external coexistence
+### External FreeCAD routing
 
-| Configuration for new `.FCStd` processing | Selected path |
+| Configuration | Processing route |
 | --- | --- |
-| One enabled matching external registration | Generic external worker job |
-| No matching external registration, dedicated FreeCAD URL configured | Existing remote PFG profile |
-| No matching registration or dedicated URL | Existing embedded FreeCAD processing role |
+| One enabled matching registration | Generic external CAD job |
+| No matching registration, external FreeCAD URL configured | Generic job using live worker capabilities |
+| Neither | FreeCAD processing unavailable |
 
-Embedded and external FreeCAD can run simultaneously. Upload/commit, regeneration and copied
-revision processing honor the external registration. Existing jobs retain their assigned job type;
-starting a service does not migrate or duplicate their work. Disabling a registration affects
-subsequent routing, not conversion already executing remotely. A queued generic job still needs
-its matching enabled registration when it is dispatched.
-
-An unavailable or failed selected external worker is reported through normal job failure/retry
-handling; Modelryx does not automatically retry it using embedded FreeCAD. Disable or remove the
-registration before submitting new work to restore the existing path. FreeCAD CAD sessions keep
-using the embedded runtime. STEP/STP processing retains its built-in path.
+Multiple matching registrations are errors. External failures follow normal failure/retry
+handling and never run native FreeCAD inside the platform. Registration changes affect subsequent
+routing; a queued generic job needs its matching enabled registration or reachable configured server at dispatch time.
+Controlled CAD editing sessions are disabled in this release. STEP/STP retains its separate service.
 
 The in-repository [FreeCAD worker](../workers/freecad/README.md#reference-external-worker) is the
 reference implementation. External workers follow the same registration, multipart submission,
@@ -266,11 +260,12 @@ FreeCAD advertises `freecad`, part and assembly document kinds, and the `.fcstd`
 It returns its existing PFG preview archive as `modelryx-preview` (`application/zip`), normalized
 `part-metadata` (`application/json`), and raw `native-snapshot` (`application/json`). It also
 exposes `model-preview` (`application/json`) and `glb` (`model/gltf-binary`) for generic external
-registration. An enabled matching FreeCAD registration takes precedence; without one, embedded
-and the existing dedicated standalone-URL processing remain available. The dedicated URL
+registration. An enabled matching FreeCAD registration takes precedence; otherwise a configured
+external URL is required. The dedicated URL
 integration retains its PFG publication path; external registration uses generic CAD publication
 with separately validated GLB, navigation, metadata and native extraction outputs. The original FCStd package remains authoritative.
-Dependency discovery and CAD sessions have separate lifecycles and are outside this conversion profile.
+Dependency discovery belongs to the separate local preprocessor. Controlled CAD editing sessions
+are disabled in this release.
 
 ## Optional HTTP dependency analysis
 

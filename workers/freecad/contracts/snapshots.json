@@ -1,0 +1,27 @@
+{
+  "contractVersion": "1.0",
+  "sdkVersion": "0.1.0",
+  "partMetadataVersion": "1.0",
+  "files": [
+    {
+      "path": "vendor/worker-sdk/pyproject.toml",
+      "source": "worker-sdk/pyproject.toml",
+      "sha256": "ddaea5aabfadaba8eb9e87aa0f4f37ba177b8454103fccb61b442f39a9dd7db2"
+    },
+    {
+      "path": "vendor/worker-sdk/LICENSE",
+      "source": "worker-sdk/LICENSE",
+      "sha256": "aac73b3148f6d1d7111dbca32099f68d26c644c6813ae1e4f05f6579aa2663fe"
+    },
+    {
+      "path": "vendor/worker-sdk/src/modelryx_worker_sdk/__init__.py",
+      "source": "worker-sdk/src/modelryx_worker_sdk/__init__.py",
+      "sha256": "4c973667bf81e24382a0c1f78420ff51850cef6a44712d1c24262cfcbc094ea9"
+    },
+    {
+      "path": "contracts/part_metadata_v1.json",
+      "source": "server/src/server/modelryx/metadata/schemas/part_metadata_v1.json",
+      "sha256": "57077d7823a6f76f473233217b3b89324fb152c880d4b4ab4ecb9329d3596b73"
+    }
+  ]
+}

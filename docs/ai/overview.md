@@ -39,7 +39,7 @@ Items · Revisions · Artifacts · metadata · BOM · validation · approvals
 | Validation | Versioned rules and immutable findings | Finding explanation only |
 | Assembly intelligence | Authoritative BOM traversal and deterministic analysis | Bounded BOM question answering |
 | Controlled actions | Typed proposal, confirmation, state token, authorization, idempotency | Proposal assistance; never direct execution |
-| Controlled CAD operations | Inspected native IDs, immutable plans, isolated worker execution, review and commit | Explanation or target ranking within inspected choices |
+| Controlled CAD operations | Disabled in the first release; reserved for future external workers | Unavailable |
 
 ## Provider configuration
 
@@ -55,7 +55,7 @@ MODELRYX_AI_EMBEDDING_DIMENSIONS=1536
 
 The gateway must provide compatible `/chat/completions` and `/embeddings` operations. The current
 database vector schema requires 1536 dimensions. Without a gateway, indexing, lexical retrieval,
-structured search, comparison, validation, BOM analysis, action controls, and CAD plans continue to
+structured search, comparison, validation, BOM analysis, and action controls continue to
 work; vector retrieval and generated explanations are unavailable or use deterministic fallbacks.
 
 `GET /api/v1/ai/status` reports whether chat and embedding configuration is available and how many

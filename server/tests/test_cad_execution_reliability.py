@@ -164,7 +164,7 @@ def test_cad_execution_cancellation_closes_workflow_and_preserves_source(monkeyp
         assert phases == ["mutation"]
     if cancel_at:
         result = client.get(f"/api/v1/cad-sessions/{session_id}/result", headers=AUTH)
-        assert result.status_code == 409
+        assert result.status_code == 404
     else:
         late = client.post(f"/api/v1/processing-jobs/{job_id}/cancel", headers=AUTH)
         assert late.status_code == 409

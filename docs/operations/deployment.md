@@ -12,8 +12,7 @@ Copy `.env.example` to `.env` and replace placeholders with independent secrets.
 non-placeholder JWT/worker keys of at least 32 characters and an administrator password of at
 least 16 characters. Set exact allowed frontend origins using `MODELRYX_CORS_ORIGINS` JSON.
 
-`postgres-data` contains metadata; `object-data` contains native and derived files. API/general/
-embedded workers share `/var/lib/modelryx/objects`. STEP/external job volumes retain conversion
+`postgres-data` contains metadata; `object-data` contains native and derived files. API and general orchestrator share `/var/lib/modelryx/objects`. STEP/external job volumes retain conversion
 jobs according to worker policy. Independent workers need neither database credentials nor
 object-volume access. Local storage is the application backend; optional S3 utilities do not
 switch uploads/downloads to S3.
@@ -26,30 +25,21 @@ docker compose config --quiet
 
 ## Select services
 
-Default startup includes API, database/storage initialization, general and STEP workers,
-embedded FreeCAD and the dependency preprocessor:
+Default startup includes API, database/storage initialization, general orchestrator and STEP:
 
 ```powershell
 docker compose up -d --build
 ```
 
-For external FreeCAD without the embedded services:
-
-```powershell
-docker compose stop freecad-worker freecad-preprocessor
-docker compose up -d --build api general-worker step-worker
-```
-
-Use [the FreeCAD launcher](../../workers/freecad/README.md#standalone-http-service), then register
-its URL in **External CAD Workers**. Docker Desktop can reach a host worker at
+Deploy FreeCAD separately using [the FreeCAD launcher](../../workers/freecad/README.md#standalone-http-service),
+then register its URL in **External CAD Workers**. Docker Desktop can reach a host worker at
 `http://host.docker.internal:8090` when started with `-ListenAddress 0.0.0.0`. Other hosts require
-a private reachable address/TLS endpoint; container localhost is not the worker's host.
-Starting a service does not register it.
+a private reachable address/TLS endpoint. Starting a service does not register it.
 
-For `.FCStd`, one enabled matching registration takes precedence. Without one, the dedicated
-FreeCAD worker URL applies if configured, otherwise the embedded role handles conversion.
-External failure does not automatically retry through embedded FreeCAD. CAD sessions retain
-the embedded runtime. STEP retains its built-in service path. 
+FreeCAD requires an enabled matching registration or configured external URL. Controlled CAD
+editing sessions are disabled. Open CAD File requires a separately installed preprocessor on
+each client; all extraction runs on the worker server.
+
 ## Frontend and networking
 
 In `front-end/`, run `npm ci` and `npm run build`; serve `dist/` with SPA fallback to `index.html`.
@@ -74,7 +64,7 @@ separately from server DLLs/images.
 
 Check `/health/live`, `/health/ready`, authenticated sign-in, source downloads and representative
 previews. Inspect `docker compose ps` and logs. Operations shows configured worker statuses;
-FreeCAD upload preflight follows the selected remote/embedded route. Native qualification is
+FreeCAD upload preflight checks the configured external route. Native qualification is
 separate from liveness and cannot be inferred from an ONLINE card alone.
 
 ## Operational limitations and monitoring

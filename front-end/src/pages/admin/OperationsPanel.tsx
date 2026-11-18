@@ -129,17 +129,11 @@ export function OperationsPanel({
           )}
           <div className="worker-health-grid">
             {(status?.workers ?? [])
-              .filter((worker) =>
-                ['FREECAD', 'STEP', 'GENERAL'].includes(worker.worker_type.toUpperCase())
-              )
+              .filter((worker) => ['STEP', 'GENERAL'].includes(worker.worker_type.toUpperCase()))
               .map((worker) => (
                 <article className="worker-health-card" key={worker.worker_type}>
                   <div className="maintenance-title-row">
-                    <strong>
-                      {worker.worker_type.toUpperCase() === 'FREECAD'
-                        ? 'EMBEDDED FREECAD'
-                        : worker.worker_type}
-                    </strong>
+                    <strong>{worker.worker_type}</strong>
                     <span
                       className={`maintenance-health ${worker.availability === 'ONLINE' ? 'healthy' : 'degraded'}`}
                     >
@@ -195,22 +189,21 @@ export function OperationsPanel({
                     </div>
                   </dl>
                   {worker.detail && <p className="maintenance-warning">{worker.detail}</p>}
-                  {worker.worker_type.toUpperCase() === 'FREECAD' &&
-                    cadWorkerSettings.freecad_url && (
-                      <p>
-                        Standalone FreeCAD is configured for conversion. This card reports the
-                        separate embedded worker.
-                      </p>
-                    )}
                 </article>
               ))}
             {(['freecad', 'freecad_analyzer'] as const).map((system) => {
               const connection = cadWorkerStatus?.[system];
+              if (!connection?.url) return null;
               return (
                 <article className="worker-health-card" key={system}>
                   <div className="maintenance-title-row">
                     <strong>
-                      {system === 'freecad' ? 'STANDALONE FREECAD' : 'FREECAD PREPROCESSOR'}
+                      {String(
+                        connection?.capabilities?.workerName ??
+                          connection?.capabilities?.cadSystem ??
+                          'CAD'
+                      )}
+                      {system === 'freecad' ? ' worker' : ' preprocessor'}
                     </strong>
                     <span
                       className={`maintenance-health ${connection?.availability === 'ONLINE' ? 'healthy' : 'degraded'}`}
@@ -222,6 +215,18 @@ export function OperationsPanel({
                     <div>
                       <dt>Endpoint</dt>
                       <dd>{connection?.url ?? 'Not configured'}</dd>
+                    </div>
+                    <div>
+                      <dt>Worker version</dt>
+                      <dd>{String(connection?.capabilities?.workerVersion ?? '—')}</dd>
+                    </div>
+                    <div>
+                      <dt>File formats</dt>
+                      <dd>
+                        {Array.isArray(connection?.capabilities?.sourceExtensions)
+                          ? connection.capabilities.sourceExtensions.join(', ')
+                          : '—'}
+                      </dd>
                     </div>
                     <div>
                       <dt>Configuration</dt>
@@ -251,9 +256,9 @@ export function OperationsPanel({
             <div>
               <h3 id="cad-servers-title">CAD server settings</h3>
               <p>
-                Configure FreeCAD worker and preprocessor URLs. Leave the worker URL empty to use
-                the embedded worker, or leave the preprocessor URL empty to disable server-side
-                analysis.
+                Configure external FreeCAD worker and preprocessor URLs. An enabled matching worker
+                registration takes precedence. Without a registration or worker URL, FreeCAD
+                processing is unavailable. An empty preprocessor URL disables server-side analysis.
               </p>
             </div>
           </div>

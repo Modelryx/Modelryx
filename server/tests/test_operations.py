@@ -48,7 +48,7 @@ def test_operational_status_reports_capacity_and_queues() -> None:
 
 def test_worker_heartbeat_is_authenticated_and_reported() -> None:
     payload = {
-        "worker_type": "FREECAD",
+        "worker_type": "GENERAL",
         "machine_name": "freecad-test-host",
         "worker_version": "1.2.3",
         "application_version": "FreeCAD 1.1.3",
@@ -69,7 +69,7 @@ def test_worker_heartbeat_is_authenticated_and_reported() -> None:
     assert accepted.status_code == 204, accepted.text
 
     status = client.get("/api/v1/operations/status", headers=AUTH).json()
-    freecad = next(worker for worker in status["workers"] if worker["worker_type"] == "FREECAD")
+    freecad = next(worker for worker in status["workers"] if worker["worker_type"] == "GENERAL")
     assert freecad["availability"] == "ONLINE"
     assert freecad["machine_name"] == "freecad-test-host"
     assert freecad["worker_version"] == "1.2.3"
@@ -84,8 +84,8 @@ def test_worker_heartbeat_is_authenticated_and_reported() -> None:
         "/api/v1/workers/preflight?worker_type=FREECAD", headers=AUTH
     )
     assert preflight.status_code == 200
-    assert preflight.json()["available"] is True
-    assert preflight.json()["compatible"] is True
+    assert preflight.json()["available"] is False
+    assert preflight.json()["compatible"] is False
 
 
 def test_external_worker_heartbeats_report_incompatible_runtime() -> None:
@@ -189,3 +189,15 @@ def test_reconciliation_preserves_staging_files_and_deletes_only_orphans(
     assert staged_path.is_file()
     assert not orphan_path.exists()
     assert result.removed == 1
+
+
+def test_embedded_freecad_heartbeat_is_not_an_available_cad_server():
+    response = client.put(
+        "/api/v1/workers/heartbeat",
+        headers={"X-Modelryx-Worker-Key": get_settings().internal_worker_key},
+        json={"worker_type": "FREECAD", "machine_name": "retired-embedded",
+              "worker_version": "old", "compatibility_state": "COMPATIBLE"},
+    )
+    assert response.status_code == 204
+    status = client.get("/api/v1/operations/status", headers=AUTH).json()
+    assert all(w["worker_type"] != "FREECAD" for w in status["workers"])

@@ -36,9 +36,7 @@ public sealed record DependencyReport(
     [property: JsonPropertyName("files")] IReadOnlyList<DependencyFile> Files,
     [property: JsonPropertyName("missing_references")] IReadOnlyList<MissingReference> MissingReferences,
     [property: JsonPropertyName("references")] IReadOnlyList<DependencyReference>? References = null,
-    [property: JsonPropertyName("isolated_reopen_validated")] bool IsolatedReopenValidated = false,
-    [property: JsonPropertyName("part_metadata")] JsonObject? PartMetadata = null,
-    [property: JsonPropertyName("metadata_source_sha256")] string? MetadataSourceSha256 = null);
+    [property: JsonPropertyName("isolated_reopen_validated")] bool IsolatedReopenValidated = false);
 
 public sealed record AnalysisOutput(DependencyReport Report, string PackagePath);
 public sealed record SelectionJob(

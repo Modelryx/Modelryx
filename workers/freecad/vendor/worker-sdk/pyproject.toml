@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "modelryx-worker-sdk"
+version = "0.1.0"
+description = "Protocol helpers for standalone Modelryx CAD workers"
+license = {file = "LICENSE"}
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+conformance = [
+  "httpx>=0.28,<1",
+  "jsonschema[format]>=4.23,<5",
+  "PyYAML>=6,<7",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

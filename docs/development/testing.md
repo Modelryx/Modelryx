@@ -110,3 +110,17 @@ repository. The platform tests the shared protocol and artifact publication boun
 `npm --prefix front-end run test:api` checks that authenticated requests stay under the
 configured API URL, JSON payloads retain falsy values, and expired sessions clear credentials
 and notify the sign-in flow. These checks run in Platform CI alongside the upload contract.
+
+
+## FreeCAD CI boundary
+
+FreeCAD is an independent external worker. Its workflow triggers only for non-Markdown changes
+inside `workers/freecad/` or `worker-sdk/`, or manual dispatch. Server, frontend and workflow-only changes
+do not run its native builds. FreeCAD-only changes skip platform build/test jobs; worker security
+scanning runs in FreeCAD CI and repository safety still runs globally. The worker's Docker
+context, tests, SDK snapshot and metadata
+contract are all inside that directory. Upstream contract updates require an explicit snapshot
+refresh reviewed as a worker change. See [worker validation](../../workers/freecad/README.md#independent-build-and-ci).
+
+Because this workflow is path-filtered, do not require its status globally for unrelated PRs;
+GitHub can leave path-skipped required checks pending. Platform CI remains independently required.

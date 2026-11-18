@@ -1,4 +1,4 @@
-"""Skip expensive CI only for changes known to be documentation-only."""
+"""Classify platform changes; independent FreeCAD validation owns its directory."""
 
 import json
 import os
@@ -15,6 +15,8 @@ def requires_ci(paths):
     if not paths:
         return True
     for path in paths:
+        if path.startswith("workers/freecad/"):
+            continue
         suffix = PurePosixPath(path).suffix.lower()
         if path in BUILD_READMES:
             return True

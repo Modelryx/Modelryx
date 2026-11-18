@@ -27,6 +27,10 @@ def test_native_routing_requires_registration_and_rejects_ambiguity(monkeypatch,
     )
     workers = []
     monkeypatch.setattr(external_workers, "registered_workers", lambda _db: workers)
+    monkeypatch.setattr(
+        external_workers, "discover_workers",
+        lambda db, _settings: external_workers.registered_workers(db),
+    )
     assert route("root.part", "Example CAD", object()) is None
     worker = {"id": "example", "enabled": True, "capabilities": capabilities}
     workers.append(worker)

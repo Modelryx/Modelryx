@@ -272,8 +272,7 @@ def test_non_administrator_processing_control_is_limited_to_item_creator() -> No
     assert denied.status_code == 403
 
 
-@pytest.mark.parametrize("remote", [False, True])
-def test_freecad_job_stores_outputs_and_preview_builds_pfg(monkeypatch, remote) -> None:
+def test_freecad_job_stores_outputs_and_preview_builds_pfg(monkeypatch) -> None:
     content = f"test FCStd content {uuid.uuid4()}".encode()
     completed = commit_item(
         client,
@@ -359,14 +358,13 @@ def test_freecad_job_stores_outputs_and_preview_builds_pfg(monkeypatch, remote) 
         )
 
     monkeypatch.setattr("modelryx.services.processing.run_converter", fake_converter)
-    if remote:
-        def fake_remote(source, workspace, output, settings, job, document_kind, cancel, report):
-            assert source.is_relative_to(workspace)
-            assert document_kind == "part"
-            fake_converter(source, output, settings, report, cancel)
+    def fake_remote(source, workspace, output, settings, job, document_kind, cancel, report):
+        assert source.is_relative_to(workspace)
+        assert document_kind == "part"
+        fake_converter(source, output, settings, report, cancel)
 
-        monkeypatch.setattr("modelryx.services.freecad_remote.convert_remote", fake_remote)
-        monkeypatch.setattr(get_settings(), "freecad_worker_url", "http://worker")
+    monkeypatch.setattr("modelryx.services.freecad_remote.convert_remote", fake_remote)
+    monkeypatch.setattr(get_settings(), "freecad_worker_url", "http://worker")
     with SessionLocal() as db:
         job = db.scalar(
             select(ProcessingJob).where(ProcessingJob.revision_id == uuid.UUID(revision_id))
@@ -484,3 +482,79 @@ def test_freecad_job_stores_outputs_and_preview_builds_pfg(monkeypatch, remote) 
             assert json.loads(package.read("manifest.json"))["format"] == "Modelryx Graphics"
     finally:
         preview_path.unlink(missing_ok=True)
+
+
+@pytest.mark.parametrize("job_type", ["EXTERNAL_CAD_TO_MODELRYX", "STEP_TO_MODELRYX"])
+def test_failed_regeneration_and_retry_preserve_library_and_published_outputs(tmp_path, job_type):
+    import httpx
+    from modelryx.services.artifact_content import (
+        current_artifact_files,
+        latest_content_snapshot_id,
+    )
+    from modelryx.services.processing import publish_worker_outputs, store_output
+    from modelryx.services.storage import LocalStorageProvider
+
+    number = f"PRESERVE-PUBLISHED-{uuid.uuid4().hex}"
+    completed = commit_item(client, item_number=number, name="Keep published part",
+                            files=[("part.step", b"native source")])
+    revision_id = uuid.UUID(completed["revision_id"])
+    with SessionLocal() as db:
+        revision = db.get(Revision, revision_id)
+        original_job = db.scalar(
+            select(ProcessingJob).where(ProcessingJob.revision_id == revision_id)
+        )
+        original_job.state = "SUCCEEDED"
+        snapshot = db.get(RevisionContentSnapshot, latest_content_snapshot_id(db, revision_id))
+        preview = tmp_path / "model.glb"
+        preview.write_bytes(b"last successful preview")
+        output = store_output(
+            db, LocalStorageProvider(get_settings().storage_root), revision, snapshot,
+            kind="GLB", filename="model.glb", mime_type="model/gltf-binary", source=preview,
+        )
+        publish_worker_outputs(db, revision, snapshot, [output])
+        revision.state = "READY"
+        revision.metadata_status = "READY"
+        revision.derived_metadata_json = {"last_successful_metadata": True}
+        db.commit()
+        before = {f.id: f.sha256 for f in current_artifact_files(db, revision_id)}
+        snapshot_id = latest_content_snapshot_id(db, revision_id)
+
+    regeneration = client.post(f"/api/v1/revisions/{revision_id}/preview/reprocess", headers=AUTH)
+    assert regeneration.status_code == 202, regeneration.text
+    job_id = uuid.UUID(regeneration.json()["id"])
+    with SessionLocal() as db:
+        job = db.get(ProcessingJob, job_id)
+        job.type, job.state, job.stage, job.attempt_count = job_type, "RUNNING", "VALIDATING", 3
+        db.commit()
+        fail_job(db, job, httpx.ConnectError("connection refused"))
+        revision = db.get(Revision, revision_id)
+        assert job.state == "FAILED"
+        assert revision.state == "READY_WITH_WARNINGS"
+        assert revision.metadata_status == "READY"
+        assert revision.derived_metadata_json == {"last_successful_metadata": True}
+        assert latest_content_snapshot_id(db, revision_id) == snapshot_id
+        assert {f.id: f.sha256 for f in current_artifact_files(db, revision_id)} == before
+
+    library = client.get("/api/v1/items", headers=AUTH, params={"item_number_regex": number})
+    assert library.status_code == 200, library.text
+    assert number in library.text
+    retried = client.post(f"/api/v1/processing-jobs/{job_id}/retry", headers=AUTH)
+    assert retried.status_code == 202, retried.text
+    with SessionLocal() as db:
+        assert db.get(Revision, revision_id).state == "READY_WITH_WARNINGS"
+
+
+def test_failed_first_processing_does_not_mark_unprocessed_content_ready():
+    import httpx
+
+    completed = commit_item(client, item_number=f"FIRST-FAIL-{uuid.uuid4().hex}",
+                            name="No published preview", files=[("part.step", b"source")])
+    revision_id = uuid.UUID(completed["revision_id"])
+    with SessionLocal() as db:
+        revision = db.get(Revision, revision_id)
+        revision.state = "PROCESSING"
+        job = db.scalar(select(ProcessingJob).where(ProcessingJob.revision_id == revision_id))
+        job.state, job.attempt_count = "RUNNING", 3
+        db.commit()
+        fail_job(db, job, httpx.ConnectError("connection refused"))
+        assert revision.state == "FAILED"

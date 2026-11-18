@@ -1,0 +1,6 @@
+pytest>=8.3,<9
+httpx>=0.28,<1
+jsonschema[format]>=4.23,<5
+numpy>=1.20
+trimesh>=4
+Pillow>=10

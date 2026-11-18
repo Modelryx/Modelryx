@@ -40,7 +40,7 @@ Inspect the OpenAPI tags and modules under `server/src/server/modelryx/api` for 
 | Search/AI | `search.py`, `engineering_search.py`, `ai.py`, `assistant.py`, `knowledge.py` |
 | Personal state/views | `personal.py`, `ui_views.py` |
 | Administration | `admin.py`, `operations.py`, `worker_health.py` |
-| Native CAD sessions | `cad.py`, `actions.py` |
+| CAD dependency analysis | `cad.py` (editing session routes are disabled) |
 
 The frontend Workspace label does not imply a generic `/workspaces` CRUD API. Revision content
 uses immutable snapshots and controlled staging, validation and commit workflows. Item numbers,
@@ -50,7 +50,7 @@ source lineage and managed BOM identity are server-owned.
 
 - `GET /api/v1/workers/external-formats`: enabled format/identity discovery without credentials.
 - `GET /api/v1/workers/preflight?worker_type=FREECAD`: availability of the selected FreeCAD path,
-  including external registration, dedicated standalone URL and embedded heartbeat fallback.
+  including external registration and dedicated external URL; heartbeat alone cannot enable FreeCAD.
 - `GET /api/v1/admin/external-workers`: administrator-managed registrations.
 - `GET /api/v1/admin/external-workers/status`: registered-worker readiness/capability checks.
 - `GET /api/v1/admin/cad-workers/status`: dedicated endpoint status, including FreeCAD worker/analyzer URLs.

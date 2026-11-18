@@ -30,7 +30,7 @@ MAX_PATH_LENGTH = 240
 PREPROCESSOR = Path(
     os.environ.get("MODELRYX_FREECAD_PREPROCESSOR_SCRIPT")
     or os.environ.get("MODELRYX_FREECAD_ANALYZER_SCRIPT")
-    or "/opt/modelryx-preprocessor/modelryx_freecad_preprocessor.py"
+    or Path(__file__).resolve().parents[1] / "preprocessor/modelryx_freecad_preprocessor.py"
 )
 ANALYSIS_TIMEOUT_SECONDS = 300
 

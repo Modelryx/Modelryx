@@ -1,0 +1,3 @@
+# Contract snapshots are hashed byte-for-byte, including across Windows/Linux clones.
+/vendor/worker-sdk/** -text
+/contracts/part_metadata_v1.json -text

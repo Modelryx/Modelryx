@@ -17,7 +17,7 @@ import zipfile
 from pathlib import Path
 
 import trimesh
-from modelryx.metadata import validate_part_metadata
+from metadata_contract import validate_part_metadata
 import fcstd_to_modelryx_glb as converter
 from link_array_geometry import filtered_expanded_array_shape
 from fcstd_to_modelryx_glb import (

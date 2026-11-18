@@ -51,7 +51,7 @@ docker compose up -d --build
 ```
 
 Default services include `db`, `initialize-db`, `storage-init`, `api`, `general-worker`,
-`step-worker`, `freecad-worker` and `freecad-preprocessor`. Initialization creates a fresh schema
+and `step-worker`. FreeCAD is deployed separately. Initialization creates a fresh schema
 or verifies a matching schema; it does not upgrade an incompatible database.
 Start the frontend in another terminal:
 
@@ -89,11 +89,11 @@ the Docker services alone does not install these client components.
 
 For a Windows source installation:
 
-1. Install FreeCAD and the .NET 8 SDK. FreeCAD's Python environment must provide
-   NumPy, trimesh and Pillow; see the [FreeCAD preprocessor guide](workers/freecad/README.md#local-preprocessor-registration).
+1. Install FreeCAD and the .NET 8 SDK. No converter dependencies are needed locally; see the [FreeCAD preprocessor guide](workers/freecad/README.md#local-preprocessor-registration).
 2. Configure an enabled FreeCAD worker under **Administrator > External CAD
-   Workers** so the local dialog can discover `.FCStd` support. Note its exact
-   worker ID. See [standalone FreeCAD setup](workers/freecad/README.md#standalone-http-service)
+   Workers**, or set its reachable URL in **Operations > CAD server settings**.
+   The dialog retrieves extensions from that server. Note the registered worker ID,
+   or use `freecad` for the standard URL-only service. See [standalone FreeCAD setup](workers/freecad/README.md#standalone-http-service)
    for starting and registering the service.
 3. Run these commands from the repository root on the client machine:
 
@@ -121,21 +121,20 @@ The server worker registration and client preprocessor registration are separate
 their worker IDs must match. See the [Local CAD Agent guide](local_cad_agent/README.md)
 for configuration and Linux installation details.
 
-## Run without embedded FreeCAD
+## External FreeCAD server
 
-```powershell
-docker compose stop freecad-worker freecad-preprocessor
-docker compose up -d --build api general-worker step-worker
-.\workers\freecad\scripts\start-freecad-server.ps1 -ListenAddress 0.0.0.0
-```
+The main Compose stack contains the API, database, general orchestrator and STEP service.
+FreeCAD runs only as a separate HTTP worker, without platform database or object-volume access.
+Copy `workers/freecad/.env.example` to `workers/freecad/.env` and set the shared worker key.
+Start it with `workers/freecad/scripts/start-freecad-server.ps1`; for Docker Desktop use
+`-ListenAddress 0.0.0.0`, then register `http://host.docker.internal:8090` in
+**Administrator > External CAD Workers**. Both services must use the same internal worker key.
+On another host use a reachable private/TLS URL. See [FreeCAD](workers/freecad/README.md).
 
-In Docker Desktop, register `http://host.docker.internal:8090` in **Administrator > External CAD
-Workers**, using the shared internal key. An enabled matching registration overrides new FreeCAD
-conversion jobs. Without one, the dedicated FreeCAD URL is used when configured, otherwise the
-embedded role handles processing. There is no automatic embedded fallback after an external
-job fails. CAD sessions still require the embedded runtime. Plain `docker compose up -d` starts
-the default embedded services again. See [FreeCAD](workers/freecad/README.md) and
-[worker SDK](worker-sdk/README.md).
+Extraction, metadata, geometry and previews run on the external server. Without a registration
+or configured external URL, FreeCAD processing is unavailable. Controlled CAD editing sessions
+are disabled in both UI and API for this release. Open CAD File requires the separately installed
+local preprocessor; it only resolves references, rebases copies and packages source documents.
 
 ## Host Python API
 
@@ -189,3 +188,15 @@ qualification belong in their own repositories.
 
 The Local CAD Agent requires a matching external preprocessor registration. Native runtime
 discovery and installation are responsibilities of the external preprocessor.
+
+
+### Format discovery
+
+Open CAD File reads `/api/v1/workers/external-formats`. The server gets format names, versions,
+extensions and document kinds from authenticated worker capabilities. Enabled external
+registrations take precedence; a configured external FreeCAD worker URL is also discovered,
+so URL-only setups do not need a duplicate registration. No FreeCAD extension is invented by
+the local file picker. The configured server must be reachable and advertise a valid worker
+contract. The local preprocessor registration must match the returned worker ID (`freecad` for
+the standard URL-only FreeCAD service). Rebuild/reinstall and restart the local agent after
+updating its source. Local runtime and preprocessor installation are still required.

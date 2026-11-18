@@ -1,0 +1,65 @@
+name: FreeCAD CI
+on:
+  pull_request:
+    paths: ["workers/freecad/**", "worker-sdk/**", "!workers/freecad/*.md", "!workers/freecad/**/*.md", "!worker-sdk/*.md", "!worker-sdk/**/*.md"]
+  push:
+    branches: [main, develop]
+    paths: ["workers/freecad/**", "worker-sdk/**", "!workers/freecad/*.md", "!workers/freecad/**/*.md", "!worker-sdk/*.md", "!worker-sdk/**/*.md"]
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  freecad-worker:
+    name: FreeCAD worker
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: workers/freecad
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - run: pip install ./vendor/worker-sdk -r standalone/requirements.txt -r requirements-test.txt
+      - name: Run FreeCAD unit tests
+        run: python -m pytest -q tests
+      - run: python -m compileall -q converter preprocessor shared standalone
+      - name: Free disk space for native CAD runtime
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /usr/local/.ghcup /opt/ghc
+          df -h /
+      # The native builder avoids a second full image export/import via buildx load.
+      - name: Build native FreeCAD worker image
+        run: docker build --target native-tests --tag modelryx-freecad-ci .
+      - name: Run native FreeCAD release gates
+        run: |
+          docker run --rm modelryx-freecad-ci python /app/converter/golden_integration_test.py
+          docker run --rm modelryx-freecad-ci python /app/preprocessor/dependency_integration_test.py
+          docker run --rm modelryx-freecad-ci python /app/converter/production_fixture_test.py
+          docker run --rm modelryx-freecad-ci python /app/tests/process_tree_integration_test.py
+  worker-security:
+    name: FreeCAD security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan worker dependencies and configuration
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: workers/freecad
+          format: sarif
+          output: freecad-trivy-results.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: freecad-security-results
+          path: freecad-trivy-results.sarif
+          if-no-files-found: error

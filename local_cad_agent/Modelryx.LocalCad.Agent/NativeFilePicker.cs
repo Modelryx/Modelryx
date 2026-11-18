@@ -7,7 +7,7 @@ internal sealed record CadFileSelection(string Path, WorkerFormat? Worker);
 internal sealed record CadFileFilter(string CadSystem, string Name, string[] Extensions, WorkerFormat[] Workers)
 {
     public string Patterns => string.Join(';', Extensions.Select(extension => "*" + extension));
-    public string Label => $"{Name} ({(CadSystem == "freecad" ? "*.FCStd" : Patterns)})";
+    public string Label => $"{Name} ({Patterns})";
 }
 
 internal static class NativeFilePicker
@@ -16,18 +16,13 @@ internal static class NativeFilePicker
     {
         var filters = formats.GroupBy(worker => System.Text.RegularExpressions.Regex.Replace(
                 worker.CadSystem.ToLowerInvariant(), "[^a-z0-9]", ""))
-            .Select(group => new CadFileFilter(group.Key, group.Key switch
-            {
-                "freecad" => "FreeCAD",
-                _ => group.First().CadSystem,
-            }, group.SelectMany(worker => worker.SourceExtensions)
+            .Select(group => new CadFileFilter(group.Key, group.First().WorkerName,
+                group.SelectMany(worker => worker.SourceExtensions)
                 .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(extension => extension, StringComparer.OrdinalIgnoreCase)
                 .ToArray(), group.ToArray())).ToList();
-        if (!filters.Any(filter => filter.CadSystem == "freecad"))
-            filters.Add(new CadFileFilter("freecad", "FreeCAD", [".fcstd"], []));
-        return filters.OrderBy(filter => filter.CadSystem switch
-            { "freecad" => 0, _ => 1 })
-            .ThenBy(filter => filter.Name, StringComparer.OrdinalIgnoreCase).ToArray();
+        if (filters.Count == 0)
+            throw new InvalidOperationException("Register an enabled external CAD worker before opening a CAD file.");
+        return filters.OrderBy(filter => filter.Name, StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
     internal static CadFileSelection SelectFile(string path, CadFileFilter filter)

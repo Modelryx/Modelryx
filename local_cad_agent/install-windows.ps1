@@ -2,7 +2,6 @@ param(
     [string]$InstallDirectory = "$env:LOCALAPPDATA\Modelryx\LocalCadAgent",
     [string]$Runtime = "win-x64",
     [string[]]$AllowedOrigins = @(),
-    [string]$FreeCadCommand = "",
     [switch]$BuildFromSource
 )
 
@@ -20,10 +19,6 @@ if ($BuildFromSource) {
     if ($LASTEXITCODE) { throw "Local CAD Agent publish failed." }
 } elseif (Test-Path -LiteralPath $Prebuilt) {
     Copy-Item -Force -LiteralPath $Prebuilt -Destination $Publish
-    $PrebuiltPreprocessors = Join-Path $PSScriptRoot "artifacts\$Runtime\preprocessors"
-    if (Test-Path -LiteralPath $PrebuiltPreprocessors) {
-        Copy-Item -Recurse -Force -LiteralPath $PrebuiltPreprocessors -Destination $Publish
-    }
 } else {
     if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
         throw "The prebuilt $Runtime application is missing. Obtain the release package; .NET is required only to build from source."
@@ -37,39 +32,6 @@ $Executable = Join-Path $Publish "Modelryx.LocalCad.Agent.exe"
 Copy-Item -Force -LiteralPath (Join-Path $PSScriptRoot 'register-preprocessor.ps1') -Destination $Publish
 $Preprocessors = Join-Path $Publish "preprocessors"
 New-Item -ItemType Directory -Force -Path $Preprocessors | Out-Null
-# Remove the legacy local adapter layout. Server extraction binaries do not belong in this install.
-$legacyAdapters = Join-Path $Publish "adapters"
-if (Test-Path -LiteralPath $legacyAdapters) { Remove-Item -Recurse -Force -LiteralPath $legacyAdapters }
-
-function Copy-PreprocessorFile([string]$Source, [string]$Cad, [string]$Name) {
-    if (-not (Test-Path -LiteralPath $Source)) { return $null }
-    $destination = Join-Path (Join-Path $Preprocessors $Cad) $Name
-    New-Item -ItemType Directory -Force -Path (Split-Path $destination) | Out-Null
-    Copy-Item -Force -LiteralPath $Source -Destination $destination
-    return $destination
-}
-
-$freeCadScript = Copy-PreprocessorFile `
-    (Join-Path $PSScriptRoot "..\workers\freecad\preprocessor\modelryx_freecad_preprocessor.py") "freecad" "modelryx_freecad_preprocessor.py"
-$freeCadShared = Copy-PreprocessorFile `
-    (Join-Path $PSScriptRoot "..\workers\freecad\shared\modelryx_freecad_shared.py") "freecad" "modelryx_freecad_shared.py"
-$freeCadConverterSource = Join-Path $PSScriptRoot "..\workers\freecad\converter"
-if (Test-Path -LiteralPath $freeCadConverterSource) {
-    foreach ($source in Get-ChildItem -LiteralPath $freeCadConverterSource -Filter '*.py' -File |
-        Where-Object { $_.Name -notlike '*_test.py' }) {
-        Copy-PreprocessorFile $source.FullName "freecad" $source.Name | Out-Null
-    }
-}
-$freeCadConverter = Join-Path $Preprocessors "freecad\fcstd_to_modelryx_glb.py"
-if (-not (Test-Path -LiteralPath $freeCadConverter)) { $freeCadConverter = $null }
-if (-not $freeCadScript) {
-    $installedScript = Join-Path $Preprocessors "freecad\modelryx_freecad_preprocessor.py"
-    if (Test-Path -LiteralPath $installedScript) { $freeCadScript = $installedScript }
-}
-$legacyFreeCadMetadata = Join-Path $Preprocessors "freecad\modelryx_freecad_metadata.py"
-if (Test-Path -LiteralPath $legacyFreeCadMetadata) {
-    Remove-Item -Force -LiteralPath $legacyFreeCadMetadata
-}
 $settingsPath = Join-Path $Publish "settings.json"
 $previousSettings = $null
 if (Test-Path -LiteralPath $settingsPath) {
@@ -87,9 +49,6 @@ if (-not $PSBoundParameters.ContainsKey('AllowedOrigins') -and $previousSettings
     }
 }
 $settings = [ordered]@{
-    FreeCadCommand = $FreeCadCommand
-    FreeCadPreprocessorScript = $freeCadScript
-    FreeCadConverterScript = $freeCadConverter
     ExternalPreprocessors = @($previousSettings.ExternalPreprocessors | Where-Object { $null -ne $_ })
     AllowedOrigins = $effectiveAllowedOrigins
 }

@@ -16,10 +16,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import trimesh
-from modelryx.metadata import validate_part_metadata
-from modelryx.cad.inspection import inspect_metadata_snapshot
-from modelryx.cad.models import CADParameterChangeRequest
-from modelryx.cad.plans import resolve_parameter_change
+from metadata_contract import validate_part_metadata
 from fcstd_to_modelryx_glb import convert_fcstd_to_modelryx_package, extract_fcstd_part_metadata
 from execute_cad_plan import execute, sha256_file
 from document_health import recompute_for_extraction
@@ -396,16 +393,7 @@ def main() -> int:
         save_document(edit_source, sketch_edit_fixture)
         inspection_path = root / "sketch-edit-metadata.json"
         extract_fcstd_part_metadata(str(edit_source), str(inspection_path))
-        inspected = inspect_metadata_snapshot(
-            json.loads(inspection_path.read_text()), revision_id="fixture",
-            source_sha256=sha256_file(edit_source),
-        )
-        edit_request = CADParameterChangeRequest(
-            target_id="Sketch", parameter="Constraints[0]", value=7, unit="mm"
-        )
-        assert resolve_parameter_change(edit_request, inspected) == (
-            "SKETCH", 5.0, "mm", "sketch.constraint.set_value"
-        )
+        validate_part_metadata(json.loads(inspection_path.read_text()))
         plan = {"operation": "sketch.constraint.set_value", "target_id": "Sketch",
                 "parameter": "Constraints[0]", "expected_value": 5.0, "new_value": 7.0,
                 "unit": "mm", "source_sha256": sha256_file(edit_source)}

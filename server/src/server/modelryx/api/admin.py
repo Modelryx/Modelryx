@@ -410,6 +410,7 @@ async def external_worker_status(db: Db, principal: Actor, settings: Config) -> 
             "availability": "DISABLED" if not worker["enabled"] else "OFFLINE",
             "checkedAt": datetime.now(UTC).isoformat(),
             "detail": None,
+            "capabilities": worker["capabilities"],
         }
         if not worker["enabled"]:
             return result
@@ -425,7 +426,9 @@ async def external_worker_status(db: Db, principal: Actor, settings: Config) -> 
                     headers={"X-Modelryx-Worker-Key": settings.internal_worker_key},
                 )
                 response.raise_for_status()
-                if validate_capabilities(response.json()) != worker["capabilities"]:
+                advertised = validate_capabilities(response.json())
+                result["capabilities"] = advertised
+                if advertised != worker["capabilities"]:
                     result["availability"] = "CHANGED"
                     result["detail"] = "Worker capabilities changed. Re-register the worker."
                 else:

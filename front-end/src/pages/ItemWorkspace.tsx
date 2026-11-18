@@ -22,8 +22,7 @@ import {
   RevisionLifecyclePanel,
   type RevisionLifecycleAction,
 } from './RevisionLifecycle';
-import { CADSessionsSection } from './revisionProperties/OperationalSections';
-import type { CADSession, ProcessingJob as StageJob } from './revisionProperties/types';
+import type { ProcessingJob as StageJob } from './revisionProperties/types';
 import { StagesPanel } from './Stages';
 import { BOMIntelligenceSection } from './revisionProperties/BOMIntelligenceSection';
 import { PropertiesSection } from './revisionProperties/PropertiesSection';
@@ -852,7 +851,6 @@ export function ItemWorkspace({
         ...(item.data?.item_type === 'ASSEMBLY'
           ? [{ id: 'intelligence', label: 'BOM Intelligence', group: 'Structure' }]
           : []),
-        { id: 'cad', label: 'CAD Sessions', group: 'Activity' },
         { id: 'stages', label: 'Stages', group: 'Activity' },
         { id: 'history', label: 'History', group: 'Activity' },
         { id: 'compare', label: 'Compare revisions', group: 'Actions' },
@@ -1104,14 +1102,6 @@ export function ItemWorkspace({
                     editUrl={canEdit ? `${revisionPath}/attachments/edit` : undefined}
                   />
                 )}
-                {activeSection === 'cad' && (
-                  <RevisionCadSection
-                    key={revisionId}
-                    itemId={itemId}
-                    revision={revision.data}
-                    canEdit={canEdit}
-                  />
-                )}
                 {activeSection === 'stages' && (
                   <RevisionStages key={revisionId} revisionId={revisionId} isAdmin={isAdmin} />
                 )}
@@ -1213,34 +1203,6 @@ export function ItemWorkspace({
             />
           )}
         </>
-      )}
-    </>
-  );
-}
-function RevisionCadSection({
-  itemId,
-  revision,
-  canEdit,
-}: {
-  itemId: string;
-  revision: Revision;
-  canEdit: boolean;
-}) {
-  const state = useResource<CADSession[]>(
-    `/item-revisions/${encodeURIComponent(revision.id)}/cad-sessions`
-  );
-  return (
-    <>
-      <ResourceState state={state} />
-      {state.data && !state.error && (
-        <CADSessionsSection
-          itemId={itemId}
-          revisionId={revision.id}
-          cadSystem={revision.cad_system}
-          sessions={state.data}
-          canEdit={canEdit}
-          onChanged={async () => state.retry()}
-        />
       )}
     </>
   );

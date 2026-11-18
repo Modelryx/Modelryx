@@ -76,7 +76,7 @@ def test_rejects_weak_production_password_before_writing(project):
     assert not (project / ".env").exists()
 
 
-def test_agent_install_is_explicit_and_receives_freecad_path(project):
+def test_agent_install_is_explicit_and_independent_of_freecad(project):
     agent = project / "local_cad_agent"
     agent.mkdir()
     (agent / "install-windows.ps1").write_text(
@@ -88,9 +88,7 @@ def test_agent_install_is_explicit_and_receives_freecad_path(project):
     executable.touch()
     result = configure(project, "-FreeCadCmd", str(executable), "-InstallLocalCadAgent")
     assert result.returncode == 0, result.stderr
-    assert (agent / "called.txt").read_text(encoding="utf-8-sig").strip() == str(
-        executable
-    )
+    assert (agent / "called.txt").read_text(encoding="utf-8-sig").strip() == ""
 
 
 def test_optional_settings_and_explicit_database_are_preserved(project):

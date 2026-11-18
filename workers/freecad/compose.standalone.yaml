@@ -4,8 +4,8 @@ services:
   freecad:
     image: modelryx-freecad-standalone:local
     build:
-      context: ../..
-      dockerfile: workers/freecad/Dockerfile.standalone
+      context: .
+      dockerfile: Dockerfile
     restart: unless-stopped
     environment:
       MODELRYX_INTERNAL_WORKER_KEY: ${MODELRYX_INTERNAL_WORKER_KEY:?Set MODELRYX_INTERNAL_WORKER_KEY in the environment file}

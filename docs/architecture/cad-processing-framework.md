@@ -5,12 +5,10 @@ installation, and troubleshooting belong in each worker's integration guide.
 
 ## Architecture decision
 
-Modelryx uses two deployment models:
-
-1. **Embedded processing** for technology shipped and operated with Modelryx, including the
-   FreeCAD adapter and STEP geometry service (a separate durable HTTP service).
-2. **Custom CAD workers** can be deployed as independently scalable HTTP services following the
-   [worker integration guide](../workers/new-cad-worker-guide.md).
+Modelryx uses independent HTTP services for CAD processing. STEP ships in the main Compose stack;
+FreeCAD and other CAD workers are deployed separately. The browser's Local CAD Agent invokes
+separately installed native preprocessors only for dependency resolution and source packaging.
+Controlled CAD editing sessions are disabled in the first release.
 
 The governing boundary is:
 
@@ -36,12 +34,12 @@ Browser, upload client, or CAD plugin
         +----------+--------------------------+
         |                     |               |
         v                     v               v
-  FreeCAD adapter       STEP service    Custom CAD workers
-  and analyzer          (durable jobs)     (HTTP services)
+  FreeCAD server        STEP service    Custom CAD workers
+  (external HTTP)       (durable jobs)     (HTTP services)
                                         (FreeCAD, etc.)
 ```
 
-Embedded means shipped and deployed with Modelryx, not loaded into the web API process. Native
+FreeCAD is not included in the platform runtime. Native
 execution remains isolated so crashes, dependencies, timeouts, memory use, and concurrency can be
 controlled.
 
@@ -79,13 +77,13 @@ Source format and available workers determine the processing route:
 
 | Input | Primary route |
 | --- | --- |
-| `.fcstd` | Enabled matching external registration; otherwise dedicated FreeCAD URL or embedded adapter |
+| `.fcstd` | Enabled matching external registration; otherwise a configured external FreeCAD URL; unavailable without either |
 | `.step`, `.stp` | STEP service |
 | Other native formats | Enabled external worker matched by CAD system and extension; legacy dedicated routes remain where supported |
 
 Starting an external HTTP service does not register it. Re-register after capability changes.
-Multiple matches are errors; a selected external failure is not retried on embedded FreeCAD.
-FreeCAD CAD sessions keep using the embedded runtime. The Local CAD Agent retains the selected
+Multiple matches are errors; external failures are surfaced without local native fallback.
+The Local CAD Agent retains the selected
 CAD-system filter.
 
 Worker selection is a server decision. Clients identify source content and configuration context;
@@ -117,21 +115,16 @@ When custom CAD workers are deployed, Modelryx dispatches submissions based on f
 worker capability. It validates the job identity, converter version, output paths, declared sizes,
 and hashes before using the existing publication flow.
 
-### Embedded FreeCAD adapter
+### External FreeCAD server
 
-The FreeCAD processing path uses the `CADWorkerAdapter` protocol selected by
-`MODELRYX_CAD_WORKER_ADAPTER`. A compatible adapter owns native conversion and controlled-edit
-execution and publishes its capability manifest through the Modelryx worker heartbeat API.
+The standalone worker owns FreeCAD and converter dependencies, native extraction and generated
+representations. It requires neither platform database credentials nor object storage access.
+Register it in External CAD Workers, or configure the external FreeCAD URL for the PFG client.
+An empty URL does not select local processing. The local preprocessor contains only the executable
+host, packaging entry point, dependency packager and its shared helper; it extracts no metadata.
 
-Its normalized conversion envelope contains:
-
-- a Modelryx Graphics (`.pfg`) package with `manifest.json`, `model.glb`, and
-  `model-preview.json`;
-- `<package>.part-metadata.json` using the PartMetadata schema;
-- `<package>.cad-raw-metadata.json` for opaque adapter-specific evidence.
-
-Dependency analysis is submitted to `POST /api/v1/cad/analyze`. The logical root path is encoded as
-UTF-8 Base64 in `X-Modelryx-Root-Path-B64` so it does not depend on HTTP header character encoding.
+Dependency analysis is available through `POST /api/v1/cad/analyze` with a configured external
+service. The logical root path is UTF-8 Base64 encoded in `X-Modelryx-Root-Path-B64`.
 
 ### STEP service
 
@@ -214,7 +207,7 @@ because a worker returned it.
 ## Extending the framework
 
 A new licensed desktop integration should normally follow the standalone service contract. A
-shippable open-source engine may use an isolated embedded service. A cloud CAD system should use an
+shippable open-source engine uses an isolated external service. A cloud CAD system should use an
 API connector behind the same Modelryx ownership and publication boundary.
 
 New integrations must not add vendor SDK dependencies to Modelryx or introduce a second durable
@@ -228,7 +221,7 @@ product model. Refer to the worker SDK documentation for adding custom worker im
 
 Native extraction evidence is separate from managed BOM identity. The generic external path warns
 about unmatched components and supports operator-resolved relationships; it does not automatically
-create generated component Items/revisions. Embedded/legacy paths can have different publication
+create generated component Items/revisions. Dedicated external URL paths can have different publication
 behavior.
 
 The current generic result allowlist accepts native snapshot, PartMetadata, model preview, GLB and

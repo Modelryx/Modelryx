@@ -211,7 +211,7 @@ class FreeCADWorkerAdapter:
             os.environ.get("MODELRYX_CONVERTER_PYTHON", "python"),
             os.environ.get(
                 "MODELRYX_CONVERTER_SCRIPT",
-                "/opt/modelryx-converter/fcstd_to_modelryx_glb.py",
+                str(Path(__file__).resolve().parent / "converter/fcstd_to_modelryx_glb.py"),
             ),
             str(source),
             "--output",
@@ -247,7 +247,7 @@ class FreeCADWorkerAdapter:
             os.environ.get("MODELRYX_CONVERTER_PYTHON", "python"),
             os.environ.get(
                 "MODELRYX_CAD_EXECUTOR_SCRIPT",
-                "/opt/modelryx-converter/execute_cad_plan.py",
+                str(Path(__file__).resolve().parent / "converter/execute_cad_plan.py"),
             ),
             "--plan",
             str(plan),

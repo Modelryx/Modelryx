@@ -49,14 +49,13 @@ class Settings(BaseSettings):
     max_preview_nodes: int = 100_000
     max_preview_triangles: int = 5_000_000
     worker_poll_seconds: float = 2.0
-    processing_worker_role: Literal["all", "general", "freecad"] = "all"
+    processing_worker_role: Literal["general"] = "general"
     worker_heartbeat_timeout_seconds: int = 30
     maintenance_cleanup_seconds: float = 300.0
     maintenance_cleanup_failure_threshold: int = 3
     processing_stale_seconds: int = 3600
     cad_session_expiry_seconds: int = 2 * 60 * 60
     cad_session_max_bytes: int = 2 * 1024 * 1024 * 1024
-    cad_executor_script: str = "/opt/modelryx-converter/execute_cad_plan.py"
     ai_gateway_base_url: str | None = None
     ai_gateway_api_key: str | None = None
     ai_chat_model: str = ""

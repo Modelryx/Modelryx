@@ -98,37 +98,6 @@ jobs:
         with: {python-version: "3.12"}
       - run: pip install "pytest>=8.3,<9" "pydantic-settings>=2.7,<3" "boto3>=1.35,<2" './worker-sdk[conformance]'
       - run: python -m pytest -q worker-sdk/tests scripts/tests/test_configure_project.py scripts/tests/test_production_settings.py scripts/tests/test_s3_storage.py scripts/tests/test_license_notices.py scripts/tests/test_ci_changes.py
-  freecad-worker:
-    name: FreeCAD worker
-    needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.run_ci != 'false' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: "3.11"}
-      - run: pip install "pytest>=8.3,<9" "httpx>=0.28,<1" ./worker-sdk -r workers/freecad/standalone/requirements.txt
-      - name: Run FreeCAD unit tests
-        env:
-          PYTHONPATH: workers/freecad:worker-sdk/src:server/src/server
-        run: python -m pytest -q workers/freecad/tests
-      - run: python -m compileall -q converter preprocessor shared
-        working-directory: workers/freecad
-      - name: Free disk space for native CAD runtime
-        run: |
-          df -h /
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /usr/local/.ghcup /opt/ghc
-          df -h /
-      # The native builder avoids a second full image export/import via buildx load.
-      - name: Build native FreeCAD worker image
-        run: docker build --file workers/freecad/Dockerfile --tag modelryx-freecad-ci .
-      - name: Run native FreeCAD release gates
-        run: |
-          docker run --rm modelryx-freecad-ci python /opt/modelryx-converter/golden_integration_test.py
-          docker run --rm modelryx-freecad-ci python /opt/modelryx-preprocessor/dependency_integration_test.py
-          docker run --rm modelryx-freecad-ci python /opt/modelryx-converter/production_fixture_test.py
-          docker run --rm modelryx-freecad-ci python /opt/modelryx-converter/process_tree_integration_test.py
   step-worker:
     name: STEP worker
     needs: changes

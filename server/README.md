@@ -33,11 +33,10 @@ database. See [initialization](../docs/operations/database-initialization.md).
 
 ## Workers
 
-`general-worker` handles generic dispatch, staging/STEP and external CAD jobs. `freecad-worker`
-provides embedded FCStd processing and FreeCAD CAD sessions. Enabled matching external registration
-overrides FreeCAD conversion; absent/disabled registration retains the dedicated-URL/embedded
-path. STEP retains its built-in service path. Independent HTTP workers receive no database
-credentials or object-volume mount. See [the SDK](../worker-sdk/README.md).
+`general-worker` orchestrates STEP and external CAD jobs. FreeCAD runs only as an independent
+HTTP service, with no database credentials or object-volume mount. Register it in External CAD
+Workers or configure its external URL. No embedded native processing service is deployed.
+Controlled CAD editing sessions are disabled in this release. See [the SDK](../worker-sdk/README.md).
 
 ## Tests and layout
 

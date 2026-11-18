@@ -4,9 +4,11 @@ import json
 import re
 from pathlib import Path
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from modelryx.core.config import Settings, get_settings
 from modelryx.models import ApplicationSetting
 
 PREFIX = "external_worker."
@@ -83,12 +85,14 @@ def registered_workers(db: Session) -> list[dict]:
     return result
 
 
-def matching_worker(db: Session, filename: str, cad_system: str) -> dict | None:
+def matching_worker(
+    db: Session, filename: str, cad_system: str, settings: Settings | None = None
+) -> dict | None:
     """Match a system and extension; never guess when multiple workers qualify."""
     extension = Path(filename).suffix.casefold()
     candidates = [
         w
-        for w in registered_workers(db)
+        for w in discover_workers(db, settings or get_settings())
         if w["enabled"] and extension in w["capabilities"]["sourceExtensions"]
     ]
     normalized = re.sub(r"[^a-z0-9]", "", cad_system.casefold())
@@ -101,3 +105,42 @@ def matching_worker(db: Session, filename: str, cad_system: str) -> dict | None:
     if len(candidates) > 1:
         raise AmbiguousWorkerError("More than one enabled worker matches this CAD source")
     return candidates[0] if candidates else None
+
+
+def discover_workers(db: Session, settings: Settings) -> list[dict]:
+    """Merge registrations with capabilities advertised by the configured external server.
+
+    Registrations remain authoritative. URL-only deployments expose the same neutral format
+    contract, without inventing extensions or requiring a second administrator registration.
+    """
+    workers = registered_workers(db)
+    if not settings.internal_worker_key:
+        return workers
+    from modelryx.services.freecad_settings import FREECAD_WORKER_KEY, configured_url
+
+    url = configured_url(db, FREECAD_WORKER_KEY, settings.freecad_worker_url)
+    if not url or any(w["enabled"] and w["url"].rstrip("/") == url.rstrip("/") for w in workers):
+        return workers
+    try:
+        with httpx.Client(timeout=3.0, follow_redirects=False) as client:
+            response = client.get(
+                f"{url.rstrip('/')}/api/v1/capabilities",
+                headers={"X-Modelryx-Worker-Key": settings.internal_worker_key},
+            )
+            response.raise_for_status()
+            capabilities = validate_capabilities(response.json())
+    except (httpx.HTTPError, ValueError, TypeError):
+        return workers
+    if any(
+        w["enabled"]
+        and w["capabilities"]["cadSystem"].casefold() == capabilities["cadSystem"].casefold()
+        for w in workers
+    ):
+        return workers
+    identifier = re.sub(r"[^a-z0-9_-]", "", capabilities["cadSystem"].casefold())
+    if not identifier or not identifier[0].isalpha():
+        identifier = "configured-" + identifier
+    identifier = identifier[:64]
+    if any(w["id"] == identifier for w in workers):
+        identifier = "configured-" + identifier[:53]
+    return [*workers, {"id": identifier, "url": url, "enabled": True, "capabilities": capabilities}]

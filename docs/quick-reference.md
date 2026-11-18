@@ -21,15 +21,14 @@ API checks: [liveness](http://localhost:8000/health/live),
 ## External FreeCAD only
 
 ```powershell
-docker compose stop freecad-worker freecad-preprocessor
 docker compose up -d --build api general-worker step-worker
 .\workers\freecad\scripts\start-freecad-server.ps1 -ListenAddress 0.0.0.0
 ```
 
 In Docker Desktop, register `http://host.docker.internal:8090` under **External CAD Workers**.
 Starting a worker alone does not register it. Without a matching enabled registration, FreeCAD
-uses its dedicated URL or embedded role. External failures do not trigger embedded retries.
-FreeCAD CAD sessions still require the embedded role.
+requires its configured external URL. External failures are surfaced without a local fallback.
+Controlled CAD editing sessions are disabled in this release.
 
 ## Verification
 

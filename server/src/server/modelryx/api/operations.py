@@ -79,7 +79,8 @@ def worker_statuses(db: Session, settings: Settings, now: datetime) -> list[Work
     for heartbeat in db.scalars(
         select(WorkerHeartbeat).order_by(WorkerHeartbeat.last_heartbeat_at.desc())
     ):
-        latest.setdefault(heartbeat.worker_type, heartbeat)
+        if heartbeat.worker_type.upper() != "FREECAD":
+            latest.setdefault(heartbeat.worker_type, heartbeat)
     configured_urls = {
         "STEP": settings.step_worker_url,
     }

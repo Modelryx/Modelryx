@@ -2,7 +2,7 @@
 
 The agent opens a native file dialog, runs dependency analysis on the user's computer,
 and returns an isolated CAD package to the browser. It listens on `127.0.0.1:47832`.
-FreeCAD preprocessing scripts are supplied, but **Open CAD File** for `.FCStd`
+Native preprocessors are installed separately. **Open CAD File** for `.FCStd`
 also requires a local FreeCAD runtime and a built/published FreeCAD preprocessor
 executable registered with this agent. Installing the agent alone does not
 register that executable. Follow the [client setup steps](../DEVELOPMENT.md#enable-open-cad-file-for-freecad)
@@ -14,8 +14,7 @@ registered against an external worker ID; this repository contains no vendor SDK
 
 On Windows, run `./local_cad_agent/install-windows.ps1`. A release package uses its prebuilt,
 self-contained executable. Source installations require the .NET 8 SDK; `-BuildFromSource`
-forces rebuilding the agent. Set `-AllowedOrigins` to your frontend's origins and
-`-FreeCadCommand` to the FreeCAD executable if it is not found automatically.
+forces rebuilding the agent. Set `-AllowedOrigins` to your frontend's origins.
 
 On Linux, use `./local_cad_agent/install-linux.sh`. Install FreeCAD and a supported native
 file dialog utility as described by that script. Windows-only external runtimes must be
@@ -26,8 +25,9 @@ on reinstall. Additional preprocessors are not built or discovered automatically
 
 ## External preprocessors
 
-First register the remote worker in **Administrator > External CAD Workers**. The worker
-advertises its CAD system, source extensions, document kinds, and output roles. The local
+Configure the remote worker in **Administrator > External CAD Workers**, or configure the
+external FreeCAD server URL in Operations. The worker advertises its name, version, CAD system,
+source extensions, document kinds, and output roles through its capabilities endpoint. The local
 file dialog uses those declarations, including when multiple systems share an extension.
 
 Use the installed `app/register-preprocessor.ps1` with `WorkerId`, `CadSystem`, `Version`,
@@ -46,9 +46,9 @@ processes started independently of that tree remain the preprocessor's responsib
 ## Configuration
 
 `settings.json` is loaded from the application directory or the per-user configuration directory.
-Supported settings are `FreeCadCommand`, `FreeCadPreprocessorScript`, `FreeCadConverterScript`,
-`ExternalPreprocessors`, and `AllowedOrigins`. FreeCAD paths can also be configured with
-`MODELRYX_FREECAD_CMD`, `MODELRYX_FREECAD_PREPROCESSOR`, and `MODELRYX_FREECAD_CONVERTER`.
+Supported settings are `ExternalPreprocessors` and `AllowedOrigins`. Native runtime settings
+belong to the separately installed preprocessor. FreeCAD uses `MODELRYX_FREECAD_CMD`.
+The generic agent installs no FreeCAD scripts, extraction code or converter dependencies.
 `MODELRYX_ALLOWED_ORIGINS` overrides configured web origins.
 
 ## Security and verification

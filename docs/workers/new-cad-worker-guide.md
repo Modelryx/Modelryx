@@ -40,8 +40,8 @@ Selection matches enabled registrations, source extension and CAD system. Multip
 are errors; readiness does not arbitrarily choose between registrations.A failed selected external worker is not automatically retried through another system.
 
 FreeCAD registration overrides new FCStd conversion routing. Without a matching registration,
-its dedicated standalone URL or embedded role remains available. FreeCAD CAD sessions still use
-the embedded runtime. STEP/STP retains the built-in geometry-service route.
+its configured external URL is required. Controlled CAD editing sessions are disabled in this
+release. STEP/STP retains the built-in geometry-service route.
 
 ## Source contract
 
@@ -64,8 +64,8 @@ executable directory with the Local CAD Agent using the same administrator-assig
 The agent invokes it with source path and output directory arguments. It emits a one-line JSON
 dependency report and creates the isolated native package in that workspace. Resolve/rebind
 only package copies, reopen them without satisfying links from original paths, and declare
-`isolated_reopen_validated` only after this succeeds. Optional local `part-metadata.json` supports
-duplicate checking. No worker key is needed by this executable.
+`isolated_reopen_validated` only after this succeeds. Extract metadata and geometry on the
+external server after upload; the local executable only packages dependencies and needs no worker key.
 
 HTTP `POST /analyze` is a separate optional capability. Advertise `dependencyAnalysis: true` only
 when it is implemented. Modelryx forwards an authenticated ZIP plus UTF-8 root path encoded in

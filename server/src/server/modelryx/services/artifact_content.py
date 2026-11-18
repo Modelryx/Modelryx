@@ -114,3 +114,12 @@ def revisions_with_current_artifact_types(
         .distinct()
     )
     return set(db.scalars(statement))
+
+
+def has_published_derived_content(db: Session, revision_id: uuid.UUID) -> bool:
+    """A failed refresh must not invalidate representations in the published snapshot."""
+    return any(
+        (artifact := db.get(Artifact, file.artifact_id)) is not None
+        and artifact.classification == "DERIVED"
+        for file in current_artifact_files(db, revision_id, artifact_types={"GLB", "METADATA"})
+    )

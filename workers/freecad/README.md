@@ -3,21 +3,19 @@
 Native document closure waits up to 30 seconds for pending TechDraw tasks before
 freeing drawing or referenced base objects. A timeout fails the operation; the
 isolated worker deadline remains responsible for terminating stalled native work.
-This applies to extraction, controlled edits, and dependency preprocessing.
+This applies to extraction and dependency preprocessing.
 
 ## Reference external worker
 
 This is the in-repository reference for designing other CAD workers. Native extraction and
 conversion stay under `workers/freecad`; the server owns Items, revisions, authorization,
-publication and managed BOM relationships. The embedded FreeCAD processing role remains supported.
+publication and managed BOM relationships. Worker and local preprocessor are separate deployments.
 
-An enabled matching registration in **Administrator → External CAD Workers** takes precedence
-for new `.FCStd` uploads, regeneration and copied revisions. Register this service's URL with CAD
-system `freecad` and the same internal worker key. Disable or remove that registration to use
-the existing FreeCAD path: its configured standalone URL, or embedded conversion if the URL is
-empty. Existing claimed jobs keep their selected job type. Multiple matching registrations are
-an error; Modelryx does not silently select a worker or fall back after an external job fails.
-STEP remains built in. FreeCAD CAD sessions continue using the embedded runtime.
+Register this external HTTP service in **Administrator > External CAD Workers**, with CAD system
+`freecad` and the same internal worker key. Multiple matching registrations are an error.
+Extraction, metadata, geometry and previews run on this server. The main platform contains no
+embedded FreeCAD service. Controlled CAD editing sessions are disabled in this release; future
+editing support will use external workers. STEP retains its separate service.
 
 The authenticated capabilities endpoint advertises name/version, part/assembly kinds, `.fcstd`,
 dependency analysis and these semantic output roles:
@@ -33,14 +31,13 @@ dependency analysis and these semantic output roles:
 Generic Modelryx jobs require the first three roles and prefer GLB. Outputs include hashes,
 sizes and generator/source provenance. Only requested roles are returned. GLB and model preview
 are bounded, validated exports from the same PFG conversion, preserving occurrence identity.
-The existing embedded and URL-based PFG publication paths are retained.
+The URL-based external PFG publication path is also supported.
 
 ### Local preprocessor registration
 
 This client installation is required for the browser's **Open CAD File** action
 with `.FCStd` files. Install it on each machine running the browser and holding the
-CAD files. The server's Docker `freecad-preprocessor` service is a separate
-component and does not install the local executable or Local CAD Agent.
+CAD files. Starting the server does not install the local executable or Local CAD Agent.
 See the [complete client setup](../../DEVELOPMENT.md#enable-open-cad-file-for-freecad).
 
 The generic Local CAD Agent launches a registered executable with two arguments: source path and
@@ -54,16 +51,17 @@ FreeCAD implementation on each Windows client after installing FreeCAD, .NET 8 a
 
 Use the exact worker ID assigned in administration. `-InstallDirectory` selects another agent
 installation; `-PreprocessorDirectory` and `-Version` support a published distribution.
-The server registration must be enabled so the local file dialog discovers FreeCAD
-support. Restart the Local CAD Agent after registering the executable.
+An enabled registration or reachable configured external worker URL lets the dialog discover
+FreeCAD support. Restart the Local CAD Agent after registering the executable.
 `artifacts/preprocessor` contains the executable host, Python entry point, preprocessor,
-converter and shared modules. Copy the complete distribution. Set `MODELRYX_FREECAD_CMD` to
-FreeCAD's Python executable when automatic discovery is insufficient. The runtime also needs
-the converter's Python dependencies (NumPy, trimesh and Pillow).
+and one shared module. It contains no converter or extraction scripts. Copy the complete
+distribution. Set `MODELRYX_FREECAD_CMD` to FreeCAD's Python executable when discovery fails.
+Local preprocessing needs FreeCAD, but not NumPy, trimesh or Pillow.
 
 The host starts the native Python processes, enforces a timeout, forwards stdout/stderr, and
 propagates failure. `preprocessor/local_preprocessor.py` discovers and rebases package copies,
-validates isolated reopening and extracts duplicate-check metadata from the rebased package.
+and validates isolated reopening. Metadata extraction and geometry-based duplicate assessment
+occur on the external server after upload.
 It returns missing references explicitly and never saves the original native documents.
 The worker and client preprocessor are independent installations; clients need no worker key.
 
@@ -77,7 +75,7 @@ The worker and client preprocessor are independent installations; clients need n
 - `tests/test_standalone_api.py`: generic and legacy profile contract tests without FreeCAD.
 
 Implement the [worker SDK protocol](../../worker-sdk/README.md) when adapting another CAD
-system; do not copy FreeCAD's server/database orchestration into a vendor adapter. Run the
+system; keep platform publication and database orchestration outside native adapters. Run the
 SDK conformance probe against a licensed/native fixture as described there. Re-register after
 changing capabilities. The [new worker guide](../../docs/workers/new-cad-worker-guide.md)
 describes ownership, native evidence and generic publication boundaries.
@@ -88,13 +86,15 @@ The standalone image implements the read-only part and assembly profile in the
 [worker protocol](../../worker-sdk/README.md). It uses its own job volume and does not require the
 Modelryx server image, database, object storage, or STEP service.
 
-From the repository root, start it with PowerShell:
+FreeCAD builds and runs from its own directory. Configure its own environment file first:
 
 ```powershell
+Copy-Item workers/freecad/.env.example workers/freecad/.env
+# Set the worker key in workers/freecad/.env to match the Modelryx server.
 .\workers\freecad\scripts\start-freecad-server.ps1
 ```
 
-The script reads the root `.env` through Docker Compose, builds the standalone image, starts it
+The script reads `workers/freecad/.env` through Docker Compose, builds the standalone image, starts it
 in the background, and waits for readiness. Set `MODELRYX_INTERNAL_WORKER_KEY` to the same key
 used by Modelryx. Use `-EnvFile` for another environment file, `-Port 8091` for another host port,
 or `-SkipBuild` to reuse an existing image. The default listener is `127.0.0.1:8090`.
@@ -110,19 +110,20 @@ For a remote server, use the worker host's reachable address and the private-net
 deployment guidance below. Starting the service does not register it automatically.
 
 This uses `compose.standalone.yaml` and its own persistent job volume. It starts only the
-external worker, independently of the main server and embedded FreeCAD services. To view logs
+external worker, independently of the main platform. To view logs
 or stop it without removing retained jobs:
 
 ```powershell
-docker compose -f workers/freecad/compose.standalone.yaml --env-file .env logs -f freecad
-docker compose -f workers/freecad/compose.standalone.yaml --env-file .env stop freecad
+docker compose -f workers/freecad/compose.standalone.yaml --env-file workers/freecad/.env logs -f freecad
+docker compose -f workers/freecad/compose.standalone.yaml --env-file workers/freecad/.env stop freecad
 ```
 
-Build from the repository root on the worker host. Set `MODELRYX_INTERNAL_WORKER_KEY` in your
+Build using only `workers/freecad` as the Docker context. You can copy this directory to an
+independent worker checkout; the platform server and live SDK sources are not required. Set `MODELRYX_INTERNAL_WORKER_KEY` in your
 environment before starting the container.
 
 ```sh
-docker build -f workers/freecad/Dockerfile.standalone -t modelryx-freecad-standalone .
+docker build -t modelryx-freecad-standalone workers/freecad
 docker run --rm --name modelryx-freecad-standalone \
   --env MODELRYX_INTERNAL_WORKER_KEY \
   --mount source=modelryx-freecad-jobs,target=/data/jobs \
@@ -149,19 +150,11 @@ curl -i http://127.0.0.1:8090/api/v1/jobs \
   -F "source=@assembly.zip;type=application/zip"
 ```
 
-Without an enabled matching external registration, set `MODELRYX_FREECAD_WORKER_URL` on the Modelryx general worker to the standalone service's
-reachable URL and configure the same internal worker key on both sides. Managed FCStd conversion
-jobs then use the standalone worker. Leave the URL empty to use the embedded worker described
-below. Set `MODELRYX_FREECAD_PREPROCESSOR_URL` on the server to the same standalone URL to use its
-authenticated dependency preprocessor. CAD sessions currently use the embedded worker.
-Administrators can instead set both URLs under **Administrator → Operations → CAD server settings**.
-Saved URLs override the environment defaults. An empty saved worker URL selects embedded processing,
-and an empty saved preprocessor URL disables server-side dependency analysis. The general worker picks up
-changes on its next polling cycle, while a job already claimed continues with its existing URL.
-The availability cards check standalone readiness and authenticated capabilities using the configured
-internal worker key. The default Compose deployment runs the embedded FreeCAD image as a separate
-`freecad-preprocessor` HTTP service; it is not the standalone conversion service. The old `MODELRYX_CAD_ANALYZER_URL` environment variable
-remains supported for existing configurations.
+Administrators may also set `MODELRYX_FREECAD_WORKER_URL` and
+`MODELRYX_FREECAD_PREPROCESSOR_URL` to the external service, or configure URLs in Operations.
+Saved URLs override environment defaults. An empty worker URL provides no conversion service;
+an empty preprocessor URL disables server-side analysis. The local file dialog discovers formats from the registered or configured server capabilities. The general orchestrator reads settings each polling cycle.
+
 The worker's adapter version must match the server's `MODELRYX_CONVERTER_VERSION` so cached
 conversions and published artifact provenance use the configured converter version.
 
@@ -173,34 +166,37 @@ worker, `MODELRYX_TEST_FREECAD_FIXTURES` pointing to the generated files, and
 `MODELRYX_INTERNAL_WORKER_KEY` matching the worker. It checks the preview, published artifacts,
 and the committed child revision reference.
 
-## Embedded worker
+## Independent build and CI
 
-This image runs the dedicated `freecad` processing role. It shares the server's PostgreSQL
-`ProcessingJob` queue and object storage, but claims only `FCSTD_TO_MODELRYX` work and
-FreeCAD-targeted CAD sessions. Generic staging, STEP, external CAD, and bundle jobs are
-handled by the lightweight server `general-worker` service.
-
-Standalone FreeCAD runtime for Modelryx. It retains the rich direct FCStd-to-GLB/PFG path and
-keeps optional command-line utilities separate from the production converter.
-
-Build from the `Modelryx` parent directory because the image installs the server's job orchestration
-package while keeping FreeCAD conversion code outside the server project:
+`Dockerfile` builds the external HTTP runtime by default. Its `native-tests` target adds only
+worker-owned tests and contract snapshots. It installs no platform server package and receives
+no files outside this directory. Build native validation with:
 
 ```powershell
-docker build -f workers\freecad\Dockerfile -t modelryx-freecad-worker .
+docker build --target native-tests -t modelryx-freecad-tests workers/freecad
+docker run --rm modelryx-freecad-tests python converter/golden_integration_test.py
+docker run --rm modelryx-freecad-tests python preprocessor/dependency_integration_test.py
+docker run --rm modelryx-freecad-tests python converter/production_fixture_test.py
 ```
 
-The production image defaults to FreeCAD 1.1.3. The manually dispatched FreeCAD compatibility
-workflow also builds previous and newer candidate runtimes and runs the golden, dependency, and
-production fixture suites against them.
-Candidate lanes are informational and do not change the worker's configured compatibility policy;
-package availability and fixture failures must be reviewed before supporting another version.
-The production fixture retains its version assertion by default; `--compatibility-candidate` runs
-the same behavioral checks on a candidate without asserting it is supported.
+FreeCAD CI is triggered by non-Markdown changes under `workers/freecad/` or `worker-sdk/`,
+or manually. Platform, frontend and workflow-file-only changes do not trigger it. The separate manual
+compatibility workflow tests candidate FreeCAD runtimes. Keep platform checks required globally;
+path-filtered FreeCAD checks should not be globally required for unrelated pull requests.
+
+The worker owns versioned SDK and PartMetadata snapshots with hashes and license provenance.
+Adopt upstream updates explicitly using [the snapshot refresh workflow](contracts/README.md).
+Native metadata and execution fixtures remain here; platform CAD plan selection and publication
+validation belong to platform tests. Unit tests from this directory need only the worker files:
+
+```powershell
+python -m pip install ./vendor/worker-sdk -r standalone/requirements.txt -r requirements-test.txt
+python -m pytest -q tests
+```
 
 Key directories:
 
-- `converter/` — production FCStd conversion, metadata normalization, and controlled CAD execution
+- `converter/` — server-side conversion, metadata normalization, and reserved future editing code
 - `preprocessor/` — local-only root selection, dependency discovery, rebinding, and packaging
 - `shared/` — low-level FCStd provenance and assembly-model inspection used by both processes
 - `tools/` — optional check-in and shared STEP-service command-line utilities
@@ -267,7 +263,6 @@ Windows agent when automatic discovery is not sufficient:
 
 ```powershell
 $env:MODELRYX_FREECAD_CMD = "C:\Program Files\FreeCAD 1.1\bin\python.exe"
-$env:MODELRYX_FREECAD_PREPROCESSOR = "D:\project1\Modelryx\workers\freecad\preprocessor\modelryx_freecad_preprocessor.py"
 ```
 
 The production FreeCAD worker does not perform dependency discovery or package rewriting. It
@@ -280,3 +275,15 @@ semantics and native compatibility fixtures remain in the parity backlog.
 The shared contract, path mapping rules, security boundary, test matrix, and implementation order
 are documented in
 [`../../docs/workers/new-cad-worker-guide.md#source-contract`](../../docs/workers/new-cad-worker-guide.md#source-contract).
+
+
+### Format discovery
+
+Open CAD File reads `/api/v1/workers/external-formats`. The server gets format names, versions,
+extensions and document kinds from authenticated worker capabilities. Enabled external
+registrations take precedence; a configured external FreeCAD worker URL is also discovered,
+so URL-only setups do not need a duplicate registration. No FreeCAD extension is invented by
+the local file picker. The configured server must be reachable and advertise a valid worker
+contract. The local preprocessor registration must match the returned worker ID (`freecad` for
+the standard URL-only FreeCAD service). Rebuild/reinstall and restart the local agent after
+updating its source. Local runtime and preprocessor installation are still required.

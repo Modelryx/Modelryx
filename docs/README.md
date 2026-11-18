@@ -96,7 +96,7 @@ modelryx/
 ├── server/              # Python FastAPI backend API
 ├── front-end/           # React TypeScript frontend UI
 ├── workers/
-│   ├── freecad/         # FreeCAD embedded/standalone reference worker
+│   ├── freecad/         # External FreeCAD worker and local preprocessor
 │   └── step/            # STEP processor (built-in)
 ├── docs/                # Complete documentation
 │   ├── operations/      # Deployment and operations

@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$EnvFile = (Join-Path $PSScriptRoot '..\..\..\.env'),
+    [string]$EnvFile = (Join-Path $PSScriptRoot '..\.env'),
     [ValidateRange(1, 65535)][int]$Port = 8090,
     [string]$ListenAddress = '127.0.0.1',
     [switch]$SkipBuild

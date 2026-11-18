@@ -75,6 +75,8 @@ from modelryx.services.freecad_settings import FREECAD_ANALYZER_KEY, configured_
 from modelryx.services.storage import LocalStorageProvider
 
 router = APIRouter(prefix="/api/v1", tags=["cad-workers"])
+# Reserved for a future external editing contract; never mounted in this release.
+editing_router = APIRouter(prefix="/api/v1", tags=["cad-editing-disabled"])
 Db = Annotated[Session, Depends(get_db)]
 Actor = Annotated[Principal, Depends(current_principal)]
 Config = Annotated[Settings, Depends(get_settings)]
@@ -112,12 +114,12 @@ async def analyze_cad_upload(
     _require_cad_editor(principal)
     external_worker = None
     if worker_id is not None:
-        from modelryx.services.external_workers import registered_workers
+        from modelryx.services.external_workers import discover_workers
 
         external_worker = next(
             (
                 worker
-                for worker in registered_workers(db)
+                for worker in discover_workers(db, settings)
                 if worker["id"] == worker_id and worker["enabled"]
             ),
             None,
@@ -319,12 +321,12 @@ def owned_session(
     return value
 
 
-@router.get("/cad/workers", response_model=list[CADWorkerSummary])
+@editing_router.get("/cad/workers", response_model=list[CADWorkerSummary])
 def list_cad_workers(db: Db, _: Actor, settings: Config) -> list[CADWorkerSummary]:
     return worker_summaries(db.scalars(select(WorkerHeartbeat)), cutoff=_worker_cutoff(settings))
 
 
-@router.get("/cad/workers/{worker_id}/capabilities", response_model=CADWorkerCapabilities)
+@editing_router.get("/cad/workers/{worker_id}/capabilities", response_model=CADWorkerCapabilities)
 def get_cad_worker_capabilities(
     worker_id: str, db: Db, _: Actor, settings: Config
 ) -> CADWorkerCapabilities:
@@ -338,7 +340,9 @@ def get_cad_worker_capabilities(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.get("/item-revisions/{revision_id}/cad-inspection", response_model=CADDocumentInspection)
+@editing_router.get(
+    "/item-revisions/{revision_id}/cad-inspection", response_model=CADDocumentInspection
+)
 def get_cad_inspection(revision_id: uuid.UUID, db: Db, principal: Actor) -> CADDocumentInspection:
     candidate = db.get(Revision, revision_id)
     if candidate is None:
@@ -349,7 +353,7 @@ def get_cad_inspection(revision_id: uuid.UUID, db: Db, principal: Actor) -> CADD
     return _revision_inspection(db, revision)
 
 
-@router.post(
+@editing_router.post(
     "/item-revisions/{revision_id}/cad-sessions",
     response_model=CADSessionResponse,
     status_code=status.HTTP_201_CREATED,
@@ -478,12 +482,14 @@ def create_cad_session(
     return session_response(value)
 
 
-@router.get("/cad-sessions/{session_id}", response_model=CADSessionResponse)
+@editing_router.get("/cad-sessions/{session_id}", response_model=CADSessionResponse)
 def get_cad_session(session_id: uuid.UUID, db: Db, principal: Actor) -> CADSessionResponse:
     return session_response(owned_session(db, session_id, principal))
 
 
-@router.get("/item-revisions/{revision_id}/cad-sessions", response_model=list[CADSessionResponse])
+@editing_router.get(
+    "/item-revisions/{revision_id}/cad-sessions", response_model=list[CADSessionResponse]
+)
 def list_cad_sessions(revision_id: uuid.UUID, db: Db, principal: Actor) -> list[CADSessionResponse]:
     revision = db.get(Revision, revision_id)
     if revision is None:
@@ -497,7 +503,7 @@ def list_cad_sessions(revision_id: uuid.UUID, db: Db, principal: Actor) -> list[
     return [session_response(value) for value in sessions]
 
 
-@router.post("/cad-sessions/{session_id}/discard", response_model=CADSessionResponse)
+@editing_router.post("/cad-sessions/{session_id}/discard", response_model=CADSessionResponse)
 def discard_cad_session(
     session_id: uuid.UUID,
     request: Request,
@@ -552,7 +558,7 @@ def _owned_plan(
     return plan, owned_session(db, plan.session_id, principal, lock=lock)
 
 
-@router.post(
+@editing_router.post(
     "/cad-sessions/{session_id}/plans",
     response_model=CADPlanResponse,
     status_code=status.HTTP_201_CREATED,
@@ -651,13 +657,13 @@ def create_cad_plan(
     return plan_response(value)
 
 
-@router.get("/cad-plans/{plan_id}", response_model=CADPlanResponse)
+@editing_router.get("/cad-plans/{plan_id}", response_model=CADPlanResponse)
 def get_cad_plan(plan_id: uuid.UUID, db: Db, principal: Actor) -> CADPlanResponse:
     plan, _ = _owned_plan(db, plan_id, principal)
     return plan_response(plan)
 
 
-@router.post("/cad-plans/{plan_id}/cancel", response_model=CADPlanResponse)
+@editing_router.post("/cad-plans/{plan_id}/cancel", response_model=CADPlanResponse)
 def cancel_cad_plan(
     plan_id: uuid.UUID, request: Request, db: Db, principal: Actor
 ) -> CADPlanResponse:
@@ -681,7 +687,7 @@ def cancel_cad_plan(
     return plan_response(plan)
 
 
-@router.post("/cad-plans/{plan_id}/confirm", response_model=CADExecutionResponse)
+@editing_router.post("/cad-plans/{plan_id}/confirm", response_model=CADExecutionResponse)
 def confirm_cad_plan(
     plan_id: uuid.UUID,
     payload: CADPlanConfirm,
@@ -758,7 +764,7 @@ def confirm_cad_plan(
     return execution_response(execution)
 
 
-@router.get("/cad-executions/{execution_id}", response_model=CADExecutionResponse)
+@editing_router.get("/cad-executions/{execution_id}", response_model=CADExecutionResponse)
 def get_cad_execution(execution_id: uuid.UUID, db: Db, principal: Actor) -> CADExecutionResponse:
     value = db.get(CADExecution, execution_id)
     if value is None:
@@ -767,7 +773,7 @@ def get_cad_execution(execution_id: uuid.UUID, db: Db, principal: Actor) -> CADE
     return execution_response(value)
 
 
-@router.get("/cad-sessions/{session_id}/result", response_model=CADResultResponse)
+@editing_router.get("/cad-sessions/{session_id}/result", response_model=CADResultResponse)
 def get_cad_result(session_id: uuid.UUID, db: Db, principal: Actor) -> CADResultResponse:
     session = owned_session(db, session_id, principal)
     try:
@@ -781,7 +787,7 @@ def get_cad_result(session_id: uuid.UUID, db: Db, principal: Actor) -> CADResult
     )
 
 
-@router.post(
+@editing_router.post(
     "/cad-sessions/{session_id}/commit-plans",
     response_model=CADCommitPlanResponse,
     status_code=status.HTTP_201_CREATED,
@@ -862,7 +868,7 @@ def _owned_commit_plan(
     return value, owned_session(db, value.session_id, principal, lock=lock)
 
 
-@router.get("/cad-commit-plans/{commit_plan_id}", response_model=CADCommitPlanResponse)
+@editing_router.get("/cad-commit-plans/{commit_plan_id}", response_model=CADCommitPlanResponse)
 def get_cad_commit_plan(
     commit_plan_id: uuid.UUID, db: Db, principal: Actor
 ) -> CADCommitPlanResponse:
@@ -870,7 +876,9 @@ def get_cad_commit_plan(
     return commit_plan_response(value)
 
 
-@router.post("/cad-commit-plans/{commit_plan_id}/cancel", response_model=CADCommitPlanResponse)
+@editing_router.post(
+    "/cad-commit-plans/{commit_plan_id}/cancel", response_model=CADCommitPlanResponse
+)
 def cancel_cad_commit_plan(
     commit_plan_id: uuid.UUID, request: Request, db: Db, principal: Actor
 ) -> CADCommitPlanResponse:
@@ -894,7 +902,7 @@ def cancel_cad_commit_plan(
     return commit_plan_response(value)
 
 
-@router.post("/cad-commit-plans/{commit_plan_id}/confirm", response_model=CADCommitResponse)
+@editing_router.post("/cad-commit-plans/{commit_plan_id}/confirm", response_model=CADCommitResponse)
 def confirm_cad_commit_plan(
     commit_plan_id: uuid.UUID,
     payload: CADCommitConfirm,

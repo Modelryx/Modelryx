@@ -73,18 +73,11 @@ try {
         }
         $install = Join-Path $directory 'install'
         & (Join-Path $agentSource 'install-windows.ps1') -InstallDirectory $install
-        foreach ($source in $converterFiles) {
-            $installed = Join-Path $install "app/preprocessors/freecad/$($source.Name)"
-            if (-not (Test-Path -LiteralPath $installed) -or
-                (Get-FileHash -LiteralPath $installed).Hash -ne (Get-FileHash -LiteralPath $source.FullName).Hash) {
-                throw "The FreeCAD converter file $($source.Name) was not installed correctly."
-            }
+        if (@(Get-ChildItem -LiteralPath (Join-Path $install 'app') -Recurse -Filter '*.py').Count) {
+            throw 'The generic agent must not bundle native CAD Python files.'
         }
         $settings = Get-Content -LiteralPath (Join-Path $install 'app/settings.json') -Raw | ConvertFrom-Json
-        if (-not (Test-Path -LiteralPath $settings.FreeCadPreprocessorScript) -or
-            -not (Test-Path -LiteralPath $settings.FreeCadConverterScript)) {
-            throw "FreeCAD paths are missing from settings for $case."
-        }
+        if ($settings.PSObject.Properties.Name -match '^FreeCad') { throw 'Generic settings contain FreeCAD configuration.' }
         $expectedBuilds = if ($case -eq 'source') { 1 } else { 0 }
         if ($state.Calls.Count -ne $expectedBuilds) { throw "Unexpected publish count for $case" }
         if ($state.RegistryCalls -eq 0) { throw 'Protocol registration was not exercised.' }

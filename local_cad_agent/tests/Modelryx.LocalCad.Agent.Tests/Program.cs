@@ -27,25 +27,29 @@ var assemblyFormat = new WorkerFormat("assembly", "Assembly CAD", "Assembly work
     [".assembly", ".part", ".drawing"]);
 var drawingFormat = new WorkerFormat("drawing", "Drawing CAD", "Drawing worker", "1.0", [".drawing"]);
 var filters = NativeFilePicker.BuildFilters([drawingFormat, assemblyFormat]);
-Assert(filters.Select(filter => filter.Name).SequenceEqual(new[] { "FreeCAD", "Assembly CAD", "Drawing CAD" }),
-    "built-in format first, registered systems sorted by name");
-Assert(filters[0].Label == "FreeCAD (*.FCStd)", "FreeCAD label");
-Assert(NativeFilePicker.SelectFile("shared.DRAWING", filters[1]).Worker?.Id == "assembly",
+Assert(filters.Select(filter => filter.Name).SequenceEqual(new[] { "Assembly worker", "Drawing worker" }),
+    "only registered systems are shown, sorted by name");
+Assert(NativeFilePicker.SelectFile("shared.DRAWING", filters[0]).Worker?.Id == "assembly",
     "selected system determines shared-extension routing");
-Assert(NativeFilePicker.SelectFile("shared.drawing", filters[2]).Worker?.Id == "drawing",
+Assert(NativeFilePicker.SelectFile("shared.drawing", filters[1]).Worker?.Id == "drawing",
     "shared extension preserves the selected worker");
-Assert(NativeFilePicker.SelectFile("part.FCStd", filters[0]).Worker is null,
-    "built-in FreeCAD preprocessing remains available");
+Assert(filters.All(filter => filter.CadSystem != "freecad"), "FreeCAD requires registration");
 var freecad = new WorkerFormat("external-freecad", "FreeCAD", "FreeCAD", "1.0", [".fcstd"]);
 var registered = NativeFilePicker.BuildFilters([freecad, assemblyFormat, drawingFormat]);
-Assert(registered.Count == 3 && NativeFilePicker.SelectFile("part.FCStd", registered[0]).Worker?.Id == "external-freecad",
+Assert(registered.Count == 3 && NativeFilePicker.SelectFile("part.FCStd", registered.Single(filter => filter.CadSystem == "freecad")).Worker?.Id == "external-freecad",
     "registered FreeCAD uses the external preprocessor");
+var advertisedFreecad = freecad with { WorkerName = "Custom native server", SourceExtensions = [".fcstd", ".fcnext"] };
+var advertisedFilter = NativeFilePicker.BuildFilters([advertisedFreecad]).Single();
+Assert(advertisedFilter.Label == "Custom native server (*.fcnext;*.fcstd)",
+    "picker name and every extension come from advertised capabilities");
+Assert(NativeFilePicker.SelectFile("part.fcnext", advertisedFilter).Worker?.Id == freecad.Id,
+    "worker-provided additional extensions are selectable without client changes");
 try
 {
-    NativeFilePicker.SelectFile("model.part", filters[2]);
+    NativeFilePicker.SelectFile("model.part", filters[1]);
     throw new Exception("Unsupported extension was accepted.");
 }
-catch (InvalidOperationException error) when (error.Message.Contains("Drawing CAD file type")) { }
+catch (InvalidOperationException error) when (error.Message.Contains("Drawing worker file type")) { }
 var duplicates = NativeFilePicker.BuildFilters([drawingFormat, drawingFormat with { Id = "other" }]);
 try
 {
@@ -58,7 +62,7 @@ try
     await CadAnalyzer.AnalyzeAsync("unregistered.example", Path.GetTempPath(), CancellationToken.None);
     throw new Exception("Unregistered format was accepted.");
 }
-catch (NotSupportedException) { }
+catch (InvalidOperationException error) when (error.Message.Contains("external CAD worker")) { }
 
 var directory = Path.Combine(Path.GetTempPath(), "modelryx-agent-tests-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(directory);

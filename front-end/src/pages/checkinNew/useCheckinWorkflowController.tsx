@@ -21,7 +21,6 @@ import {
   type CommitProcessingJob,
   type EditOccurrence,
   type EditWhereUsed,
-  type DuplicateMatch,
   type FileEntry,
   type GeneratedItemNumber,
   type ItemNumberTemplateOption,
@@ -714,7 +713,7 @@ export function useCheckinWorkflowController({
 
     if (hashChecks.length > 0) {
       try {
-        let staging = resumeStageId
+        const staging = resumeStageId
           ? await api<StagingResult>(`/staging/${resumeStageId}`)
           : await api<StagingResult>('/staging', 'POST', {
               client_staging_id: randomUUID(),
@@ -733,38 +732,6 @@ export function useCheckinWorkflowController({
                 mime_type: 'application/octet-stream',
               })),
             });
-        if (!resumeStageId && packagedReport?.part_metadata) {
-          const rootEntry = entries.find((entry) => entry.logicalPath === initialMain);
-          if (
-            !rootEntry?.sha256 ||
-            packagedReport.metadata_source_sha256?.toLowerCase() !== rootEntry.sha256.toLowerCase()
-          ) {
-            throw new Error(
-              'Local CAD metadata does not match the selected root file. Analyze the CAD file again.'
-            );
-          }
-          staging = await api<StagingResult>(`/staging/${staging.id}/metadata`, 'POST', {
-            metadata: packagedReport.part_metadata,
-            source_logical_path: rootEntry.logicalPath,
-            source_sha256: rootEntry.sha256,
-            analyzer: packagedReport.analyzer_version || 'modelryx-local-cad-agent',
-          });
-          const rootCandidates: DuplicateMatch[] = staging.duplicate_check.candidates.map(
-            (candidate) => ({
-              item_id: candidate.candidate_item_id,
-              item_number: candidate.item_number,
-              item_name: candidate.item_number,
-              item_type: packagedReport.document_type === 'ASSEMBLY' ? 'ASSEMBLY' : 'PART',
-              revision_id: candidate.candidate_revision_id,
-              revision_code: candidate.revision,
-              duplicate_check_id: staging.duplicate_check.id,
-              duplicate_candidate_id: candidate.id,
-              classification: candidate.classification,
-            })
-          );
-          const root = entries.find((entry) => entry.logicalPath === initialMain);
-          if (rootCandidates.length && root) root.duplicates = rootCandidates;
-        }
         if (resumeStageId) {
           const stagedByPath = new Map(staging.files.map((file) => [file.logical_path, file]));
           const mismatch = hashChecks.find((file) => {
@@ -1389,6 +1356,11 @@ export function useCheckinWorkflowController({
           sourceExtensions: string[];
         }>
       >('/workers/external-formats');
+      if (!formats.length) {
+        throw new Error(
+          'No external CAD worker advertises supported file formats. Register an enabled worker or configure a reachable CAD server with valid capabilities in Administration.'
+        );
+      }
       const requestSelection = () =>
         fetch(`${agentBase}/api/v1/selections`, {
           method: 'POST',

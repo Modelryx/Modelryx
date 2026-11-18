@@ -16,7 +16,7 @@ spec.loader.exec_module(module)
 
 
 @pytest.mark.parametrize("missing", [False, True])
-def test_local_launcher_extracts_metadata_only_from_rebased_package(
+def test_local_launcher_only_packages_dependencies(
     tmp_path, monkeypatch, capsys, missing
 ):
     source = tmp_path / "root.FCStd"
@@ -36,15 +36,12 @@ def test_local_launcher_extracts_metadata_only_from_rebased_package(
 
     def run(command, **options):
         calls.append(command)
-        if len(calls) == 1:
-            return SimpleNamespace(stdout="native startup log\n" + json.dumps(report) + "\n")
-        assert Path(command[3]).read_bytes() == b"rebased"
-        assert "--metadata-only" in command
-        assert options["stdout"] is module.sys.stderr
-        return SimpleNamespace(returncode=0)
+        assert Path(command[2]).name == "modelryx_freecad_preprocessor.py"
+        assert options["check"] is True
+        return SimpleNamespace(stdout="native startup log\n" + json.dumps(report) + "\n")
 
     monkeypatch.setattr(module.subprocess, "run", run)
     assert module.main([str(source), str(output)]) == 0
     assert json.loads(capsys.readouterr().out) == report
-    assert len(calls) == (1 if missing else 2)
+    assert len(calls) == 1
     assert source.read_bytes() == b"original"

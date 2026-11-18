@@ -273,8 +273,7 @@ Write-Host "Configured $(Join-Path $ProjectRoot '.modelryx.local.props')"
 
 if ($InstallLocalCadAgent) {
     $AgentInstaller = Join-Path $ProjectRoot "local_cad_agent\install-windows.ps1"
-    if ($FreeCadCmd) { & $AgentInstaller -FreeCadCommand $FreeCadCmd }
-    else { & $AgentInstaller }
+    & $AgentInstaller
 }
 
 Write-Host ""

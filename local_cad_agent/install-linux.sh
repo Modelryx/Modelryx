@@ -4,7 +4,7 @@ set -eu
 install_root="${XDG_DATA_HOME:-$HOME/.local/share}/modelryx/local-cad-agent"
 config_root="${XDG_CONFIG_HOME:-$HOME/.config}/Modelryx/LocalCadAgent"
 project_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-mkdir -p "$install_root/app/preprocessors/freecad" "$config_root" "$HOME/.local/share/applications"
+mkdir -p "$install_root/app/preprocessors" "$config_root" "$HOME/.local/share/applications"
 prebuilt="$project_dir/artifacts/linux-x64/Modelryx.LocalCad.Agent"
 if [ -f "$prebuilt" ]; then
   cp "$prebuilt" "$install_root/app/Modelryx.LocalCad.Agent"
@@ -19,34 +19,10 @@ else
     -o "$install_root/app"
 fi
 
-preprocessor_script="$project_dir/../workers/freecad/preprocessor/modelryx_freecad_preprocessor.py"
-if [ -f "$preprocessor_script" ]; then
-  cp "$preprocessor_script" "$install_root/app/preprocessors/freecad/modelryx_freecad_preprocessor.py"
-elif [ -f "$project_dir/artifacts/linux-x64/preprocessors/freecad/modelryx_freecad_preprocessor.py" ]; then
-  cp "$project_dir/artifacts/linux-x64/preprocessors/freecad/modelryx_freecad_preprocessor.py" \
-    "$install_root/app/preprocessors/freecad/modelryx_freecad_preprocessor.py"
+# Install native preprocessors separately and register them in ExternalPreprocessors.
+if [ ! -f "$config_root/settings.json" ]; then
+  printf '{"ExternalPreprocessors": [], "AllowedOrigins": ["http://localhost:5173"]}\n' > "$config_root/settings.json"
 fi
-shared_script="$project_dir/../workers/freecad/shared/modelryx_freecad_shared.py"
-if [ -f "$shared_script" ]; then
-  cp "$shared_script" "$install_root/app/preprocessors/freecad/modelryx_freecad_shared.py"
-elif [ -f "$project_dir/artifacts/linux-x64/preprocessors/freecad/modelryx_freecad_shared.py" ]; then
-  cp "$project_dir/artifacts/linux-x64/preprocessors/freecad/modelryx_freecad_shared.py" \
-    "$install_root/app/preprocessors/freecad/modelryx_freecad_shared.py"
-fi
-converter_dir="$project_dir/../workers/freecad/converter"
-if [ ! -d "$converter_dir" ]; then
-  converter_dir="$project_dir/artifacts/linux-x64/preprocessors/freecad"
-fi
-for converter_source in "$converter_dir"/*.py; do
-  [ -f "$converter_source" ] || continue
-  case "$converter_source" in *_test.py) continue ;; esac
-  cp "$converter_source" "$install_root/app/preprocessors/freecad/"
-done
-rm -f "$install_root/app/preprocessors/freecad/modelryx_freecad_metadata.py"
-rm -rf "$install_root/app/adapters"
-printf '{\n  "FreeCadPreprocessorScript": "%s",\n  "FreeCadConverterScript": "%s"\n}\n' \
-  "$install_root/app/preprocessors/freecad/modelryx_freecad_preprocessor.py" \
-  "$install_root/app/preprocessors/freecad/fcstd_to_modelryx_glb.py" > "$config_root/settings.json"
 
 desktop_file="$HOME/.local/share/applications/modelryx-local-cad-agent.desktop"
 sed "s|__EXECUTABLE__|$install_root/app/Modelryx.LocalCad.Agent|g" \

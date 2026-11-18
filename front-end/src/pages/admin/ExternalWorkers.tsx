@@ -20,6 +20,14 @@ export type ExternalWorkerStatus = {
   availability: 'ONLINE' | 'OFFLINE' | 'DISABLED' | 'CHANGED';
   checkedAt: string;
   detail: string | null;
+  capabilities?: {
+    workerName: string;
+    workerVersion: string;
+    sourceExtensions: string[];
+    documentKinds: string[];
+    outputRoles: string[];
+    dependencyAnalysis: boolean;
+  };
 };
 
 export function ExternalWorkerAvailability({ workers }: { workers: ExternalWorkerStatus[] }) {
@@ -29,7 +37,7 @@ export function ExternalWorkerAvailability({ workers }: { workers: ExternalWorke
         <article className="worker-health-card" key={`external-${worker.id}`}>
           <div className="maintenance-title-row">
             <strong>
-              {worker.cadSystem} · {worker.id}
+              {worker.capabilities?.workerName ?? worker.cadSystem} · {worker.id}
             </strong>
             <span
               className={`maintenance-health ${worker.availability === 'ONLINE' ? 'healthy' : 'degraded'}`}
@@ -41,6 +49,14 @@ export function ExternalWorkerAvailability({ workers }: { workers: ExternalWorke
             <div>
               <dt>Endpoint</dt>
               <dd>{worker.url}</dd>
+            </div>
+            <div>
+              <dt>Worker version</dt>
+              <dd>{worker.capabilities?.workerVersion ?? '—'}</dd>
+            </div>
+            <div>
+              <dt>File formats</dt>
+              <dd>{worker.capabilities?.sourceExtensions.join(', ') || '—'}</dd>
             </div>
             <div>
               <dt>Last checked</dt>

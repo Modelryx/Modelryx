@@ -17,11 +17,11 @@ from pathlib import Path, PurePosixPath
 from urllib.parse import urljoin
 
 import httpx
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from modelryx.cad.worker_adapter import load_worker_adapter
+from modelryx.cad.worker_adapter import MissingCADWorkerAdapter
 from modelryx.core.audit import record_audit
 from modelryx.core.config import Settings, get_settings
 from modelryx.core.db import SessionLocal
@@ -31,9 +31,6 @@ from modelryx.models import (
     ArtifactFile,
     BomLine,
     BomViewRevision,
-    CADExecution,
-    CADOperationPlan,
-    CADSession,
     Item,
     ProcessingJob,
     Revision,
@@ -45,6 +42,7 @@ from modelryx.models import (
 from modelryx.services.approval_escalations import create_overdue_approval_escalations
 from modelryx.services.artifact_content import (
     artifact_files_for_snapshot,
+    has_published_derived_content,
     latest_content_snapshot_id,
 )
 from modelryx.services.checkout_notifications import (
@@ -70,7 +68,7 @@ from modelryx.services.storage import LocalStorageProvider
 
 MAX_ATTEMPTS = 3
 logger = logging.getLogger("modelryx.worker")
-cad_worker_adapter = load_worker_adapter()
+cad_worker_adapter = MissingCADWorkerAdapter()
 
 
 def generate_revision_thumbnail(
@@ -348,7 +346,7 @@ def report_general_worker_heartbeat(
 
 
 def busy_heartbeat_loop(
-    settings: Settings, job_id: uuid.UUID, stop: threading.Event, worker_role: str = "all"
+    settings: Settings, job_id: uuid.UUID, stop: threading.Event, worker_role: str = "general"
 ) -> None:
     while not stop.wait(10):
         try:
@@ -499,48 +497,18 @@ def duplicate_check_best_effort(db: Session, revision: Revision, settings: Setti
         logger.exception("duplicate_check_failed revision_id=%s", revision.id)
 
 
-def claim_job(
-    db: Session, worker_role: str = "all", *, remote_freecad: bool = False
-) -> ProcessingJob | None:
+def claim_job(db: Session) -> ProcessingJob | None:
     now = datetime.now(UTC)
-    cad_enabled = worker_role in {"all", "freecad"}
-    compatibility, _ = cad_worker_adapter.compatibility() if cad_enabled else ("INCOMPATIBLE", None)
-    capabilities = cad_worker_adapter.capabilities() if compatibility == "COMPATIBLE" else {}
-    extensions = capabilities.get("vendor_extensions", {})
-    formats = extensions.get("formats", []) if isinstance(extensions, dict) else []
-    native_job_types = (
-        ["FCSTD_TO_MODELRYX"] if any(str(value).casefold() == "fcstd" for value in formats) else []
-    )
-    session_jobs = (
-        select(CADExecution.processing_job_id)
-        .join(CADOperationPlan, CADOperationPlan.id == CADExecution.plan_id)
-        .join(CADSession, CADSession.id == CADOperationPlan.session_id)
-        .where(CADSession.worker_id == cad_worker_adapter.worker_id)
-    )
-    generic_job_types = (
-        "STEP_TO_MODELRYX",
-        EXTERNAL_CAD_JOB_TYPE,
-        "ASSEMBLY_SOURCE_BUNDLE",
-    )
-    eligible = []
-    if worker_role in {"all", "general"}:
-        eligible.append(ProcessingJob.type.in_(generic_job_types))
-        if remote_freecad:
-            eligible.append(ProcessingJob.type == "FCSTD_TO_MODELRYX")
-    if worker_role in {"all", "freecad"} and native_job_types and not remote_freecad:
-        eligible.append(ProcessingJob.type.in_(native_job_types))
-    if worker_role in {"all", "freecad"} and compatibility == "COMPATIBLE":
-        eligible.append(
-            (ProcessingJob.type == "CAD_SESSION_EXECUTE") & ProcessingJob.id.in_(session_jobs)
-        )
-    if not eligible:
-        return None
+    eligible = ProcessingJob.type.in_((
+        "STEP_TO_MODELRYX", EXTERNAL_CAD_JOB_TYPE, "ASSEMBLY_SOURCE_BUNDLE",
+        "FCSTD_TO_MODELRYX",
+    ))
     job = db.scalar(
         select(ProcessingJob)
         .where(
             ProcessingJob.state == "PENDING",
             ProcessingJob.available_at <= now,
-            or_(*eligible),
+            eligible,
         )
         .order_by(ProcessingJob.available_at, ProcessingJob.id)
         .with_for_update(skip_locked=True)
@@ -1540,7 +1508,7 @@ def process_external_cad_job(db: Session, job: ProcessingJob, settings: Settings
     primary = next((value for value in files if value.role == "PRIMARY"), None)
     if primary is None:
         raise RuntimeError("verified native artifact is missing")
-    external_worker = matching_worker(db, primary.original_filename, revision.cad_system)
+    external_worker = matching_worker(db, primary.original_filename, revision.cad_system, settings)
     if external_worker is None:
         raise RuntimeError("No unique enabled external worker matches the source")
     cad_system = external_worker["capabilities"]["cadSystem"]
@@ -1985,10 +1953,7 @@ def process_external_cad_job(db: Session, job: ProcessingJob, settings: Settings
 
 def process_job(db: Session, job: ProcessingJob, settings: Settings) -> None:
     if job.type == "CAD_SESSION_EXECUTE":
-        from modelryx.cad.execution import process_cad_execution
-
-        process_cad_execution(db, job, settings)
-        return
+        raise RuntimeError("Controlled CAD editing is disabled in this release")
     if job.type == "ASSEMBLY_SOURCE_BUNDLE":
         from modelryx.api.bundles import process_bundle_job
 
@@ -2002,6 +1967,11 @@ def process_job(db: Session, job: ProcessingJob, settings: Settings) -> None:
         return
     if job.type != "FCSTD_TO_MODELRYX":
         raise RuntimeError(f"unsupported processing job type: {job.type}")
+    if not settings.freecad_worker_url:
+        raise RuntimeError(
+            "FreeCAD requires an external worker. Register it in External CAD Workers "
+            "or configure MODELRYX_FREECAD_WORKER_URL."
+        )
     update_stage(db, job, "INSPECTING", 10)
     revision = db.get(Revision, job.revision_id)
     source_snapshot = db.get(RevisionContentSnapshot, job.snapshot_id)
@@ -2218,28 +2188,19 @@ def process_job(db: Session, job: ProcessingJob, settings: Settings) -> None:
                 message=message,
             )
 
-        if settings.freecad_worker_url:
-            from modelryx.services.freecad_remote import convert_remote
+        from modelryx.services.freecad_remote import convert_remote
 
-            item = db.get(Item, revision.part_id)
-            convert_remote(
-                converter_source,
-                source_directory,
-                output_pfg,
-                settings,
-                job,
-                "assembly" if item and item.part_type == "ASSEMBLY" else "part",
-                lambda: check_processing_cancelled(db, job),
-                report_native_progress,
-            )
-        else:
-            run_converter(
-                converter_source,
-                output_pfg,
-                settings,
-                progress_callback=report_native_progress,
-                cancellation_callback=lambda: check_processing_cancelled(db, job),
-            )
+        item = db.get(Item, revision.part_id)
+        convert_remote(
+            converter_source,
+            source_directory,
+            output_pfg,
+            settings,
+            job,
+            "assembly" if item and item.part_type == "ASSEMBLY" else "part",
+            lambda: check_processing_cancelled(db, job),
+            report_native_progress,
+        )
         check_processing_cancelled(db, job)
         update_stage(db, job, "VALIDATING", 70)
         glb_path, bom_path, bom, diagnostics = read_converter_package(
@@ -2470,11 +2431,16 @@ def fail_job(db: Session, job: ProcessingJob, error: Exception) -> None:
             "STEP_TO_MODELRYX",
         }:
             if latest_content_snapshot_id(db, revision.id) == job.snapshot_id:
-                revision.state = (
-                    "READY_WITH_WARNINGS" if job.type == "FCSTD_TO_MODELRYX" else "FAILED"
+                preserve_published = revision.state in {"READY", "READY_WITH_WARNINGS"} or (
+                    has_published_derived_content(db, revision.id)
                 )
-            if failed_stage in {"VALIDATING", "VALIDATING_OUTPUTS"}:
-                revision.metadata_status = "INVALID"
+                revision.state = (
+                    "READY_WITH_WARNINGS"
+                    if preserve_published or job.type == "FCSTD_TO_MODELRYX"
+                    else "FAILED"
+                )
+                if not preserve_published and failed_stage in {"VALIDATING", "VALIDATING_OUTPUTS"}:
+                    revision.metadata_status = "INVALID"
         if job.type == "ASSEMBLY_SOURCE_BUNDLE":
             from modelryx.models import DownloadBundle
 
@@ -2586,9 +2552,7 @@ def main() -> None:
                     fail_staging_workflow(db, staging_id, exc)
                     logger.exception("staging_workflow_failed staging_id=%s", staging_id)
                 continue
-            job = claim_job(
-                db, worker_role, remote_freecad=bool(current_settings.freecad_worker_url)
-            )
+            job = claim_job(db)
             if job is not None:
                 if worker_role == "general":
                     report_general_worker_heartbeat(db, status="BUSY", current_job_id=job.id)

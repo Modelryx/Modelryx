@@ -1,9 +1,7 @@
 using System.Diagnostics;
 using System.ComponentModel;
-using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Security.Cryptography;
 
 namespace Modelryx.LocalCad.Agent;
 
@@ -27,63 +25,19 @@ internal static class CadAnalyzer
                 ?? throw new InvalidOperationException($"Install the local preprocessor for '{externalWorker.WorkerName}' before opening this file.");
             var executable = configuration.RequireExternalExecutable(local);
             var json = await RunAsync(executable, [root, workDirectory], cancellationToken);
-            return ParseNativeReport(json, workDirectory, local.Version, root);
+            return ParseNativeReport(json, workDirectory, local.Version);
         }
-        return extension switch
-        {
-            ".fcstd" => await AnalyzeFreeCadAsync(root, workDirectory, cancellationToken),
-            _ => throw new NotSupportedException($"{extension} is not a supported CAD document."),
-        };
-    }
-
-    private static async Task<AnalysisOutput> AnalyzeFreeCadAsync(string root, string output,
-        CancellationToken cancellationToken)
-    {
-        var python = Configuration.FindFreeCadCommand();
-        if (string.IsNullOrWhiteSpace(python) || !File.Exists(python))
-            throw new InvalidOperationException(
-                "FreeCAD was not found. Install FreeCAD or set MODELRYX_FREECAD_CMD to its Python executable.");
-        var script = Configuration.RequireFreeCadPreprocessor();
-        var json = await RunAsync(python, [script, root, output], cancellationToken);
-        var reportNode = ParseNativeReportNode(json);
-        var packageValue = reportNode["package"]?.GetValue<string>();
-        var rootLogicalPath = reportNode["root_logical_path"]?.GetValue<string>();
-        if (string.IsNullOrWhiteSpace(packageValue) || string.IsNullOrWhiteSpace(rootLogicalPath))
-            throw new InvalidDataException("The FreeCAD analyzer returned no isolated package root.");
-        var packagedRoot = ExtractPackageForMetadata(
-            Path.GetFullPath(packageValue), rootLogicalPath, Path.Combine(output, "metadata-package"));
-        var metadataScript = Configuration.RequireFreeCadConverter();
-        var metadataPath = Path.Combine(output, "part-metadata.json");
-        await RunAsync(python,
-            [metadataScript, packagedRoot, "--metadata-only", "--metadata-output", metadataPath],
-            cancellationToken);
-        return ParseNativeReport(json, output, "modelryx-freecad-dependencies-1", packagedRoot);
-    }
-
-    private static string PackagePath(string staging, string logicalPath) => Path.GetFullPath(
-        Path.Combine(staging, logicalPath.Replace('/', Path.DirectorySeparatorChar)));
-
-    private static bool IsWithin(string file, string directory)
-    {
-        var relative = Path.GetRelativePath(directory, file);
-        return relative != ".." && !relative.StartsWith(".." + Path.DirectorySeparatorChar,
-            StringComparison.Ordinal) && !Path.IsPathRooted(relative);
+        throw new InvalidOperationException("Select an enabled external CAD worker and install its local preprocessor before opening this file.");
     }
 
     private static AnalysisOutput ParseNativeReport(string outputText, string outputDirectory,
-        string fallbackAnalyzer, string rootPath)
+        string fallbackAnalyzer)
     {
         var node = ParseNativeReportNode(outputText);
         node["contract_version"] ??= "1.0";
         node["analyzer_version"] ??= fallbackAnalyzer;
         node["missing_references"] ??= new JsonArray();
         node["references"] ??= new JsonArray();
-        var metadataPath = Path.Combine(outputDirectory, "part-metadata.json");
-        if (File.Exists(metadataPath))
-        {
-            node["part_metadata"] = JsonNode.Parse(File.ReadAllText(metadataPath));
-            node["metadata_source_sha256"] = Sha256(rootPath);
-        }
         var report = node.Deserialize<DependencyReport>(JsonOptions)
             ?? throw new InvalidDataException("The CAD analyzer report is incomplete.");
         var packageValue = node["package"]?.GetValue<string>();
@@ -108,31 +62,6 @@ internal static class CadAnalyzer
             ?? throw new InvalidDataException("The CAD analyzer returned invalid JSON.");
     }
 
-    private static string ExtractPackageForMetadata(
-        string package, string rootLogicalPath, string destinationDirectory)
-    {
-        Directory.CreateDirectory(destinationDirectory);
-        using var archive = ZipFile.OpenRead(package);
-        foreach (var entry in archive.Entries)
-        {
-            if (string.IsNullOrEmpty(entry.Name)) continue;
-            var destination = PackagePath(destinationDirectory, entry.FullName);
-            if (!IsWithin(destination, destinationDirectory))
-                throw new InvalidDataException("The CAD package contains an unsafe path.");
-            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            entry.ExtractToFile(destination, overwrite: true);
-        }
-        var root = PackagePath(destinationDirectory, rootLogicalPath);
-        if (!IsWithin(root, destinationDirectory) || !File.Exists(root))
-            throw new InvalidDataException("The isolated CAD package does not contain its declared root file.");
-        return root;
-    }
-
-    private static string Sha256(string path)
-    {
-        using var stream = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
-    }
 
     private static async Task<string> RunAsync(string executable, IEnumerable<string> arguments,
         CancellationToken cancellationToken, IReadOnlyDictionary<string, string>? environment = null,

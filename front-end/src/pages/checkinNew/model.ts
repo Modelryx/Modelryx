@@ -215,8 +215,6 @@ export type CadDependencyReport = {
   package_url?: string;
   contract_version?: string;
   analyzer_version?: string;
-  part_metadata?: Record<string, unknown>;
-  metadata_source_sha256?: string;
   document_type: 'PART' | 'ASSEMBLY' | 'DRAWING';
   root_file: string;
   root_logical_path: string;

@@ -1,0 +1,457 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://modelryx.local/schemas/part-metadata/v1.0.json",
+  "title": "Modelryx PartMetadata v1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "schema_version", "source", "identity", "geometry", "quality"],
+  "properties": {
+    "schema": {"const": "modelryx.part-metadata"},
+    "schema_version": {"const": "1.0"},
+    "source": {"$ref": "#/$defs/source"},
+    "identity": {"$ref": "#/$defs/identity"},
+    "geometry": {"$ref": "#/$defs/geometry"},
+    "physical": {"$ref": "#/$defs/physical"},
+    "features": {"$ref": "#/$defs/features"},
+    "drawings": {"type": "array", "items": {"$ref": "#/$defs/normalizedDrawing"}},
+    "assembly": {"$ref": "#/$defs/assembly"},
+    "parameters": {"type": "array", "items": {"$ref": "#/$defs/parameter"}},
+    "manufacturing": {"$ref": "#/$defs/manufacturing"},
+    "extraction": {"$ref": "#/$defs/extractionEvidence"},
+    "properties": {"$ref": "#/$defs/properties"},
+    "quality": {"$ref": "#/$defs/quality"},
+    "native": {"type": "object"}
+  },
+  "$defs": {
+    "nonNegativeNumber": {"type": "number", "minimum": 0},
+    "nonNegativeInteger": {"type": "integer", "minimum": 0},
+    "point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x_mm", "y_mm", "z_mm"],
+      "properties": {
+        "x_mm": {"type": "number"},
+        "y_mm": {"type": "number"},
+        "z_mm": {"type": "number"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system", "worker", "worker_version", "extracted_at"],
+      "properties": {
+        "system": {"type": "string", "minLength": 1},
+        "system_version": {"type": ["string", "null"]},
+        "worker": {"type": "string", "minLength": 1},
+        "worker_version": {"type": "string", "minLength": 1},
+        "extracted_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "display_name": {"type": ["string", "null"]},
+        "description": {"type": ["string", "null"]},
+        "kind": {"enum": ["part", "assembly", "unknown"]},
+        "part_number": {"type": ["string", "null"]},
+        "revision": {"type": ["string", "null"]},
+        "classification": {"type": "array", "items": {"type": "string"}},
+        "tags": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "geometry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bounding_box", "shape"],
+      "properties": {
+        "bounding_box": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["x_mm", "y_mm", "z_mm"],
+          "properties": {
+            "x_mm": {"$ref": "#/$defs/nonNegativeNumber"},
+            "y_mm": {"$ref": "#/$defs/nonNegativeNumber"},
+            "z_mm": {"$ref": "#/$defs/nonNegativeNumber"}
+          }
+        },
+        "center": {"$ref": "#/$defs/point"},
+        "shape": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["volume_mm3", "surface_area_mm2"],
+          "properties": {
+            "volume_mm3": {"$ref": "#/$defs/nonNegativeNumber"},
+            "surface_area_mm2": {"$ref": "#/$defs/nonNegativeNumber"}
+          }
+        },
+        "topology": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "solid_count": {"$ref": "#/$defs/nonNegativeInteger"},
+            "shell_count": {"$ref": "#/$defs/nonNegativeInteger"},
+            "face_count": {"$ref": "#/$defs/nonNegativeInteger"},
+            "edge_count": {"$ref": "#/$defs/nonNegativeInteger"},
+            "vertex_count": {"$ref": "#/$defs/nonNegativeInteger"}
+          }
+        }
+      }
+    },
+    "material": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "normalized_name": {"type": "string", "minLength": 1},
+        "family": {"type": ["string", "null"]},
+        "grade": {"type": ["string", "null"]},
+        "specification": {"type": ["string", "null"]},
+        "temper": {"type": ["string", "null"]}
+      }
+    },
+    "physical": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "material": {"$ref": "#/$defs/material"},
+        "density_kg_m3": {"$ref": "#/$defs/nonNegativeNumber"},
+        "mass_kg": {"$ref": "#/$defs/nonNegativeNumber"},
+        "center_of_mass": {"$ref": "#/$defs/point"}
+      }
+    },
+    "featureSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hole_count": {"$ref": "#/$defs/nonNegativeInteger"},
+        "fillet_count": {"$ref": "#/$defs/nonNegativeInteger"},
+        "chamfer_count": {"$ref": "#/$defs/nonNegativeInteger"},
+        "extrusion_count": {"$ref": "#/$defs/nonNegativeInteger"},
+        "revolution_count": {"$ref": "#/$defs/nonNegativeInteger"},
+        "pocket_count": {"$ref": "#/$defs/nonNegativeInteger"},
+        "pattern_count": {"$ref": "#/$defs/nonNegativeInteger"},
+        "thread_count": {"$ref": "#/$defs/nonNegativeInteger"}
+      }
+    },
+    "hole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["diameter_mm", "through", "count"],
+      "properties": {
+        "diameter_mm": {"$ref": "#/$defs/nonNegativeNumber"},
+        "depth_mm": {"anyOf": [{"$ref": "#/$defs/nonNegativeNumber"}, {"type": "null"}]},
+        "through": {"type": "boolean"},
+        "count": {"$ref": "#/$defs/nonNegativeInteger"},
+        "kind": {"enum": ["simple", "counterbore", "countersink", "tapped", "unknown"]},
+        "counterbore_diameter_mm": {"anyOf": [{"$ref": "#/$defs/nonNegativeNumber"}, {"type": "null"}]},
+        "counterbore_depth_mm": {"anyOf": [{"$ref": "#/$defs/nonNegativeNumber"}, {"type": "null"}]},
+        "countersink_diameter_mm": {"anyOf": [{"$ref": "#/$defs/nonNegativeNumber"}, {"type": "null"}]},
+        "countersink_angle_deg": {"anyOf": [{"$ref": "#/$defs/nonNegativeNumber"}, {"type": "null"}]},
+        "thread_designation": {"type": ["string", "null"]},
+        "thread_pitch_mm": {"anyOf": [{"$ref": "#/$defs/nonNegativeNumber"}, {"type": "null"}]},
+        "thread_class": {"type": ["string", "null"]},
+        "tapped_depth_mm": {"anyOf": [{"$ref": "#/$defs/nonNegativeNumber"}, {"type": "null"}]},
+        "pattern_id": {"type": ["string", "null"]},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "features": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "summary"],
+      "properties": {
+        "source": {"enum": ["history", "geometry_inferred", "mixed"]},
+        "summary": {"$ref": "#/$defs/featureSummary"},
+        "holes": {"type": "array", "items": {"$ref": "#/$defs/hole"}},
+        "items": {"type": "array", "items": {"$ref": "#/$defs/normalizedFeature"}}
+      }
+    },
+    "normalizedFeature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "properties"],
+      "properties": {
+        "persistent_id": {"type": ["string", "null"], "maxLength": 255},
+        "name": {"type": ["string", "null"], "maxLength": 255},
+        "type": {
+          "enum": [
+            "HOLE", "POCKET", "PAD", "EXTRUSION", "FILLET", "CHAMFER", "BOSS",
+            "SLOT", "PATTERN", "SHELL", "REVOLVE", "THREAD", "BODY", "SKETCH",
+            "LOFT", "SWEEP", "DRAFT", "BOOLEAN",
+            "UNKNOWN_FEATURE"
+          ]
+        },
+        "properties": {"$ref": "#/$defs/properties"}
+      }
+    },
+    "drawingLocation": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {"type": "number"}
+    },
+    "drawingSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stable_id", "kind", "page", "text"],
+      "properties": {
+        "stable_id": {"type": "string", "minLength": 1, "maxLength": 255},
+        "kind": {
+          "enum": ["SECTION", "NOTES", "TITLE_BLOCK", "REVISION_TABLE", "TABLE", "OTHER"]
+        },
+        "page": {"type": "integer", "minimum": 1},
+        "text": {"type": "string"},
+        "bbox": {"$ref": "#/$defs/drawingLocation"}
+      }
+    },
+    "drawingEntity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stable_id", "type", "page"],
+      "properties": {
+        "stable_id": {"type": "string", "minLength": 1, "maxLength": 255},
+        "type": {
+          "enum": [
+            "DIMENSION", "TOLERANCE", "ANNOTATION", "VIEW", "GDT", "WELD",
+            "FINISH", "UNKNOWN_ENTITY", "BALLOON", "CENTERLINE", "CENTER_MARK", "COSMETIC"
+          ]
+        },
+        "page": {"type": "integer", "minimum": 1},
+        "value": {"$ref": "#/$defs/propertyValue"},
+        "tolerance": {"anyOf": [
+          {"$ref": "#/$defs/propertyValue"},
+          {"type": "object", "additionalProperties": false, "properties": {
+            "enabled": {"type": "boolean"},
+            "upper": {"$ref": "#/$defs/propertyValue"},
+            "lower": {"$ref": "#/$defs/propertyValue"},
+            "format": {"$ref": "#/$defs/propertyValue"},
+            "symmetric": {"type": "boolean"},
+            "arbitrary": {"type": "boolean"},
+            "upper_format": {"$ref": "#/$defs/propertyValue"},
+            "lower_format": {"$ref": "#/$defs/propertyValue"}
+          }}
+        ]},
+        "dimension_kind": {"enum": ["linear", "angular", "radial", "diameter", "ordinate", "arc"]},
+        "view_kind": {"enum": ["projection", "section", "detail"]},
+        "scale": {"$ref": "#/$defs/propertyValue"},
+        "scale_type": {"$ref": "#/$defs/propertyValue"},
+        "projection_direction": {"$ref": "#/$defs/propertyValue"},
+        "rotation_deg": {"$ref": "#/$defs/propertyValue"},
+        "item_reference": {"$ref": "#/$defs/propertyValue"},
+        "symbol_kind": {"type": "string"},
+        "weld_details": {"type": "object", "additionalProperties": false, "properties": {
+          "all_around": {"type": "boolean"},
+          "field_weld": {"type": "boolean"},
+          "alternating": {"type": "boolean"},
+          "tail_text": {"type": "string"},
+          "left_text": {"type": "string"},
+          "center_text": {"type": "string"},
+          "right_text": {"type": "string"},
+          "symbol_file": {"type": "string"},
+          "column": {"type": "integer"},
+          "row": {"type": "integer"}
+        }},
+        "model_references": {"type": "array", "items": {"$ref": "#/$defs/drawingObjectReference"}},
+        "drawing_references": {"type": "array", "items": {"$ref": "#/$defs/drawingObjectReference"}},
+        "unit": {"type": ["string", "null"]},
+        "text": {"type": ["string", "null"]},
+        "view": {"type": ["string", "null"]},
+        "bbox": {"$ref": "#/$defs/drawingLocation"},
+        "properties": {"$ref": "#/$defs/properties"}
+      }
+    },
+    "drawingObjectReference": {
+          "type": "object", "additionalProperties": false,
+          "required": ["object", "document"],
+          "properties": {
+            "object": {"type": "string"},
+            "document": {"type": "string"},
+            "subelements": {"type": "array", "items": {"type": "string"}}
+          }
+    },
+    "normalizedDrawing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stable_id", "filename", "worker_contract_version"],
+      "properties": {
+        "stable_id": {"type": "string", "minLength": 1, "maxLength": 255},
+        "artifact_id": {"type": ["string", "null"]},
+        "filename": {"type": "string", "minLength": 1, "maxLength": 255},
+        "mime_type": {"type": ["string", "null"]},
+        "sha256": {"type": ["string", "null"]},
+        "byte_size": {"$ref": "#/$defs/nonNegativeInteger"},
+        "page_count": {"type": "integer", "minimum": 1},
+        "worker_contract_version": {"type": "string", "minLength": 1},
+        "sections": {"type": "array", "items": {"$ref": "#/$defs/drawingSection"}},
+        "entities": {"type": "array", "items": {"$ref": "#/$defs/drawingEntity"}}
+      }
+    },
+    "assembly": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["is_assembly"],
+      "properties": {
+        "is_assembly": {"type": "boolean"},
+        "instance_count": {"$ref": "#/$defs/nonNegativeInteger"},
+        "unique_component_count": {"$ref": "#/$defs/nonNegativeInteger"},
+        "subassembly_count": {"$ref": "#/$defs/nonNegativeInteger"},
+        "bom_row_count": {"$ref": "#/$defs/nonNegativeInteger"},
+        "components": {"type": "array", "items": {"$ref": "#/$defs/component"}},
+        "component_groups": {"type": "array", "items": {"$ref": "#/$defs/componentGroup"}}
+      }
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["occurrence_id", "name", "quantity"],
+      "properties": {
+        "occurrence_id": {"type": "string", "minLength": 1},
+        "parent_occurrence_id": {"type": ["string", "null"]},
+        "name": {"type": "string", "minLength": 1},
+        "part_number": {"type": ["string", "null"]},
+        "revision": {"type": ["string", "null"]},
+        "quantity": {"$ref": "#/$defs/nonNegativeInteger"},
+        "bom_structure": {"type": ["string", "null"]},
+        "suppressed": {"type": "boolean"},
+        "reference": {"type": ["boolean", "null"]},
+        "substitute": {"type": ["boolean", "null"]},
+        "visible": {"type": "boolean"},
+        "native_prototype_id": {"type": "string"},
+        "reference_set": {"type": ["string", "null"]},
+        "occurrence_order": {"$ref": "#/$defs/nonNegativeInteger"},
+        "representation_mode": {"type": "string"},
+        "position_status": {"type": "string"},
+        "load_diagnostic": {"type": "string"},
+        "configuration": {"type": ["string", "null"]},
+        "dependency_status": {"enum": ["resolved", "missing", "unresolved", "cyclic", null]},
+        "dependency_document": {"type": ["string", "null"]},
+        "dependency_external": {"type": "boolean"},
+        "material": {"type": ["string", "null"]},
+        "mass_kg": {"anyOf": [{"$ref": "#/$defs/nonNegativeNumber"}, {"type": "null"}]}
+      }
+    },
+    "componentGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["native_prototype_id", "quantity", "occurrence_ids"],
+      "properties": {
+        "parent_occurrence_id": {"type": ["string", "null"]},
+        "native_prototype_id": {"type": "string"},
+        "prototype_path": {"type": ["string", "null"]},
+        "part_number": {"type": ["string", "null"]},
+        "revision": {"type": ["string", "null"]},
+        "reference_set": {"type": ["string", "null"]},
+        "configuration": {"type": ["string", "null"]},
+        "load_state": {"type": "string"},
+        "suppressed": {"type": "boolean"},
+        "visible": {"type": "boolean"},
+        "reference": {"type": ["boolean", "null"]},
+        "substitute": {"type": ["boolean", "null"]},
+        "document_kind": {"type": ["string", "null"]},
+        "representation_mode": {"type": ["string", "null"]},
+        "position_status": {"type": ["string", "null"]},
+        "quantity": {"type": "integer", "minimum": 1},
+        "occurrence_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "parameter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "is_key", "is_user"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "display_name": {"type": ["string", "null"]},
+        "value": {"type": ["number", "null"]},
+        "unit": {"type": ["string", "null"]},
+        "expression": {"type": ["string", "null"]},
+        "is_key": {"type": "boolean"},
+        "is_user": {"type": "boolean"},
+        "feature_id": {"type": ["string", "null"]},
+        "configuration": {"type": ["string", "null"]},
+        "native_name": {"type": ["string", "null"]}
+      }
+    },
+    "manufacturing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "process": {"type": ["string", "null"]},
+        "stock_form": {"type": ["string", "null"]},
+        "heat_treatment": {"type": ["string", "null"]},
+        "surface_treatment": {"type": ["string", "null"]},
+        "surface_roughness_ra_um": {"anyOf": [{"$ref": "#/$defs/nonNegativeNumber"}, {"type": "null"}]},
+        "finish": {"type": ["string", "null"]},
+        "supplier": {"type": ["string", "null"]},
+        "manufacturer": {"type": ["string", "null"]}
+      }
+    },
+    "sectionEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "records_found", "records_skipped", "method"],
+      "properties": {
+        "status": {"$ref": "#/$defs/qualityState"},
+        "records_found": {"$ref": "#/$defs/nonNegativeInteger"},
+        "records_skipped": {"$ref": "#/$defs/nonNegativeInteger"},
+        "method": {"type": "string", "minLength": 1},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "extractionEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sections", "capabilities", "provenance"],
+      "properties": {
+        "sections": {"type": "object", "additionalProperties": {"$ref": "#/$defs/sectionEvidence"}},
+        "capabilities": {"type": "object", "additionalProperties": {"$ref": "#/$defs/qualityState"}},
+        "provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source_system", "worker", "worker_version", "method"],
+          "properties": {
+            "source_system": {"type": "string"},
+            "worker": {"type": "string"},
+            "worker_version": {"type": "string"},
+            "method": {"type": "string"},
+            "configuration": {"type": ["string", "null"]},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "section_confidence": {"type": "object", "additionalProperties": {
+              "type": "number", "minimum": 0, "maximum": 1
+            }}
+          }
+        }
+      }
+    },
+    "propertyValue": {
+      "anyOf": [
+        {"type": "string"}, {"type": "number"}, {"type": "boolean"}, {"type": "null"},
+        {"type": "array", "items": {"type": "string"}},
+        {"type": "array", "items": {"type": "number"}}
+      ]
+    },
+    "properties": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/propertyValue"}
+    },
+    "qualityState": {
+      "enum": ["complete", "partial", "unavailable", "unsupported", "not_applicable"]
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["geometry", "physical", "features", "assembly", "warnings"],
+      "properties": {
+        "geometry": {"$ref": "#/$defs/qualityState"},
+        "physical": {"$ref": "#/$defs/qualityState"},
+        "features": {"$ref": "#/$defs/qualityState"},
+        "assembly": {"$ref": "#/$defs/qualityState"},
+        "metadata": {"$ref": "#/$defs/qualityState"},
+        "warnings": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}

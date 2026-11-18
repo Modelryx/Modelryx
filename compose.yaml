@@ -52,7 +52,7 @@ services:
       MODELRYX_AI_EMBEDDING_MODEL: ${MODELRYX_AI_EMBEDDING_MODEL:-}
       MODELRYX_AI_EMBEDDING_DIMENSIONS: ${MODELRYX_AI_EMBEDDING_DIMENSIONS:-1536}
       MODELRYX_SERVER_URL: http://api:8000
-      MODELRYX_FREECAD_PREPROCESSOR_URL: ${MODELRYX_FREECAD_PREPROCESSOR_URL:-${MODELRYX_CAD_ANALYZER_URL:-http://freecad-preprocessor:8090}}
+      MODELRYX_FREECAD_PREPROCESSOR_URL: ${MODELRYX_FREECAD_PREPROCESSOR_URL:-${MODELRYX_CAD_ANALYZER_URL:-}}
       MODELRYX_STEP_WORKER_URL: http://step-worker:8080
       MODELRYX_FREECAD_WORKER_URL: ${MODELRYX_FREECAD_WORKER_URL:-}
       MODELRYX_CONVERTER_VERSION: ${MODELRYX_CONVERTER_VERSION:-modelryx-fcstd-29}
@@ -120,42 +120,6 @@ services:
         condition: service_completed_successfully
       step-worker:
         condition: service_healthy
-    restart: unless-stopped
-
-  freecad-worker:
-    build:
-      context: .
-      dockerfile: workers/freecad/Dockerfile
-    mem_limit: ${MODELRYX_FREECAD_MEMORY_LIMIT:-8g}
-    pids_limit: ${MODELRYX_FREECAD_PIDS_LIMIT:-512}
-    environment:
-      <<: *app-environment
-      MODELRYX_PROCESSING_WORKER_ROLE: freecad
-      MODELRYX_FREECAD_STAGE_TIMEOUT_SECONDS: ${MODELRYX_FREECAD_STAGE_TIMEOUT_SECONDS:-}
-      MODELRYX_STEP_WORKER_URL: http://step-worker:8080
-    volumes:
-      - object-data:/var/lib/modelryx/objects
-    depends_on:
-      initialize-db:
-        condition: service_completed_successfully
-      storage-init:
-        condition: service_completed_successfully
-      step-worker:
-        condition: service_healthy
-    restart: unless-stopped
-
-  freecad-preprocessor:
-    build:
-      context: .
-      dockerfile: workers/freecad/Dockerfile
-    mem_limit: ${MODELRYX_FREECAD_MEMORY_LIMIT:-8g}
-    pids_limit: ${MODELRYX_FREECAD_PIDS_LIMIT:-512}
-    command: ["uvicorn", "preprocessor_api:app", "--app-dir", "/opt/modelryx-converter", "--host", "0.0.0.0", "--port", "8090"]
-    networks:
-      default:
-        aliases: ["freecad-analyzer"]
-    environment:
-      MODELRYX_INTERNAL_WORKER_KEY: ${MODELRYX_INTERNAL_WORKER_KEY:?Set MODELRYX_INTERNAL_WORKER_KEY in .env}
     restart: unless-stopped
 
   test:

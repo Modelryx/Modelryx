@@ -22,12 +22,11 @@ Actor = Annotated[Principal, Depends(current_principal)]
 
 
 @router.get("/external-formats")
-def external_formats(db: Db, _: Actor) -> list[dict]:
+def external_formats(db: Db, _: Actor, settings: Config) -> list[dict]:
     """Expose supported formats without exposing worker endpoints or credentials."""
-    from modelryx.services.external_workers import registered_workers
+    from modelryx.services.external_workers import discover_workers
 
-    # STEP retains its built-in path. FreeCAD registrations opt into the external path;
-    # without one, the existing embedded/remote FreeCAD processing remains available.
+    # STEP retains its built-in path. Native CAD formats use external registrations.
     built_in_extensions = {".step", ".stp"}
     return [
         {
@@ -43,7 +42,7 @@ def external_formats(db: Db, _: Actor) -> list[dict]:
             "documentKinds": worker["capabilities"]["documentKinds"],
             "dependencyAnalysis": worker["capabilities"]["dependencyAnalysis"],
         }
-        for worker in registered_workers(db)
+        for worker in discover_workers(db, settings)
         if worker["enabled"]
         and any(
             extension not in built_in_extensions
@@ -206,6 +205,10 @@ async def worker_preflight(
                 adapter_version=connection.capabilities.get("adapterVersion"),
                 capabilities=connection.capabilities,
             )
+        return WorkerPreflightResponse(
+            worker_type=worker_type, available=False, compatible=False,
+            message="Configure an enabled external FreeCAD worker or external server URL.",
+        )
     heartbeat, available = _best_heartbeat(db, worker_type, settings)
     compatible = bool(available and heartbeat and heartbeat.compatibility_state != "INCOMPATIBLE")
     if not available:

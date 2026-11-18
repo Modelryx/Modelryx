@@ -55,7 +55,7 @@ licensing, operating-system, and failure-isolation requirements.
 | --- | --- |
 | `front-end/` | React/Vite browser UI, authenticated API client, PDF preview, and Three.js-based viewer |
 | `server/` | FastAPI application, SQLAlchemy models, schema initialization, domain services, orchestration, and background processing |
-| `workers/freecad/` | FreeCAD dependency analysis, native conversion, and controlled CAD operations |
+| `workers/freecad/` | Separate FreeCAD preprocessor and external native extraction server |
 | `workers/step/` | Standalone authenticated STEP geometry and metadata service |
 | `worker-sdk/` | Native worker HTTP contract, manifest validation and conformance probe |
 | `local_cad_agent/` | Native file dialog, CAD-system selection and installed client preprocessor dispatch |
@@ -101,8 +101,8 @@ Processing jobs are durable database records rather than in-memory web requests.
 claim compatible jobs, update stages and heartbeats, read verified inputs, call the appropriate
 converter or CAD service, validate outputs, and publish results.
 
-The Compose deployment separates `general-worker` for general and STEP-oriented work from
-`freecad-worker`, which runs in the FreeCAD-capable image. The database coordinates durable work and
+The Compose deployment uses `general-worker` to orchestrate STEP and external CAD services.
+FreeCAD runs in a separate HTTP service with its own native runtime. The database coordinates durable work and
 recovery; there is no separate Redis or message-broker dependency in the current deployment. Job
 claiming, idempotency, timeouts, and reconciliation must remain safe under multiple workers and
 process restarts.
@@ -111,7 +111,7 @@ process restarts.
 
 There are two primary integration shapes:
 
-1. The FreeCAD adapter and analyzer are platform-shipped but runtime-isolated.
+1. FreeCAD is an independently deployed HTTP worker with a separate local preprocessor.
 2. The STEP worker is an authenticated HTTP conversion service with durable job journals.
 
 Additional CAD workers can be developed following the [worker integration guide](../workers/new-cad-worker-guide.md).
@@ -169,7 +169,7 @@ Revision
   ├─ BOM views and relationships
   ├─ processing jobs
   ├─ approvals and comparison
-  └─ CAD sessions and generated representations
+  └─ Generated representations (controlled CAD sessions disabled)
 ```
 
 An Item provides stable business identity. A Revision represents engineering configuration.

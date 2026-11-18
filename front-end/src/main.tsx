@@ -47,9 +47,6 @@ const AttachmentEditor = lazy(() =>
     default: module.EditItemAttachmentPage,
   }))
 );
-const CADReview = lazy(() =>
-  import('./pages/CADReview').then((module) => ({ default: module.CADReviewPage }))
-);
 import { StagesPage, type StageProcessingJob } from './pages/Stages';
 import type { ReviewInboxEntry } from './workflow-api';
 import { BLANK_FILTER_VALUE, DataTable } from './components/DataTable';
@@ -1345,14 +1342,6 @@ function Shell({ session, signOut }: { session: Session; signOut: () => void }) 
               element={
                 <Suspense fallback={<p>Loading…</p>}>
                   <Comparison />
-                </Suspense>
-              }
-            />
-            <Route
-              path="/items/:itemId/revisions/:revisionId/cad-sessions/:sessionId"
-              element={
-                <Suspense fallback={<p>Loading…</p>}>
-                  <CADReview />
                 </Suspense>
               }
             />
