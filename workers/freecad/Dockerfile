@@ -1,5 +1,5 @@
 # Update the base image tag and verified digest together.
-FROM condaforge/miniforge3:25.9.1-0@sha256:7ddae459669444129323a431fed8959e8972700dfb43c790d22abaeab85ff9d1 AS base
+FROM condaforge/miniforge3:25.9.1-0@sha256:7ddae459669444129323a431fed8959e8972700dfb43c790d22abaeab85ff9d1 AS dependencies
 
 ARG MODELRYX_FREECAD_VERSION=1.1.3
 RUN conda create -n modelryx-worker -y -c conda-forge python=3.11 "freecad=${MODELRYX_FREECAD_VERSION}" numpy trimesh pillow \
@@ -15,25 +15,30 @@ WORKDIR /app
 COPY vendor/worker-sdk /tmp/worker-sdk
 COPY standalone/requirements.txt /tmp/requirements.txt
 RUN python -m pip install --no-cache-dir /tmp/worker-sdk -r /tmp/requirements.txt
+RUN groupadd --system --gid 101 modelryx \
+    && useradd --system --uid 100 --gid 101 --create-home modelryx \
+    && mkdir -p /data/jobs \
+    && chown -R modelryx:modelryx /data/jobs
+
+FROM dependencies AS base
 COPY standalone ./standalone
 COPY converter ./converter
 COPY preprocessor ./preprocessor
 COPY shared ./shared
 COPY modelryx_freecad_adapter.py ./
-RUN python converter/fcstd_to_modelryx_glb.py --help >/dev/null \
-    && groupadd --system --gid 101 modelryx \
-    && useradd --system --uid 100 --gid 101 --create-home modelryx \
-    && mkdir -p /data/jobs \
-    && chown -R modelryx:modelryx /data/jobs
+RUN python converter/fcstd_to_modelryx_glb.py --help >/dev/null
 
-FROM base AS native-tests
+FROM dependencies AS test-dependencies
+COPY requirements-test.txt /tmp/requirements-test.txt
+RUN python -m pip install --no-cache-dir -r /tmp/requirements-test.txt
+
+FROM test-dependencies AS native-tests
+COPY --from=base /app /app
 COPY vendor ./vendor
 COPY contracts ./contracts
 COPY tests ./tests
 COPY scripts ./scripts
 COPY pyproject.toml ./pyproject.toml
-COPY requirements-test.txt ./requirements-test.txt
-RUN python -m pip install --no-cache-dir -r requirements-test.txt
 ENV PYTHONPATH=/app:/app/converter:/app/shared:/opt/conda/envs/modelryx-worker/lib
 USER modelryx
 CMD ["python", "converter/golden_integration_test.py"]

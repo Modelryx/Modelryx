@@ -53,6 +53,8 @@ The manually dispatched FreeCAD compatibility workflow is unaffected.
 Changes in `server/`, `front-end/`, root scripts, or workflow files alone do
 not trigger it. After changing the workflow itself, use manual dispatch to validate it.
 
+The native image uses the Docker driver with containerd storage and a persistent GitHub Actions
+v2 layer cache scoped by FreeCAD version. Cache export is best-effort with a five-minute timeout.
 The Docker context is the worker directory. Runtime and native tests use worker-owned versioned
 SDK/schema snapshots and do not install or import the platform. Worker dependency/configuration
 security scanning also runs in this workflow. Snapshot updates are explicit

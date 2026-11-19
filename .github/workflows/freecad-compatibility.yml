@@ -25,13 +25,34 @@ jobs:
           df -h /
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /usr/local/.ghcup /opt/ghc
           df -h /
-      - name: Build candidate FreeCAD runtime
-        run: >-
-          docker build --file workers/freecad/Dockerfile --target native-tests
-          --build-arg MODELRYX_FREECAD_VERSION=${{ matrix.freecad_version }}
-          --tag modelryx-freecad-compat workers/freecad
-      - name: Prepare native test memory
+      - name: Prepare native build and test memory
         run: bash workers/freecad/scripts/ci-memory.sh prepare
+      - name: Set up Docker containerd image store
+        uses: docker/setup-docker-action@v5
+        with:
+          daemon-config: |
+            {"features": {"containerd-snapshotter": true}}
+      - name: Set up native Docker builder
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver: docker
+      - name: Build candidate FreeCAD runtime
+        uses: docker/build-push-action@v7
+        env:
+          DOCKER_BUILD_SUMMARY: "false"
+        with:
+          context: workers/freecad
+          file: workers/freecad/Dockerfile
+          target: native-tests
+          build-args: MODELRYX_FREECAD_VERSION=${{ matrix.freecad_version }}
+          # The Docker driver stores the image locally without a separate --load export.
+          load: false
+          push: false
+          tags: modelryx-freecad-compat
+          provenance: false
+          sbom: false
+          cache-from: type=gha,version=2,scope=freecad-native-${{ matrix.freecad_version }},timeout=5m
+          cache-to: type=gha,version=2,scope=freecad-native-${{ matrix.freecad_version }},mode=max,timeout=5m,ignore-error=true
       - name: Golden native fixtures
         run: bash workers/freecad/scripts/run-native-gate.sh /app/converter/golden_integration_test.py modelryx-freecad-compat
       - name: Nested dependency fixtures

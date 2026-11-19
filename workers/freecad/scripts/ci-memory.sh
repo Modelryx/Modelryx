@@ -11,10 +11,9 @@ case "${1:-}" in
   prepare)
     free -h
     df -h "${RUNNER_TEMP:?}"
-    available_kib=$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)
     swap_kib=$(awk '/^SwapTotal:/ {print $2}' /proc/meminfo)
-    # Leave room for Docker/runner processes beside the 4 GiB native container.
-    if (( available_kib < 6 * 1024 * 1024 && swap_kib < 4 * 1024 * 1024 )); then
+    # Provision before the image build: layer export can also pressure runner memory.
+    if (( swap_kib < 4 * 1024 * 1024 )); then
       swapfile=$(mktemp "$RUNNER_TEMP/freecad-ci-swap.XXXXXX")
       printf 'FREECAD_CI_SWAPFILE=%s\n' "$swapfile" >> "${GITHUB_ENV:?}"
       sudo fallocate -l 4G "$swapfile"
