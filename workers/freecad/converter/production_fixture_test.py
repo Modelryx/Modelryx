@@ -10,12 +10,15 @@ import Sketcher  # type: ignore
 
 import argparse
 import json
+import subprocess
+import sys
 import tempfile
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 
 import trimesh
+from pypdf import PdfReader
 from metadata_contract import validate_part_metadata
 from fcstd_to_modelryx_glb import convert_fcstd_to_modelryx_package, extract_fcstd_part_metadata
 from execute_cad_plan import execute, sha256_file
@@ -210,6 +213,20 @@ def open_surface(document) -> None:
     surface.Shape = Part.makePlane(30, 20)
 
 
+def open_face_compound(document) -> None:
+    surface = document.addObject("Part::Feature", "OpenFaces")
+    surface.Shape = Part.makeCompound(Part.makeBox(30, 20, 10).Faces[:5])
+    assert surface.Shape.Volume > 0 and not surface.Shape.Solids
+
+
+def mixed_solid_surface(document) -> None:
+    feature = document.addObject("Part::Feature", "MixedGeometry")
+    box = Part.makeBox(1, 2, 3)
+    surface = Part.makePlane(30, 20, FreeCAD.Vector(0, 0, 10))
+    feature.Shape = Part.makeCompound([box, surface])
+    assert abs(feature.Shape.Volume - 6) > 1
+
+
 def subtractive_prism(document) -> None:
     body = document.addObject("PartDesign::Body", "Body")
     base = body.newObject("PartDesign::AdditiveBox", "Base")
@@ -274,6 +291,17 @@ def techdraw_page(document) -> None:
     angular.UnderTolerance = -0.5
     angular.References2D = [(view, ["Edge0", "Edge2"])]
     page.addView(angular)
+
+
+def two_techdraw_pages(document) -> None:
+    techdraw_page(document)
+    page = document.addObject("TechDraw::DrawPage", "SecondPage")
+    template = document.addObject("TechDraw::DrawSVGTemplate", "SecondTemplate")
+    template.Template = document.getObject("Template").Template
+    page.Template = template
+    view = document.addObject("TechDraw::DrawViewPart", "SecondView")
+    view.Source = [document.getObject("DrawingSource")]
+    page.addView(view)
 
 
 def techdraw_circular_dimensions(document) -> None:
@@ -456,6 +484,20 @@ def main() -> int:
         assert metadata["geometry"]["topology"]["solid_count"] == 0
         assert metadata["geometry"]["topology"]["face_count"] == 1
 
+        save_document(root / "open-face-compound.FCStd", open_face_compound)
+        convert(root, "open-face-compound")
+        metadata = json.loads((root / "open-face-compound.part-metadata.json").read_text())
+        validate_part_metadata(metadata)
+        assert metadata["geometry"]["topology"]["solid_count"] == 0
+        assert metadata["geometry"]["shape"]["volume_mm3"] == 0
+
+        save_document(root / "mixed-solid-surface.FCStd", mixed_solid_surface)
+        convert(root, "mixed-solid-surface")
+        metadata = json.loads((root / "mixed-solid-surface.part-metadata.json").read_text())
+        validate_part_metadata(metadata)
+        assert metadata["geometry"]["topology"]["solid_count"] == 1
+        assert metadata["geometry"]["shape"]["volume_mm3"] == 6
+
         save_document(root / "subtractive-prism.FCStd", subtractive_prism)
         convert(root, "subtractive-prism")
         prism_metadata = json.loads((root / "subtractive-prism.part-metadata.json").read_text())
@@ -500,6 +542,14 @@ def main() -> int:
         assert mesh_metadata == metadata
 
         save_document(root / "techdraw.FCStd", techdraw_page)
+        save_document(root / "two-pages.FCStd", two_techdraw_pages)
+        pdf = root / "two-pages.pdf"
+        subprocess.run(
+            [sys.executable, str(Path(__file__).with_name("export_techdraw_pdf.py")),
+             str(root / "two-pages.FCStd"), str(pdf)],
+            check=True, timeout=120,
+        )
+        assert len(PdfReader(str(pdf)).pages) == 2
         convert(root, "techdraw")
         drawing_metadata = json.loads((root / "techdraw.part-metadata.json").read_text())
         validate_part_metadata(drawing_metadata)

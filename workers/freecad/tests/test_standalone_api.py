@@ -44,8 +44,11 @@ class Converter:
             package.writestr("model.glb", b"glTF" + (2).to_bytes(4,"little") + (12).to_bytes(4,"little"))
             package.writestr("diagnostics.json", '{"warnings":[{"message":"Example warning"}]}')
         for role, (name, _, _) in OUTPUTS.items():
-            if role not in {"modelryx-preview", "model-preview", "glb"}:
+            if role not in {"modelryx-preview", "model-preview", "glb", "drawing-pdf"}:
                 (preview.parent / name).write_text("{}", encoding="utf-8")
+
+    def export_drawing_pdf(self, source, output, **_kwargs):
+        output.write_bytes(b"%PDF-1.4\n%%EOF\n")
 
 
 def source_package():
@@ -84,6 +87,34 @@ def wait_for_terminal(store, job_id):
             return record
         time.sleep(0.01)
     pytest.fail(f"Job did not finish: {record}")
+
+
+@pytest.mark.parametrize("required", [False, True])
+def test_missing_drawing_pdf_respects_required_outputs(tmp_path, required):
+    class NoDrawing(Converter):
+        def export_drawing_pdf(self, source, output, **_kwargs):
+            pass
+
+    source = source_package()
+    request = request_for(source)
+    if not required:
+        request = request.model_copy(update={
+            "requiredOutputs": [role for role in request.requiredOutputs if role != "drawing-pdf"],
+            "preferredOutputs": ["drawing-pdf"],
+        })
+    jobs = JobStore(tmp_path, NoDrawing())
+    jobs.submit(request, io.BytesIO(source), "application/zip")
+    jobs.start()
+    try:
+        result = wait_for_terminal(jobs, request.jobId)
+        if required:
+            assert result["state"] == "Failed"
+        else:
+            assert result["state"] == "Partial"
+            assert "FreeCAD document contains no exportable drawing pages." in result["result"]["warnings"]
+            assert "drawing-pdf" not in {output["role"] for output in result["result"]["outputs"]}
+    finally:
+        jobs.close()
 
 
 def test_recovers_a_job_and_replays_without_reprocessing(tmp_path):
@@ -212,7 +243,7 @@ def test_generic_external_profile_and_legacy_profile(tmp_path):
         capabilities = client.get("/api/v1/capabilities", headers=KEY).json()
         assert capabilities["workerName"] == "FreeCAD"
         assert capabilities["workerVersion"] == "test"
-        assert {"native-snapshot", "part-metadata", "model-preview", "glb"} <= set(capabilities["outputRoles"])
+        assert {"native-snapshot", "part-metadata", "model-preview", "glb", "drawing-pdf"} <= set(capabilities["outputRoles"])
         for required, preferred in [
             (["native-snapshot", "part-metadata", "model-preview"], ["glb"]),
             (["native-snapshot", "part-metadata", "modelryx-preview"], []),
@@ -242,3 +273,13 @@ def test_invalid_generic_preview_is_not_published(tmp_path, role, payload):
         package.writestr(OUTPUTS[role][0], payload)
     with ZipFile(archive) as package, pytest.raises(ValueError):
         export_preview_members(package, tmp_path, {role})
+
+
+def test_techdraw_document_kind_is_advertised_and_accepted():
+    source = source_package()
+    request = request_for(source).model_dump(mode="json")
+    request["documentKind"] = "drawing"
+    assert ConversionRequest.model_validate(request).documentKind == "drawing"
+    from standalone.conversion import DOCUMENT_KINDS
+
+    assert "drawing" in DOCUMENT_KINDS

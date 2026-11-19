@@ -233,6 +233,18 @@ class FreeCADWorkerAdapter:
         if vendor_metadata.is_file():
             shutil.copyfile(vendor_metadata, standard_metadata)
 
+    def export_drawing_pdf(
+        self, source: Path, output: Path, *, timeout_seconds: int,
+        cancellation_callback: Callable[[], None] | None,
+    ) -> None:
+        command = [
+            os.environ.get("MODELRYX_CONVERTER_PYTHON", "python"),
+            str(Path(__file__).resolve().parent / "converter/export_techdraw_pdf.py"),
+            str(source), str(output),
+        ]
+        _run_process(command, output, timeout_seconds=timeout_seconds,
+                     cancellation_callback=cancellation_callback)
+
     def execute_plan(
         self,
         plan: Path,

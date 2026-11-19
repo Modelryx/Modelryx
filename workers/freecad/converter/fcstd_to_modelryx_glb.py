@@ -63,6 +63,7 @@ from link_array_geometry import filtered_expanded_array_shape, filtered_face_app
 from freecad_material import material_density_kg_m3, material_name
 from feature_properties import normalized_feature_properties
 from material_extractor import MaterialExtractor
+from native_hierarchy import unique_hierarchy_children
 from reference_geometry_extractor import ReferenceGeometryExtractor
 from parameter_graph import (
     BoundedParameterLoader, ParameterExtractor, add_external_graph_edges, cross_document_cycles, external_parameter_evidence,
@@ -192,6 +193,19 @@ def is_group(obj: Any) -> bool:
     }
 
 
+def group_transforms_children(obj: Any) -> bool:
+    """Ordinary FreeCAD groups do not impose their placement on their members."""
+    has_extension = getattr(obj, "hasExtension", None)
+    if callable(has_extension):
+        try:
+            if has_extension("App::GroupExtension"):
+                return bool(has_extension("App::GeoFeatureGroupExtension"))
+        except (AttributeError, RuntimeError, TypeError):
+            pass
+    # Preserve the existing behavior for unknown custom containers.
+    return True
+
+
 def hierarchy_children(obj: Any) -> list[Any]:
     """Return FreeCAD tree children, including claimed dependency children.
 
@@ -203,20 +217,20 @@ def hierarchy_children(obj: Any) -> list[Any]:
     """
     group = list(getattr(obj, "Group", None) or [])
     if group:
-        return group
+        return unique_hierarchy_children(group)
     type_id = str(getattr(obj, "TypeId", ""))
     if type_id in {"App::Link", "App::LinkElement", "PartDesign::FeatureBase"} or type_id.startswith(
         "TechDraw::"
     ):
         return []
     document = getattr(obj, "Document", None)
-    return [
+    return unique_hierarchy_children(
         child
         for child in (getattr(obj, "OutList", None) or [])
         if child is not obj
         and getattr(child, "Document", None) is document
         and (is_group(child) or has_renderable_geometry(child))
-    ]
+    )
 
 
 def linked_object_for(obj: Any) -> Any | None:
@@ -610,7 +624,14 @@ def physical_properties(obj: Any, *, shape_override: Any = None) -> dict[str, An
         warn_once("physical-bounds", "Failed to compute FreeCAD bounding box metadata: %s", exc)
     for key, attribute in (("volumeMm3", "Volume"), ("surfaceAreaMm2", "Area")):
         try:
-            result[key] = round(float(getattr(shape, attribute)), 6)
+            # Open faces and shells can report a nonzero signed Volume in OCC.
+            # Only solids represent enclosed material for volume and mass.
+            value = (
+                sum(float(solid.Volume) for solid in shape.Solids)
+                if key == "volumeMm3"
+                else float(getattr(shape, attribute))
+            )
+            result[key] = round(value, 6)
         except Exception as exc:
             warn_once(
                 "physical-metrics",
@@ -2378,9 +2399,21 @@ class ModelryxExporter:
                     f"Copy-on-change storage ownership for '{owner.Name}' could not be inspected.",
                     object_name=str(owner.Name),
                 )
-        children = {
-            child.Name for obj in self.document.Objects for child in hierarchy_children(obj)
+        # A hidden view or section can reference an independently visible group
+        # through OutList. That reference is not ownership of the group: treating
+        # it as such hides the group's entire model beneath the hidden view.
+        owners: dict[str, list[tuple[Any, bool]]] = {}
+        for obj in self.document.Objects:
+            group_children = list(getattr(obj, "Group", None) or [])
+            for child in hierarchy_children(obj):
+                owners.setdefault(child.Name, []).append((obj, child in group_children))
+        independent_groups = {
+            obj.Name for obj in self.document.Objects
+            if is_group(obj) and self.object_visible(obj) and obj.Name in owners
+            and all(not structural and not self.object_visible(owner)
+                    for owner, structural in owners[obj.Name])
         }
+        children = set(owners) - independent_groups
         # Link targets may themselves be visible occurrences. In headless
         # FreeCAD their saved GUI visibility can be unavailable.
         linked_definitions = {
@@ -2414,7 +2447,7 @@ class ModelryxExporter:
             for element in (getattr(obj, "ElementList", ()) or ())
             if getattr(element, "Name", None)
         }
-        return [
+        roots = [
             obj
             for obj in self.document.Objects
             if obj.Name not in children
@@ -2426,6 +2459,9 @@ class ModelryxExporter:
             and obj.Name not in array_elements
             and (is_group(obj) or has_renderable_geometry(obj))
         ]
+        # Traverse these groups before reference-only trees so the shared-object
+        # guard cannot consume their geometry through a hidden dependency first.
+        return sorted(roots, key=lambda obj: obj.Name not in independent_groups)
 
     def visit(
         self,
@@ -2442,6 +2478,7 @@ class ModelryxExporter:
         world_transform_reliable: bool = True,
         parent_visible: bool = True,
         parent_suppressed: bool = False,
+        placement_basis: Any | None = None,
     ) -> None:
         if (
             getattr(obj, "Document", None) is self.document
@@ -2484,8 +2521,13 @@ class ModelryxExporter:
         definition_document_id = self.linked_document_identity(definition_document)
         part_id = stable_id("part", str(definition_document_id), str(definition.Name))
         node_name = f"{type_name}-{occurrence_id}"
-        local_matrix = placement_matrix(obj)
         parent_world_matrix = world_matrix if world_matrix is not None else np.eye(4)
+        native_matrix = placement_matrix(obj)
+        object_basis = placement_basis if placement_basis is not None else parent_world_matrix
+        local_matrix = (
+            np.linalg.inv(parent_world_matrix) @ object_basis @ native_matrix
+            if placement_basis is not None else native_matrix
+        )
         object_world_matrix = parent_world_matrix @ local_matrix
         effective_visibility = parent_visible and self.object_visible(obj)
         own_suppression, suppression_source = native_suppression(obj)
@@ -2877,6 +2919,11 @@ class ModelryxExporter:
                     ),
                     parent_visible=effective_visibility,
                     parent_suppressed=effective_suppression,
+                    placement_basis=(
+                        object_basis
+                        if child in group_children and not group_transforms_children(obj)
+                        else None
+                    ),
                     # A dependency subtree claimed below two distinct group
                     # occurrences belongs below both in navigation, even
                     # though its geometry remains represented only by the

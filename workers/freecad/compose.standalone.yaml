@@ -1,8 +1,8 @@
-name: modelryx-freecad-standalone
+name: modelryx-freecad
 
 services:
   freecad:
-    image: modelryx-freecad-standalone:local
+    image: modelryx-freecad:local
     build:
       context: .
       dockerfile: Dockerfile

@@ -17,7 +17,16 @@ Extraction, metadata, geometry and previews run on this server. The main platfor
 embedded FreeCAD service. Controlled CAD editing sessions are disabled in this release; future
 editing support will use external workers. STEP retains its separate service.
 
-The authenticated capabilities endpoint advertises name/version, part/assembly kinds, `.fcstd`,
+The worker accepts TechDraw-bearing FreeCAD files as drawings and extracts metadata, model
+previews and a PDF containing the TechDraw pages. The PDF is generated with FreeCAD's native
+renderer; its fidelity depends on the document and the installed FreeCAD runtime. Re-register
+the worker after updating its advertised capabilities, then regenerate existing previews.
+
+FreeCAD annotation labels, Draft text, labels and dimensions without a CAD shape are
+not currently rendered in the 3D preview. General viewer and FreeCAD worker support
+is tracked as a [future enhancement](../../docs/development/future-enhancements.md#cad-text-and-annotations-in-3d-previews).
+
+The authenticated capabilities endpoint advertises name/version, part/assembly/drawing kinds, `.fcstd`,
 dependency analysis and these semantic output roles:
 
 | Role | Media type | Purpose |
@@ -26,6 +35,7 @@ dependency analysis and these semantic output roles:
 | `part-metadata` | `application/json` | Normalized PartMetadata v1 |
 | `model-preview` | `application/json` | Viewer navigation and occurrence IDs |
 | `glb` | `model/gltf-binary` | Browser geometry |
+| `drawing-pdf` | `application/pdf` | Native TechDraw pages for drawing documents |
 | `modelryx-preview` | `application/zip` | Existing PFG profile for the built-in remote client |
 
 Generic Modelryx jobs require the first three roles and prefer GLB. Outputs include hashes,
@@ -82,7 +92,7 @@ describes ownership, native evidence and generic publication boundaries.
 
 ## Standalone HTTP service
 
-The standalone image implements the read-only part and assembly profile in the
+The standalone image implements the read-only part, assembly and drawing profiles in the
 [worker protocol](../../worker-sdk/README.md). It uses its own job volume and does not require the
 Modelryx server image, database, object storage, or STEP service.
 

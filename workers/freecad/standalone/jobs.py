@@ -239,11 +239,40 @@ class JobStore:
                 for warning in diagnostics.get("warnings", [])
                 if warning.get("message", "").strip()
             ]
+            if "drawing-pdf" in requested:
+                pdf = workspace / OUTPUTS["drawing-pdf"][0]
+                try:
+                    self.adapter.export_drawing_pdf(
+                        source, pdf,
+                        timeout_seconds=min(
+                            1800, max(1, (request.expiresAt - datetime.now(UTC)).total_seconds())
+                        ),
+                        cancellation_callback=check_interrupted,
+                    )
+                    if pdf.exists():
+                        if pdf.stat().st_size > OUTPUTS["drawing-pdf"][2]:
+                            raise ValueError("FreeCAD drawing PDF exceeds its size limit")
+                        with pdf.open("rb") as stream:
+                            if stream.read(5) != b"%PDF-":
+                                raise ValueError("FreeCAD produced an invalid drawing PDF")
+                except (RuntimeError, ValueError, OSError, subprocess.TimeoutExpired):
+                    if "drawing-pdf" in request.requiredOutputs:
+                        raise
+                    LOGGER.warning("FreeCAD could not export the drawing PDF", exc_info=True)
+                    pdf.unlink(missing_ok=True)
+                    warnings.append("FreeCAD could not export the drawing PDF.")
+                if not pdf.exists():
+                    if "drawing-pdf" in request.requiredOutputs:
+                        raise ValueError("FreeCAD drawing PDF is unavailable")
+                    if "FreeCAD could not export the drawing PDF." not in warnings:
+                        warnings.append("FreeCAD document contains no exportable drawing pages.")
             outputs = []
             for role, (name, media_type, limit) in OUTPUTS.items():
                 if role in requested:
                     check_interrupted()
                     file = workspace / name
+                    if role == "drawing-pdf" and not file.exists():
+                        continue
                     if file.stat().st_size > limit:
                         raise ValueError("FreeCAD output exceeds its size limit")
                     outputs.append(

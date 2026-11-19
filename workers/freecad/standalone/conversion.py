@@ -14,11 +14,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 MAX_SOURCE_BYTES = 2 * 1024**3
 MAX_MEMBERS = 4096
-DOCUMENT_KINDS = ("part", "assembly")
+DOCUMENT_KINDS = ("part", "assembly", "drawing")
 OUTPUTS = {
     "modelryx-preview": ("preview.pfg", "application/zip", 1024**3),
     "model-preview": ("model-preview.json", "application/json", 64 * 1024**2),
     "glb": ("model.glb", "model/gltf-binary", 512 * 1024**2),
+    "drawing-pdf": ("drawing.pdf", "application/pdf", 50 * 1024**2),
     "part-metadata": ("preview.part-metadata.json", "application/json", 64 * 1024**2),
     "native-snapshot": ("preview.cad-raw-metadata.json", "application/json", 64 * 1024**2),
 }

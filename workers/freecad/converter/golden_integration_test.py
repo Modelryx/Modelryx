@@ -890,6 +890,9 @@ def make_claimed_children_fixture(path: Path) -> None:
         operation.Shape = source.Shape
         operation.addProperty("App::PropertyLink", "Base")
         operation.Base = source
+        # Separate properties can repeat the same native dependency in OutList.
+        operation.addProperty("App::PropertyLinkList", "Inputs")
+        operation.Inputs = [source, source]
         exploded = document.addObject("App::DocumentObjectGroup", "Exploded")
         exploded.Label = "Exploded result"
         for index, x_position in enumerate((0, 20)):
@@ -899,8 +902,62 @@ def make_claimed_children_fixture(path: Path) -> None:
             child.Placement.Base = FreeCAD.Vector(x_position, 0, 0)
             child.addProperty("App::PropertyLink", "Base")
             child.Base = operation
+            child.addProperty("App::PropertyLinkList", "Inputs")
+            child.Inputs = [operation, operation]
             exploded.addObject(child)
         document.recompute()
+        document.saveAs(str(path))
+    finally:
+        FreeCAD.closeDocument(document.Name)
+
+
+def make_visible_group_referenced_by_hidden_view(path: Path) -> None:
+    document = FreeCAD.newDocument("VisibleGroupHiddenReference")
+    try:
+        view = document.addObject("Part::FeaturePython", "SectionView")
+        view.Shape = Part.makePlane(2, 2)
+        group = document.addObject("App::Part", "SectionGroup")
+        group.Label = "Section L1"
+        solid = document.addObject("Part::Feature", "Solid")
+        solid.Shape = Part.makeBox(1, 2, 3)
+        group.addObject(solid)
+        view.addProperty("App::PropertyLink", "Source")
+        view.Source = group
+        document.recompute()
+        document.saveAs(str(path))
+    finally:
+        FreeCAD.closeDocument(document.Name)
+    with zipfile.ZipFile(path, "a") as archive:
+        archive.writestr(
+            "GuiDocument.xml",
+            '<Document><ViewProviderData>'
+            '<ViewProvider name="SectionView"><Properties><Property name="Visibility"><Bool value="false"/></Property></Properties></ViewProvider>'
+            '<ViewProvider name="SectionGroup"><Properties><Property name="Visibility"><Bool value="true"/></Property></Properties></ViewProvider>'
+            '<ViewProvider name="Solid"><Properties><Property name="Visibility"><Bool value="true"/></Property></Properties></ViewProvider>'
+            '</ViewProviderData></Document>',
+        )
+
+
+def make_non_geometric_group_fixture(path: Path) -> None:
+    document = FreeCAD.newDocument("NonGeometricGroup")
+    try:
+        outer = document.addObject("App::GeometryPython", "OuterGroup")
+        outer.addExtension("App::GroupExtensionPython")
+        outer.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1000, 2000, 3000), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+        )
+        inner = document.addObject("App::GeometryPython", "InnerGroup")
+        inner.addExtension("App::GroupExtensionPython")
+        inner.Placement.Base = FreeCAD.Vector(400, 500, 600)
+        outer.addObject(inner)
+        solid = document.addObject("Part::Feature", "Member")
+        solid.Shape = Part.makeBox(10, 20, 30)
+        solid.Placement.Base = FreeCAD.Vector(50, 60, 70)
+        inner.addObject(solid)
+        document.recompute()
+        assert solid.getParentGeoFeatureGroup() is None
+        assert tuple(round(x, 6) for x in (solid.Shape.BoundBox.XMin,
+                     solid.Shape.BoundBox.YMin, solid.Shape.BoundBox.ZMin)) == (50, 60, 70)
         document.saveAs(str(path))
     finally:
         FreeCAD.closeDocument(document.Name)
@@ -1009,6 +1066,7 @@ def main() -> int:
         assert manifest["converter"]["tessellationProfile"] == "standard"
         assert manifest["converter"]["tessellationSource"] == "profile"
         assert diagnostics["statistics"]["meshes"] == 1
+
         assert diagnostics["statistics"]["triangles"] == 24
         raw_metadata = json.loads(
             package_path.with_suffix(".freecad-raw-metadata.json").read_text()
@@ -2548,6 +2606,7 @@ def main() -> int:
             "UNKNOWN_FEATURE"
         }
         claimed_items = claimed_preview["items"]
+        assert len({item["occurrenceId"] for item in claimed_items}) == len(claimed_items)
         assert (
             next(item for item in claimed_items if item["name"] == "Exploded result")["cadType"]
             == "Group"
@@ -2562,13 +2621,38 @@ def main() -> int:
                 and item["name"] == "Shared operation"
             ]
             assert len(operations) == 1
-            assert any(
-                item["parentOccurrenceId"] == operations[0]["occurrenceId"]
+            sources = [
+                item for item in claimed_items
+                if item["parentOccurrenceId"] == operations[0]["occurrenceId"]
                 and item["name"] == "Source solid"
-                for item in claimed_items
-            )
+            ]
+            assert len(sources) == 1
         # Both result occurrences instance one cached mesh; linked history is navigation-only.
         assert claimed_diagnostics["statistics"]["meshes"] == 1
+
+        source = root / "visible-group-hidden-view.FCStd"
+        package_path = root / "visible-group-hidden-view.pfg"
+        make_visible_group_referenced_by_hidden_view(source)
+        convert_fcstd_to_modelryx_package(str(source), str(package_path))
+        with zipfile.ZipFile(package_path) as package:
+            preview = json.loads(package.read("model-preview.json"))
+            diagnostics = json.loads(package.read("diagnostics.json"))
+        group = next(item for item in preview["items"] if item["name"] == "Section L1")
+        solid = next(item for item in preview["items"] if item["name"] == "Solid")
+        assert group["parentOccurrenceId"] == preview["rootOccurrenceId"]
+        assert group["display"]["visible"] and solid["display"]["visible"]
+        assert solid["parentOccurrenceId"] == group["occurrenceId"]
+        assert diagnostics["statistics"]["meshes"] == 1
+
+        source = root / "non-geometric-groups.FCStd"
+        package_path = root / "non-geometric-groups.pfg"
+        make_non_geometric_group_fixture(source)
+        convert_fcstd_to_modelryx_package(str(source), str(package_path))
+        with zipfile.ZipFile(package_path) as package:
+            group_glb = root / "non-geometric-groups.glb"
+            group_glb.write_bytes(package.read("model.glb"))
+        group_scene = trimesh.load_scene(group_glb)
+        assert group_scene.bounds.round(6).tolist() == [[0.05, 0.06, 0.07], [0.06, 0.08, 0.1]]
 
         construction_source = root / "construction-only.FCStd"
         construction_package = root / "construction-only.pfg"
