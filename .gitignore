@@ -53,7 +53,7 @@ server/.git.legacy/
 
 /.tmp*/
 /.local/
-/tmp/
+/tmp*/
 */worker-data/
 # Native runtime crash diagnostics are local artifacts
 /ErrorReports/

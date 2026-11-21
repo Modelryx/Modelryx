@@ -461,6 +461,7 @@ export type AssistantMessageResponse = {
   message_id: string;
   answer: string;
   intent:
+    | 'TOOL_ASSISTED'
     | 'ITEM_SUMMARY'
     | 'ITEM_METADATA'
     | 'REVISION_HISTORY'

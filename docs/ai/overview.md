@@ -53,7 +53,9 @@ MODELRYX_AI_EMBEDDING_MODEL=your-embedding-model
 MODELRYX_AI_EMBEDDING_DIMENSIONS=1536
 ```
 
-The gateway must provide compatible `/chat/completions` and `/embeddings` operations. The current
+Chat can alternatively use native OpenAI, Claude, or Gemini adapters with separate
+credentials; see [provider configuration](providers.md). The configuration above uses
+the default compatible gateway, which provides `/chat/completions` and `/embeddings`. The current
 database vector schema requires 1536 dimensions. Without a gateway, indexing, lexical retrieval,
 structured search, comparison, validation, BOM analysis, and action controls continue to
 work; vector retrieval and generated explanations are unavailable or use deterministic fallbacks.

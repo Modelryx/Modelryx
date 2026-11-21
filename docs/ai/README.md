@@ -4,6 +4,9 @@ Modelryx's AI subsystem is a set of bounded consumers of authoritative engineeri
 
 ## Core Documentation
 
+- **[tools.md](./tools.md)** — Read-only tool catalog, provider execution loop, limits, and enablement
+- **[providers.md](./providers.md)** — Configure OpenAI, Claude, Gemini, or a compatible chat gateway
+- **[design-spec.md](./design-spec.md)** — Proposed AI design specification, architecture review, contracts, and delivery gates
 - **[overview.md](./overview.md)** — Architecture, capability map, trust boundaries, and configuration
 - **[assistant.md](./assistant.md)** — Context-aware assistant implementation, intents, and tool lifecycle
 - **[engineering-search.md](./engineering-search.md)** — Deterministic search behavior, validation gates, and evaluation framework

@@ -24,7 +24,7 @@ the worker after updating its advertised capabilities, then regenerate existing 
 
 FreeCAD annotation labels, Draft text, labels and dimensions without a CAD shape are
 not currently rendered in the 3D preview. General viewer and FreeCAD worker support
-is tracked as a [future enhancement](../../docs/development/future-enhancements.md#cad-text-and-annotations-in-3d-previews).
+is tracked in the [project todo list](../../docs/development/todo-list.md#cad-text-and-annotations-in-3d-previews).
 
 The authenticated capabilities endpoint advertises name/version, part/assembly/drawing kinds, `.fcstd`,
 dependency analysis and these semantic output roles:

@@ -12,11 +12,14 @@ from modelryx.assistant.models import (
     AssistantStoredMessage,
 )
 from modelryx.assistant.service import AssistantToolGateway, classify_intent
+from modelryx.assistant.tool_loop import ToolExecution, run_tool_loop
+from modelryx.assistant.tools import EngineeringToolRegistry
 from modelryx.core.audit import record_audit, user_for_principal
 from modelryx.core.auth import Principal, current_principal
 from modelryx.core.config import Settings, get_settings
 from modelryx.core.db import get_db
 from modelryx.models import AiConversation, AiMessage, AiToolExecution
+from modelryx.services.ai import AiGateway
 
 router = APIRouter(prefix="/api/v1/ai/assistant", tags=["ai-assistant"])
 Db = Annotated[Session, Depends(get_db)]
@@ -66,10 +69,41 @@ def create_assistant_message(
     db.add(user_message)
     db.flush()
 
-    intent = classify_intent(payload.message, payload.context)
-    tool_name, tool_result, duration_ms = AssistantToolGateway(db, principal, settings).execute(
-        intent, payload.context, payload.message
-    )
+    gateway = AiGateway(settings)
+    tools_enabled = settings.ai_tool_calling_enabled and gateway.chat_enabled
+    try:
+        intent = classify_intent(payload.message, payload.context)
+    except HTTPException as exc:
+        if not tools_enabled or exc.status_code != 422:
+            raise
+        intent = "TOOL_ASSISTED"
+    warnings = []
+    # Keep specialized deterministic capabilities (BOM, viewer, validation,
+    # comparisons and feature/material answers) until matching tools are exposed.
+    if tools_enabled and intent in {"TOOL_ASSISTED", "ENGINEERING_SEARCH", "ITEM_SUMMARY"}:
+        registry = EngineeringToolRegistry(db, principal)
+        context = registry.validate_context(payload.context)
+        tool_result = run_tool_loop(
+            gateway.chat_adapter,
+            registry,
+            settings,
+            payload.message,
+            context,
+        )
+        intent = "TOOL_ASSISTED"
+        executions = tool_result.executions
+        warnings = tool_result.warnings
+    else:
+        tool_name, tool_result, duration_ms = AssistantToolGateway(db, principal, settings).execute(
+            intent, payload.context, payload.message
+        )
+        executions = [
+            ToolExecution(
+                tool_name, context_snapshot, "COMPLETED", duration_ms, tool_result.summary
+            )
+        ]
+        if settings.ai_tool_calling_enabled and not gateway.chat_enabled:
+            warnings.append("AI tools are not configured; using the deterministic assistant.")
     trace_id = request.state.request_id
     response = AssistantMessageResponse(
         conversation_id=conversation.id,
@@ -78,6 +112,7 @@ def create_assistant_message(
         intent=intent,
         references=tool_result.references,
         actions=tool_result.actions,
+        warnings=warnings,
         trace_id=trace_id,
     )
     assistant_message = AiMessage(
@@ -90,16 +125,17 @@ def create_assistant_message(
     )
     db.add(assistant_message)
     db.flush()
-    db.add(
-        AiToolExecution(
-            message_id=assistant_message.id,
-            tool_name=tool_name,
-            arguments_json=context_snapshot,
-            status="COMPLETED",
-            duration_ms=duration_ms,
-            result_summary_json=tool_result.summary,
+    for execution in executions:
+        db.add(
+            AiToolExecution(
+                message_id=assistant_message.id,
+                tool_name=execution.name,
+                arguments_json=execution.arguments,
+                status=execution.status,
+                duration_ms=execution.duration_ms,
+                result_summary_json=execution.summary,
+            )
         )
-    )
     record_audit(
         db,
         actor_id=user.id,
@@ -107,7 +143,11 @@ def create_assistant_message(
         entity_type="ai_conversation",
         entity_id=conversation.id,
         request_id=trace_id,
-        details={"intent": intent, "tool": tool_name},
+        details={
+            "intent": intent,
+            "tool": executions[0].name if len(executions) == 1 else None,
+            "tools": [execution.name for execution in executions],
+        },
     )
     db.commit()
     return response

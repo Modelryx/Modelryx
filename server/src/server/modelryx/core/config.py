@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -58,10 +58,20 @@ class Settings(BaseSettings):
     cad_session_max_bytes: int = 2 * 1024 * 1024 * 1024
     ai_gateway_base_url: str | None = None
     ai_gateway_api_key: str | None = None
+    ai_chat_provider: Literal["openai_compatible", "openai", "anthropic", "gemini"] = (
+        "openai_compatible"
+    )
+    ai_chat_base_url: str | None = None
+    ai_chat_api_key: str | None = None
     ai_chat_model: str = ""
+    ai_chat_max_output_tokens: int = Field(default=4096, ge=1, le=65536)
+    ai_tool_calling_enabled: bool = False
+    ai_tool_max_calls: int = Field(default=6, ge=1, le=12)
+    ai_tool_max_rounds: int = Field(default=3, ge=1, le=6)
+    ai_tool_timeout_seconds: int = Field(default=30, ge=1, le=120)
     ai_embedding_model: str = ""
     ai_embedding_dimensions: int = 1536
-    ai_request_timeout_seconds: int = 60
+    ai_request_timeout_seconds: int = Field(default=60, ge=1)
     ai_retrieval_limit: int = 8
     ai_search_store_raw_queries: bool = False
     ai_search_history_retention_days: int = 30

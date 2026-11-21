@@ -2,14 +2,13 @@ import hashlib
 import json
 import logging
 import re
-import urllib.error
-import urllib.request
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException
+from jsonschema import Draft202012Validator, ValidationError
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -21,6 +20,7 @@ from modelryx.duplicate_detection.search_document import (
 )
 from modelryx.metadata.array_quality import ARRAY_GEOMETRY_WARNING, has_unverified_array_geometry
 from modelryx.models import AiDocument, Item, Revision
+from modelryx.services.ai_adapters import create_chat_adapter, post_json
 
 _QUERY_FILLER = {
     "a",
@@ -63,10 +63,11 @@ class RetrievedDocument:
 
 
 class AiGateway:
-    """Small OpenAI-compatible gateway client for embeddings and chat completion."""
+    """Provider-neutral chat facade with a separate compatible embedding gateway."""
 
     def __init__(self, settings: Settings):
         self.settings = settings
+        self.chat_adapter = create_chat_adapter(settings)
 
     @property
     def embeddings_enabled(self) -> bool:
@@ -74,7 +75,7 @@ class AiGateway:
 
     @property
     def chat_enabled(self) -> bool:
-        return bool(self.settings.ai_gateway_base_url and self.settings.ai_chat_model)
+        return self.chat_adapter.enabled
 
     def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         if not self.settings.ai_gateway_base_url:
@@ -82,26 +83,10 @@ class AiGateway:
         headers = {"Content-Type": "application/json"}
         if self.settings.ai_gateway_api_key:
             headers["Authorization"] = f"Bearer {self.settings.ai_gateway_api_key}"
-        request = urllib.request.Request(
+        return post_json(
             f"{self.settings.ai_gateway_base_url.rstrip('/')}/{path.lstrip('/')}",
-            data=json.dumps(payload).encode("utf-8"),
-            headers=headers,
-            method="POST",
+            payload, headers, self.settings.ai_request_timeout_seconds,
         )
-        try:
-            with urllib.request.urlopen(
-                request, timeout=self.settings.ai_request_timeout_seconds
-            ) as response:
-                return json.load(response)
-        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
-            detail = (
-                exc.read().decode(errors="replace")
-                if isinstance(exc, urllib.error.HTTPError)
-                else str(exc)
-            )
-            raise HTTPException(
-                status_code=502, detail=f"AI gateway request failed: {detail}"
-            ) from exc
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:
@@ -135,40 +120,23 @@ class AiGateway:
             f"[S{index}] {source.document.title}\n{source.document.content}"
             for index, source in enumerate(sources, 1)
         )
-        response = self._post(
-            "/chat/completions",
-            {
-                "model": self.settings.ai_chat_model,
-                "temperature": 0,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are the Modelryx engineering retrieval agent. Answer only from "
-                            "the supplied sources. Cite factual claims with [S#]. If evidence is "
-                            "insufficient, say what is missing. Do not invent dimensions, "
-                            "materials, relationships, or lifecycle states. Multiple sources can "
-                            "describe CAD hierarchy nodes from the same Modelryx item and "
-                            "revision—for example, a PartDesign Body and its AdditiveBox feature. "
-                            "Treat those as supporting evidence for one item, not separate item "
-                            "records. When listing or counting items, deduplicate by the Item and "
-                            "Revision fields in the source content."
-                        ),
-                    },
-                    {
-                        "role": "user",
-                        "content": f"Question: {question}\n\nSources:\n{source_text}",
-                    },
-                ],
-            },
+        result = self.chat_adapter.complete(
+            system=(
+                "You are the Modelryx engineering retrieval agent. Answer only from "
+                "the supplied sources. Cite factual claims with [S#]. If evidence is "
+                "insufficient, say what is missing. Do not invent dimensions, "
+                "materials, relationships, or lifecycle states. Multiple sources can "
+                "describe CAD hierarchy nodes from the same Modelryx item and "
+                "revision—for example, a PartDesign Body and its AdditiveBox feature. "
+                "Treat those as supporting evidence for one item, not separate item "
+                "records. When listing or counting items, deduplicate by the Item and "
+                "Revision fields in the source content."
+            ),
+            user=f"Question: {question}\n\nSources:\n{source_text}",
         )
-        try:
-            return str(response["choices"][0]["message"]["content"])
-        except (KeyError, IndexError, TypeError) as exc:
-            raise HTTPException(
-                status_code=502,
-                detail="AI gateway returned an invalid chat response",
-            ) from exc
+        if not isinstance(result, str):
+            raise HTTPException(502, "AI gateway returned an invalid chat response")
+        return result
 
     def structured_chat(
         self,
@@ -178,33 +146,24 @@ class AiGateway:
         schema: dict[str, Any],
         schema_name: str = "modelryx_structured_output",
     ) -> dict[str, Any]:
-        """Request strict JSON-schema output from the configured chat model."""
-        response = self._post(
-            "/chat/completions",
-            {
-                "model": self.settings.ai_chat_model,
-                "temperature": 0,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": json.dumps(payload, separators=(",", ":"))},
-                ],
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": schema_name,
-                        "strict": True,
-                        "schema": schema,
-                    },
-                },
-            },
+        """Request structured data and validate it locally for every provider."""
+        result = self.chat_adapter.complete(
+            system=system,
+            user=json.dumps(payload, separators=(",", ":")),
+            schema=schema,
+            schema_name=schema_name,
         )
         try:
-            content = response["choices"][0]["message"]["content"]
-            return json.loads(content)
-        except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
+            parsed = json.loads(result) if isinstance(result, str) else result
+            if not isinstance(parsed, dict):
+                raise ValueError("expected an object")
+            Draft202012Validator(schema).validate(parsed)
+            return parsed
+        except (TypeError, ValueError, ValidationError):
             raise HTTPException(
                 status_code=502, detail="AI gateway returned invalid structured output"
-            ) from exc
+            ) from None
+
 
 
 def _value(value: Any) -> str:

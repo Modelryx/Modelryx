@@ -5,6 +5,10 @@ The phase labels below identify delivery increments; they are not separate runti
 
 ## Status
 
+Optional provider-driven read-only tools now share this endpoint. See
+[tool support](tools.md) for enablement, the initial two-tool catalog, and limits.
+The deterministic capabilities below remain the default.
+
 | Sub-phase | Status |
 | --- | --- |
 | 3.1A Assistant foundation | Implemented |

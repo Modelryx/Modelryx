@@ -96,6 +96,7 @@ class AssistantMessageResponse(StrictModel):
     message_id: uuid.UUID
     answer: str
     intent: Literal[
+        "TOOL_ASSISTED",
         "ITEM_SUMMARY",
         "ITEM_METADATA",
         "REVISION_HISTORY",

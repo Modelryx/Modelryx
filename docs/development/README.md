@@ -19,7 +19,7 @@ Guides for developing with and contributing to Modelryx.
   - Running tests locally
 
 - **[tooling-security.md](tooling-security.md)** - Development-server exposure and unresolved build-tool advisories
-- **[future-enhancements.md](future-enhancements.md)** - Planned development, including CAD text and annotations in 3D previews
+- **[todo-list.md](todo-list.md)** - Prioritized project enhancements, AI learning, and CAD preview annotations
 
 ## Quick Links
 
