@@ -19,7 +19,8 @@ def test_contract_snapshots_match_their_release_manifest():
     manifest = json.loads((ROOT / "contracts/snapshots.json").read_text(encoding="utf-8"))
     assert manifest["contractVersion"] == CONTRACT_VERSION
     for entry in manifest["files"]:
-        assert hashlib.sha256((ROOT / entry["path"]).read_bytes()).hexdigest() == entry["sha256"]
+        actual = hashlib.sha256((ROOT / entry["path"]).read_bytes()).hexdigest()
+        assert actual == entry["sha256"], f"Contract snapshot hash mismatch: {entry['path']}"
     package = tomllib.loads((ROOT / "vendor/worker-sdk/pyproject.toml").read_text(encoding="utf-8"))
     assert package["project"]["version"] == manifest["sdkVersion"]
     schema = json.loads((ROOT / "contracts/part_metadata_v1.json").read_text(encoding="utf-8"))
