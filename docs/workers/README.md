@@ -22,6 +22,12 @@ This open-source repository includes:
 
 For the native worker protocol and reference implementation, see the [worker SDK](../../worker-sdk/README.md) and [FreeCAD worker](../../workers/freecad/README.md).
 
+## Deployment boundaries
+
+The root Compose stack includes STEP and the general orchestrator. Deploy and register
+FreeCAD separately. Native file selection also requires the [Local CAD Agent](../../local_cad_agent/README.md)
+and a matching preprocessor on each user's computer; a running remote worker does not install them.
+
 ## Architecture
 
 Workers are independently deployable services that:
@@ -31,7 +37,7 @@ Workers are independently deployable services that:
 3. Validate and expose hashed, job-scoped outputs for Modelryx to download
 4. Communicate job status and results back to the server
 
-All worker communication is authenticated using a shared internal key and idempotent via submission IDs.
+Protected worker requests use the shared internal key. Native CAD jobs use protocol job IDs for replay detection; the STEP service uses its separate `Idempotency-Key` contract. Health probes are available without worker credentials.
 
 ## See Also
 

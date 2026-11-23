@@ -2,12 +2,35 @@
 
 Standalone asynchronous STEP processing service shared by Modelryx CAD integrations. It owns
 STEP preprocessing, geometry conversion, metadata extraction, preview generation, validation,
-and normalized output publication. Build with `docker build -t modelryx-step-worker .` and run with
-`docker run --rm -p 8080:8080 -v step-worker-data:/data/jobs modelryx-step-worker`.
+and normalized job outputs. Modelryx owns publication into engineering records.
+The service uses a geometry-processing contract distinct from the
+[native CAD worker protocol](../../worker-sdk/README.md).
 
-Set `MODELRYX_INTERNAL_WORKER_KEY`, then submit with
-`curl -H "X-Modelryx-Worker-Key: $KEY" -H "Idempotency-Key: model-123" -F "source=@model.step" http://localhost:8080/api/v1/jobs`, poll the returned
-`/api/v1/jobs/{id}`, then download its output links when state is `READY`.
+## Start the service
+
+The main Compose stack starts this service automatically. From the repository root,
+rebuild it with `docker compose up -d --build step-worker`.
+
+For an independent deployment, set `MODELRYX_INTERNAL_WORKER_KEY` in your shell and
+run from `workers/step/` (POSIX shell):
+
+```sh
+docker build -t modelryx-step-worker .
+docker run --rm -p 127.0.0.1:8080:8080 \
+  --env MODELRYX_INTERNAL_WORKER_KEY \
+  --mount source=step-worker-data,target=/data/jobs modelryx-step-worker
+```
+
+Submit a file using the same credential:
+
+```sh
+curl -H "X-Modelryx-Worker-Key: $MODELRYX_INTERNAL_WORKER_KEY" \
+  -H "Idempotency-Key: model-123" -F "source=@model.step" \
+  http://localhost:8080/api/v1/jobs
+```
+
+Poll `/api/v1/jobs/{id}` and download its advertised outputs when state is `READY`.
+Retain the job volume across restarts to preserve queue state and results.
 
 ## API surface
 
@@ -51,7 +74,7 @@ Terminal alternatives:
 - `CANCELLED`
 
 Completed and failed jobs are removed after `STEP_WORKER_RETENTION_SECONDS` (24 hours by default).
-# Queue reliability
+## Queue reliability
 
 Queued and in-progress jobs are persisted and resumed after a worker restart. Transient
 I/O and timeout failures are retried with exponential backoff. Configure this with

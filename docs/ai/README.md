@@ -1,6 +1,6 @@
 # AI Documentation
 
-Modelryx's AI subsystem is a set of bounded consumers of authoritative engineering data. Most capabilities work deterministically without a model provider. An optional OpenAI-compatible gateway adds embeddings, natural-language interpretation, explanations, and answers where configured.
+Modelryx's AI subsystem is a set of bounded consumers of authoritative engineering data. Structured search, comparisons, validation, and BOM analysis work without a model provider. Optional OpenAI, Anthropic Claude, Gemini, or compatible chat providers add interpretation and generated answers; an independently configured OpenAI-compatible embedding gateway enables vector retrieval.
 
 ## Core Documentation
 
@@ -23,7 +23,7 @@ Modelryx's AI subsystem is a set of bounded consumers of authoritative engineeri
 
 ### Configuration
 
-Configure an optional AI gateway through server environment settings:
+For a compatible chat and embedding gateway, set the following server environment values. See [provider configuration](providers.md) for native chat adapters and separate chat credentials:
 
 ```dotenv
 MODELRYX_AI_GATEWAY_BASE_URL=https://your-gateway.example/v1
@@ -42,10 +42,10 @@ MODELRYX_AI_EMBEDDING_DIMENSIONS=1536
 
 ## Design Principles
 
-- **Deterministic first**: All key features work without an LLM; a provider improves phrasing and interpretation only.
+- **Deterministic first**: Structured search and engineering analysis work without a provider; generated answers and vector retrieval require their corresponding configuration.
 - **Authorization enforced**: Access control is applied before retrieval and at response time.
 - **Never mutative**: AI explanations cannot change engineering findings, lifecycle, or approval state.
-- **Audited and bounded**: Every mutation uses typed tools, explicit confirmation, idempotency, and audit trails.
+- **Audited and bounded**: Optional tool calling uses an allowlisted read-only catalog, validated arguments, execution limits, and audit records. It is disabled by default; see [tool configuration](tools.md).
 
 ## See Also
 

@@ -12,6 +12,15 @@ semantics, output role meanings, units, and identity rules stay stable within 1.
 change requires a new contract version and explicit server support. Workers advertise the version
 they implement, and the server accepts only versions it supports.
 
+## Reading this contract
+
+- Start with [deployment and ownership](#deployment-and-ownership) and [registration](#external-registration-and-routing).
+- Implement [endpoints](#endpoints), [submission](#submission), and [result validation](#job-records-and-results).
+- Keep [local preprocessing](#local-preprocessor-contract) separate from remote conversion.
+- Use [SDK development](#sdk-development) for Python installation and the HTTP conformance probe.
+
+The STEP geometry service has a separate contract; this document defines native CAD jobs.
+
 ## Deployment and ownership
 
 Modelryx connects to a worker at an operator-configured URL and sends a snapshot of the native

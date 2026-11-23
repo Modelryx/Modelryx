@@ -1,6 +1,18 @@
 # Modelryx Documentation
 
-Welcome to the Modelryx documentation. This repository is an open-source engineering data and lifecycle platform for CAD model management and intelligent engineering workflows.
+Welcome to the Modelryx documentation. Modelryx is an open-source engineering data management platform combining PDM, CAD processing, browser visualization, collaboration, and optional AI assistance.
+
+## Choose a starting point
+
+| Goal | Guide |
+| --- | --- |
+| Run the platform | [Quick start](../README.md#quick-start) |
+| Develop locally | [Development setup](../DEVELOPMENT.md) |
+| Enable native file selection | [Local CAD Agent](../local_cad_agent/README.md) |
+| Deploy FreeCAD processing | [FreeCAD service](../workers/freecad/README.md#standalone-http-service) |
+| Configure AI | [Providers](ai/providers.md) and [read-only tools](ai/tools.md) |
+| Operate a deployment | [Deployment guide](operations/deployment.md) |
+| Integrate a CAD system | [Worker guide](workers/new-cad-worker-guide.md) |
 
 ## Contents
 

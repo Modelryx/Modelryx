@@ -8,6 +8,11 @@ Core technical documentation for Modelryx's platform design, data model, and pro
 - **[partmetadata-v1.md](./partmetadata-v1.md)** — CAD-neutral metadata specification for parts and assemblies, normalization rules, and responsibility boundaries
 - **[cad-processing-framework.md](./cad-processing-framework.md)** — CAD processing pipelines, worker coordination, artifact validation, and lifecycle management
 
+The API owns engineering records and authorization. The general worker orchestrates
+processing; independent CAD services own native execution and return job-scoped outputs.
+Platform storage holds source files and published artifacts. FreeCAD is deployed separately
+from the main Compose stack.
+
 ## Quick Reference
 
 ### System Components

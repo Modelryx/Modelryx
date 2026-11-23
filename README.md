@@ -1,61 +1,57 @@
 # Modelryx Platform
 
-**An open-source CAD data management and processing platform** built for engineering teams to manage, collaborate, and process CAD files at scale.
+**An open-source, AI-powered engineering data management platform** that brings together product data management (PDM), multi-CAD integration, intelligent search, automated CAD processing, and interactive 3D visualization—helping engineering teams manage models, assemblies, revisions, and related information in one collaborative environment.
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Contributions Welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 ## What is Modelryx?
 
-**Modelryx is an open-source, AI-powered engineering data management platform** that combines product data management (PDM), multi-CAD integration, intelligent engineering search, and automated CAD processing.
+Modelryx gives engineering teams a shared workspace for CAD models and the product
+information around them: Items, revisions, immutable content versions, assemblies,
+attachments, reviews, and approvals. Teams can inspect models in the browser,
+search engineering metadata, and automate conversion and validation through CAD workers.
+Optional AI assistance helps find and explain authorized engineering data.
 
-Designed for engineering teams, Modelryx provides a unified environment to manage CAD models, product structures, revisions, and engineering information. By integrating AI-assisted workflows with an extensible CAD processing architecture, Modelryx helps teams organize engineering data, automate repetitive tasks, and make better-informed engineering decisions.
-
-Built on an open and extensible architecture, Modelryx establishes a foundation for evolving from CAD/PDM management toward broader product lifecycle management (PLM).
+The current focus is engineering data management and PDM. The extensible architecture
+provides a foundation for broader product lifecycle management (PLM).
 
 ## Key Features
 
-- **AI-Powered Engineering Intelligence** — Natural-language engineering search, optional semantic retrieval, context-aware assistance, and grounded explanations of engineering data.
-
-- **Product Data Management (PDM)** — Manage engineering items, revisions, assemblies, CAD files, metadata, and product relationships.
-
-- **Multi-CAD Integration** — Built-in FreeCAD and STEP processing, with an extensible framework for integrating additional CAD systems.
-
-- **Automated CAD Processing** — Extract engineering metadata, analyze geometry, validate CAD data, and generate visualization representations using specialized processing workers.
-
-- **Interactive 3D Visualization** — Preview and inspect CAD models directly in the browser using GLB-based visualization.
-
-- **Engineering Collaboration** — Team-based access control, commenting, and approval workflows.
-
-- **Extensible Worker Framework** — Develop and deploy custom CAD workers using containerized, native, or external processing services.
-
-- **Modern Web Interface** — React and TypeScript frontend for managing engineering data and interacting with CAD models.
-
-- **REST API and Integration** — Programmatic access for external applications, automation, and engineering system integration.
-
-- **Flexible Deployment** — Docker-based deployment with PostgreSQL, pgvector, and persistent local file storage.
-
-- **Open Source** — Apache 2.0 licensed and designed for community contributions.
+| Capability | What you can do |
+| --- | --- |
+| Product data management | Organize Items, revisions, CAD files, metadata, managed BOMs, and product relationships. |
+| Engineering collaboration | Coordinate checkout, comments, reviews, and approvals with access controls. |
+| CAD processing | Extract metadata, analyze geometry, validate data, and generate previews using STEP and independently deployed native CAD workers. |
+| Browser visualization | Inspect 3D models and assembly occurrences, and view available drawing PDFs. |
+| Engineering search and AI | Search structured engineering data; optionally add natural-language interpretation, semantic retrieval, and evidence-backed assistance. |
+| Integration and extension | Use the REST API and worker protocol to connect applications, automate workflows, and integrate additional CAD systems. |
+| Self-hosted deployment | Run the backend with Docker Compose, PostgreSQL with pgvector, and persistent local file storage. |
 
 ## Architecture
 
-Modelryx follows a microservices architecture with these components:
+| Component | Responsibility | Default local address |
+| --- | --- | --- |
+| React / TypeScript frontend | Engineering workspace and browser previews; runs separately from Compose | http://localhost:5173 |
+| FastAPI server | Authentication, engineering records, workflows, and REST API | http://localhost:8000 |
+| PostgreSQL 17 + pgvector | Engineering metadata and search vectors | `localhost:5432` (loopback only) |
+| General worker | Background processing orchestration and publication | Internal service |
+| STEP worker | Neutral-format geometry processing | http://localhost:8080 |
+| External CAD workers | Native CAD extraction and conversion; FreeCAD is the included reference | FreeCAD: http://localhost:8090 when installed |
+| Local file storage | Source files and generated artifacts | Persistent `object-data` volume |
 
-- **Frontend**: React 18+ with TypeScript on Vite, run locally at http://localhost:5173
-- **API Server**: FastAPI application on port 8000 with OpenAPI documentation
-- **Database**: PostgreSQL 17 with pgvector for vector operations
-- **CAD Workers**: Containerized processing workers for format conversion and analysis
-- **Object Storage**: Persistent local filesystem volume for CAD files and artifacts
+The API and general worker share platform storage. External CAD workers receive
+job-scoped source files over HTTP and do not need platform database credentials
+or access to that volume. The optional Local CAD Agent packages native documents
+on each user's computer before upload.
 
-Frontend -> REST API (FastAPI) -> PostgreSQL + CAD Workers + Local Object Storage
-
-See the [platform architecture documentation](docs/architecture/platform-architecture.md) for detailed design.
+See the [platform architecture](docs/architecture/platform-architecture.md) for component boundaries and data flows.
 
 ## Initial release scope
 
-Modelryx is in development ahead of its first public release. Built-in CAD
-processing covers FreeCAD (`.FCStd`) and STEP; additional CAD systems require
-independently deployed workers and their own runtime licenses. See the component
+Modelryx is in development ahead of its first public release. This repository
+provides STEP processing and a separately deployed FreeCAD (`.FCStd`) worker.
+Additional CAD systems require independently deployed workers and their own runtime licenses. See the component
 guides for environment requirements and processing limitations.
 
 Database setup supports fresh-schema initialization and matching-schema checks.
@@ -68,8 +64,8 @@ release scope. A public release version and date have not yet been assigned.
 
 - **Docker Engine with Docker Compose v2**
 - **Node.js** v22.12+ (for the frontend)
-- **Python** v3.11+ (for server and workers)
-- Sufficient memory and disk for native CAD workloads; the default FreeCAD service limit is 8 GiB per container.
+- **Python** v3.11+ only for host Python development; the Docker images supply their own Python runtime.
+- Sufficient memory and disk for CAD workloads. If you enable the separate FreeCAD service, its default container memory limit is 8 GiB.
 
 ### 1. Clone the repository
 
@@ -181,11 +177,12 @@ served by Vite, with hot reload during development. On the login screen, use
 server configured for single-page application routing. Configure the API's
 `MODELRYX_CORS_ORIGINS` for the deployed frontend origin.
 
-### 4. Login
+### 4. Sign in
 
 Use your configured bootstrap credentials:
+
 - **Username:** `MODELRYX_BOOTSTRAP_ADMIN_USERNAME` (template: `admin`)
-- **Password:** (from MODELRYX_BOOTSTRAP_ADMIN_PASSWORD in .env)
+- **Password:** the value of `MODELRYX_BOOTSTRAP_ADMIN_PASSWORD` in `.env`
 
 ### 5. Enable Open CAD File for FreeCAD
 
@@ -199,13 +196,16 @@ for prerequisites, installation commands, registration, and a verification step.
 
 ## AI Support
 
-Modelryx supports an optional OpenAI-compatible AI gateway for:
+Modelryx supports optional OpenAI, Anthropic Claude, Gemini, and OpenAI-compatible
+chat providers. An independently configured OpenAI-compatible embedding gateway
+enables semantic retrieval. These integrations support:
 
 - **Natural-language engineering search** - Interpret requests as validated search filters, with optional embeddings for semantic retrieval.
 - **Context-aware assistance** - Ask about item metadata, revision history, assemblies, validation findings, and the selected model using authorized project data.
 - **Grounded answers and explanations** - Retrieve engineering knowledge and explain revision comparisons or validation findings using supporting evidence.
 
-Configure the gateway in `.env` before starting the API:
+For an OpenAI-compatible chat and embedding gateway, configure `.env` before
+starting the API. For native chat providers, follow the [provider setup guide](docs/ai/providers.md).
 
 ```dotenv
 MODELRYX_AI_GATEWAY_BASE_URL=https://your-gateway.example/v1
@@ -219,9 +219,9 @@ The gateway must support the OpenAI-compatible `/chat/completions` and `/embeddi
 operations for the corresponding features. Embeddings must have 1536 dimensions to
 match the database schema. Keep gateway credentials on the server.
 
-AI configuration is optional. Without a gateway, structured search, lexical retrieval,
+AI configuration is optional. Without a configured provider, structured search, lexical retrieval,
 revision comparison, validation, and BOM analysis remain available; generated answers
-and vector retrieval require the corresponding gateway configuration. AI requests
+and vector retrieval require chat and embedding configuration, respectively. AI requests
 respect existing access controls, and generated explanations do not change engineering
 records. Check `/api/v1/ai/status` for configuration and indexing status.
 
@@ -260,21 +260,18 @@ For production deployment:
 2. **Review [security best practices](docs/security/worker-security.md)** - Worker authentication and security
 3. **Set up monitoring** - Health checks and logging
 
-The first published version does not include built-in backup or restore support.
-Full backup and recovery support may be added in a future release.
+Built-in backup, restore, and automatic schema upgrades are outside the initial
+release scope. Plan recovery for both database metadata and stored files; see the
+[deployment guide](docs/operations/deployment.md).
 
-Quick start:
+Set production values in `.env`, including `MODELRYX_ENVIRONMENT=production`,
+`MODELRYX_SERVER_URL`, exact frontend CORS origins, and independent secrets. Configure
+TLS and the production frontend as described in the deployment guide, then start
+and verify the backend:
+
 ```bash
-# Set production values in .env
-MODELRYX_ENVIRONMENT=production
-MODELRYX_SERVER_URL=https://your-domain.com
-# ... set all required secrets ...
-
-# Start services
-docker compose up -d
-
-# Verify deployment
-curl https://your-domain.com/health
+docker compose up -d --build
+curl https://your-domain.com/health/ready
 ```
 
 See [S3 object operations](docs/development/s3-operations.md) for the optional Python
@@ -324,23 +321,12 @@ modelryx/
 |-- compose.yaml         # Docker Compose orchestration
 ```
 
-## Technology Stack
-
-| Component | Technology |
-|-----------|-----------|
-| Backend | Python 3.11+, FastAPI, SQLAlchemy |
-| Frontend | React 18+, TypeScript, Vite |
-| Database | PostgreSQL 17 with pgvector |
-| Object Storage | Persistent local filesystem |
-| Processing | General orchestrator and independent CAD/geometry services |
-| CAD | FreeCAD SDK, STEP format processing |
-
 ## Community & Support
 
-- **Issues** - Report bugs and request features on GitHub
-- **Discussions** - Ask questions and share ideas
-- **Contributing** - See [CONTRIBUTING.md](CONTRIBUTING.md)
-- **Code of Conduct** - See [code-of-conduct.md](code-of-conduct.md)
+- [GitHub issues](https://github.com/Modelryx/Modelryx/issues) — Report bugs and request features.
+- [Contributing](CONTRIBUTING.md) — Development workflow and contribution guidelines.
+- [Code of Conduct](code-of-conduct.md) — Community expectations.
+- [Security policy](SECURITY_POLICY.md) — Report security concerns.
 
 ## License
 
@@ -359,10 +345,3 @@ executables, follow the [third-party release guidance](docs/operations/third-par
 3. Follow [CONTRIBUTING.md](CONTRIBUTING.md) for repository support and contributions
 4. See [SECURITY_POLICY.md](SECURITY_POLICY.md) for security reporting
 
----
-
-**Ready to get started?** See [Quick Start](#quick-start) or [DEVELOPMENT.md](DEVELOPMENT.md).
-
-**Want to deploy to production?** See [docs/operations/deployment.md](docs/operations/deployment.md).
-
-**Building a custom worker?** See [CAD Worker Guide](docs/workers/new-cad-worker-guide.md).

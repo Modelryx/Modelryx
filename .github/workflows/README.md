@@ -1,15 +1,18 @@
 # Workflow layout
 
 - `ci.yml` runs required backend schema initialization/tests, frontend compilation, SDK tests,
-  FreeCAD unit/native tests, STEP contract tests, and repository checks. Backend
+  STEP contract tests, and repository checks. Backend
   coverage and the Trivy security report are uploaded as artifacts.
   The STEP job also builds its image once with Buildx caching, runs native converter tests,
   and runs an authenticated service smoke test. Backend Compose tests build the API runtime
-  and test images. FreeCAD is built and tested once using the native Docker builder.
+  and test images. FreeCAD has a separate path-filtered workflow.
+- `freecad.yml` runs FreeCAD unit tests and native release gates for non-Markdown
+  changes under `workers/freecad/` or `worker-sdk/`, and supports manual dispatch.
 - `freecad-compatibility.yml` is manually dispatched for the FreeCAD version matrix.
   Failures for versions other than the supported production version are advisory.
 
-Automatic workflows run on all pull requests and pushes to `main` and `develop`.
+Platform CI runs on all pull requests and pushes to `main` and `develop`; FreeCAD CI
+applies the path filters described above.
 Superseded runs for the same workflow/ref are cancelled. Jobs have explicit timeouts.
 
 Documentation-only changes skip the expensive build/test/Trivy jobs after a small
@@ -46,6 +49,6 @@ install Playwright or run browser tests.
 
 ## Required checks
 
-Select required checks from Platform CI. The `STEP worker` job includes native image and
-service checks, and the `FreeCAD worker` job includes native release gates. Remove any obsolete
-container matrix checks from branch protection after this workflow change is applied.
+Select globally required checks from Platform CI. The `STEP worker` job includes native
+image and service checks. The separate `FreeCAD worker` job includes native release gates;
+its path-filtered checks should not be globally required for unrelated pull requests.

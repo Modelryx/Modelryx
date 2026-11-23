@@ -1,9 +1,15 @@
 # Modelryx FreeCAD worker
 
-Native document closure waits up to 30 seconds for pending TechDraw tasks before
-freeing drawing or referenced base objects. A timeout fails the operation; the
-isolated worker deadline remains responsible for terminating stalled native work.
-This applies to extraction and dependency preprocessing.
+An independently deployed HTTP service for FreeCAD extraction, engineering metadata,
+3D previews, and TechDraw PDFs. A separate local preprocessor resolves dependencies
+and packages documents on each user's computer.
+
+## Start here
+
+- [Deploy the HTTP service](#standalone-http-service), then register its reachable URL in Modelryx.
+- [Install the local preprocessor](#local-preprocessor-registration) for **Open CAD File**.
+- [Build and test the worker](#independent-build-and-ci).
+- Review [assembly evidence](#assembly-evidence) and [dependency packaging](#root-document-dependency-packaging) when qualifying models.
 
 ## Reference external worker
 
@@ -215,6 +221,13 @@ Set `MODELRYX_FREECAD_STAGE_TIMEOUT_SECONDS` to a positive number to apply a tim
 to each conversion stage, including startup. The clock resets when the converter reports a
 new stage. The existing overall job timeout still applies. Leave it unset to retain only the
 overall timeout; select a limit appropriate for the expected model sizes.
+
+## Native runtime behavior
+
+Native document closure waits up to 30 seconds for pending TechDraw tasks before
+freeing drawing or referenced base objects. A timeout fails the operation; the
+isolated worker deadline remains responsible for terminating stalled native work.
+This applies to extraction and dependency preprocessing.
 
 ## Assembly evidence
 

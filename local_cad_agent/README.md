@@ -12,6 +12,9 @@ registered against an external worker ID; this repository contains no vendor SDK
 
 ## Installation
 
+Run the commands below from the repository root on the computer that holds the CAD
+files and runs the browser. Deploy the remote conversion worker separately.
+
 On Windows, run `./local_cad_agent/install-windows.ps1`. A release package uses its prebuilt,
 self-contained executable. Source installations require the .NET 8 SDK; `-BuildFromSource`
 forces rebuilding the agent. Set `-AllowedOrigins` to your frontend's origins.

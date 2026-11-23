@@ -1,10 +1,12 @@
 # Modelryx server
 
 FastAPI API and database-backed orchestration for Items, revisions, immutable content snapshots,
-artifacts, managed BOMs, checkout, approvals, search and optional AI features. The frontend is
-in `../front-end`; native conversion code is in `../workers` or separate worker checkouts.
+artifacts, managed BOMs, checkout, approvals, search and optional AI features. See the [frontend](../front-end/README.md) for the browser workspace and
+[worker integrations](../docs/workers/README.md) for native conversion services.
 
 ## Startup
+
+Commands below assume the repository root unless a component directory is specified.
 
 Follow [the root development guide](../DEVELOPMENT.md). Configure `.env` and run Compose from
 the repository root. Run `npm ci` and `npm run dev` separately from `front-end/`.

@@ -2,6 +2,10 @@
 
 Guides for developing with and contributing to Modelryx.
 
+Start with [local development setup](../../DEVELOPMENT.md) for environment configuration,
+service startup, and host Python workflows. Commands in individual guides specify
+their working directory and runtime requirements.
+
 ## Contents
 
 - **[api.md](api.md)** - REST API reference

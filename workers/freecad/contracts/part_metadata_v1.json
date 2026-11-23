@@ -314,6 +314,7 @@
         "name": {"type": "string", "minLength": 1},
         "part_number": {"type": ["string", "null"]},
         "revision": {"type": ["string", "null"]},
+        "description": {"type": ["string", "null"]},
         "quantity": {"$ref": "#/$defs/nonNegativeInteger"},
         "bom_structure": {"type": ["string", "null"]},
         "suppressed": {"type": "boolean"},

@@ -2,6 +2,9 @@
 
 Security guidelines and best practices for Modelryx.
 
+For vulnerability reporting, follow the [security policy](../../SECURITY_POLICY.md).
+For deployment configuration, use the [deployment guide](../operations/deployment.md).
+
 ## Contents
 
 - **[worker-security.md](worker-security.md)** - CAD worker security model

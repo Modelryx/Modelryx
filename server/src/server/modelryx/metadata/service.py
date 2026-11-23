@@ -128,7 +128,11 @@ def normalize_search_properties(metadata: dict) -> dict:
         if isinstance(value, (str, int, float, bool)):
             properties[target] = value
     if not properties.get("configuration") and isinstance(native, dict):
-        value = native.get("active_model_state") or native.get("active_iassembly_member")
+        value = (
+            native.get("active_model_state")
+            or native.get("active_iassembly_member")
+            or native.get("active_arrangement")
+        )
         if isinstance(value, str) and value.strip():
             properties["configuration"] = value.strip()
     return canonical
@@ -221,6 +225,7 @@ def enhance_extraction_metadata(metadata: dict) -> dict:
                 "name": str(name),
                 "part_number": value.get("part_number") or value.get("partNumber"),
                 "revision": value.get("revision"),
+                "description": value.get("description"),
                 "quantity": _non_negative_int(value.get("quantity"), default=1),
                 "bom_structure": value.get("bom_structure"),
                 "suppressed": bool(value.get("suppressed", False)),
