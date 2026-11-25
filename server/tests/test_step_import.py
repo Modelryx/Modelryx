@@ -97,7 +97,9 @@ def test_step_upload_is_primary_and_publishes_glb_preview(monkeypatch) -> None:
         native_format="STEP",
     )
 
-    def convert(_source: Path, output: Path, _settings) -> dict:
+    def convert(_source: Path, output: Path, _settings, *, cancellation_callback, job_id) -> dict:
+        assert job_id is not None
+        cancellation_callback()
         (output / "model.glb").write_bytes(_minimal_glb())
         metadata = {
             "schema": "modelryx.part-metadata",

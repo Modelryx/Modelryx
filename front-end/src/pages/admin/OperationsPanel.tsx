@@ -128,67 +128,67 @@ export function OperationsPanel({
             </p>
           )}
           <div className="worker-health-grid">
-              {(status?.workers ?? []).map((worker) => (
-                <article className="worker-health-card" key={worker.worker_type}>
-                  <div className="maintenance-title-row">
-                    <strong>{worker.worker_type}</strong>
-                    <span
-                      className={`maintenance-health ${worker.availability === 'ONLINE' ? 'healthy' : 'degraded'}`}
-                    >
-                      {worker.availability}
-                    </span>
-                    {worker.status && <span className="worker-state">{worker.status}</span>}
+            {(status?.workers ?? []).map((worker) => (
+              <article className="worker-health-card" key={worker.worker_type}>
+                <div className="maintenance-title-row">
+                  <strong>{worker.worker_type}</strong>
+                  <span
+                    className={`maintenance-health ${worker.availability === 'ONLINE' ? 'healthy' : 'degraded'}`}
+                  >
+                    {worker.availability}
+                  </span>
+                  {worker.status && <span className="worker-state">{worker.status}</span>}
+                </div>
+                <dl>
+                  <div>
+                    <dt>Machine</dt>
+                    <dd>{worker.machine_name ?? 'No heartbeat'}</dd>
                   </div>
-                  <dl>
-                    <div>
-                      <dt>Machine</dt>
-                      <dd>{worker.machine_name ?? 'No heartbeat'}</dd>
-                    </div>
-                    <div>
-                      <dt>Endpoint</dt>
-                      <dd>{worker.configured_url ?? 'Queue worker'}</dd>
-                    </div>
-                    <div>
-                      <dt>Worker</dt>
-                      <dd>{worker.worker_version ?? '—'}</dd>
-                    </div>
-                    <div>
-                      <dt>CAD version</dt>
-                      <dd>{worker.application_version ?? '—'}</dd>
-                    </div>
-                    <div>
-                      <dt>Adapter</dt>
-                      <dd>{worker.adapter_version ?? '—'}</dd>
-                    </div>
-                    <div>
-                      <dt>Compatibility</dt>
-                      <dd>{worker.compatibility_state}</dd>
-                    </div>
-                    <div>
-                      <dt>Capabilities</dt>
-                      <dd>
-                        {Object.entries(worker.capabilities)
-                          .filter(([, value]) => value === true)
-                          .map(([name]) => name.replaceAll('_', ' '))
-                          .join(', ') || '—'}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Last seen</dt>
-                      <dd>
-                        {worker.last_heartbeat_at
-                          ? new Date(worker.last_heartbeat_at).toLocaleString()
-                          : 'Never'}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Current work</dt>
-                      <dd>{worker.current_job ? 'Processing' : 'None'}</dd>
-                    </div>
-                  </dl>
-                  {worker.detail && <p className="maintenance-warning">{worker.detail}</p>}
-                </article>
-              ))}
+                  <div>
+                    <dt>Endpoint</dt>
+                    <dd>{worker.configured_url ?? 'Queue worker'}</dd>
+                  </div>
+                  <div>
+                    <dt>Worker</dt>
+                    <dd>{worker.worker_version ?? '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>CAD version</dt>
+                    <dd>{worker.application_version ?? '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>Adapter</dt>
+                    <dd>{worker.adapter_version ?? '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>Compatibility</dt>
+                    <dd>{worker.compatibility_state}</dd>
+                  </div>
+                  <div>
+                    <dt>Capabilities</dt>
+                    <dd>
+                      {Object.entries(worker.capabilities)
+                        .filter(([, value]) => value === true)
+                        .map(([name]) => name.replaceAll('_', ' '))
+                        .join(', ') || '—'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Last seen</dt>
+                    <dd>
+                      {worker.last_heartbeat_at
+                        ? new Date(worker.last_heartbeat_at).toLocaleString()
+                        : 'Never'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Current work</dt>
+                    <dd>{worker.current_job ? 'Processing' : 'None'}</dd>
+                  </div>
+                </dl>
+                {worker.detail && <p className="maintenance-warning">{worker.detail}</p>}
+              </article>
+            ))}
             {(['worker', 'analyzer'] as const).map((system) => {
               const connection = cadWorkerStatus?.[system];
               if (!connection?.url) return null;
@@ -255,8 +255,8 @@ export function OperationsPanel({
               <h3 id="cad-servers-title">CAD server settings</h3>
               <p>
                 Configure a default external CAD worker and preprocessor. An enabled matching worker
-                registration takes precedence. Without a matching worker, native CAD
-                processing is unavailable. An empty preprocessor URL disables server-side analysis.
+                registration takes precedence. Without a matching worker, native CAD processing is
+                unavailable. An empty preprocessor URL disables server-side analysis.
               </p>
             </div>
           </div>

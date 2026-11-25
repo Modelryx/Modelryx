@@ -13,14 +13,10 @@ from modelryx.core.auth import Principal, create_access_token
 from modelryx.core.config import get_settings
 from modelryx.core.db import SessionLocal
 from modelryx.models import (
-    Artifact,
-    ArtifactFile,
     Part,
     ProcessingJob,
     Revision,
-    RevisionArtifactRelation,
     RevisionContentSnapshot,
-    RevisionContentSnapshotArtifact,
     User,
     WorkerHeartbeat,
 )
@@ -28,7 +24,6 @@ from modelryx.services.processing import (
     ProcessingCancelled,
     check_processing_cancelled,
     fail_job,
-    process_job,
     read_converter_package,
     read_worker_metadata_sidecars,
     recover_abandoned_jobs,
@@ -36,6 +31,7 @@ from modelryx.services.processing import (
 from sqlalchemy import select
 
 client = TestClient(app)
+
 
 def test_running_freecad_job_can_be_cancelled_at_safe_boundary() -> None:
     completed = commit_item(
@@ -46,9 +42,7 @@ def test_running_freecad_job_can_be_cancelled_at_safe_boundary() -> None:
     )
     revision_id = uuid.UUID(completed["revision_id"])
     with SessionLocal() as db:
-        job = db.scalar(
-            select(ProcessingJob).where(ProcessingJob.revision_id == revision_id)
-        )
+        job = db.scalar(select(ProcessingJob).where(ProcessingJob.revision_id == revision_id))
         job.state = "RUNNING"
         job.stage = "EXPORTING_GEOMETRY"
         job.attempt_count = 1
@@ -84,9 +78,7 @@ def test_abandoned_job_recovery_respects_live_worker_heartbeat() -> None:
         update={"processing_stale_seconds": 60, "worker_heartbeat_timeout_seconds": 30}
     )
     with SessionLocal() as db:
-        abandoned = db.scalar(
-            select(ProcessingJob).where(ProcessingJob.revision_id == revision_id)
-        )
+        abandoned = db.scalar(select(ProcessingJob).where(ProcessingJob.revision_id == revision_id))
         abandoned.state = "RUNNING"
         abandoned.stage = "EXPORTING_GEOMETRY"
         abandoned.attempt_count = 1
@@ -188,16 +180,12 @@ def test_item_creator_or_administrator_can_control_processing_jobs() -> None:
     pending = next(job for job in jobs.json() if job["state"] == "PENDING")
     assert pending["can_control"] is True
 
-    cancelled = client.post(
-        f"/api/v1/processing-jobs/{pending['id']}/cancel", headers=AUTH
-    )
+    cancelled = client.post(f"/api/v1/processing-jobs/{pending['id']}/cancel", headers=AUTH)
     assert cancelled.status_code == 200, cancelled.text
     assert cancelled.json()["state"] == "FAILED"
     assert cancelled.json()["stage"] == "CANCELLED"
 
-    retried = client.post(
-        f"/api/v1/processing-jobs/{pending['id']}/retry", headers=AUTH
-    )
+    retried = client.post(f"/api/v1/processing-jobs/{pending['id']}/retry", headers=AUTH)
     assert retried.status_code == 202, retried.text
     assert retried.json()["state"] == "PENDING"
     assert retried.json()["can_control"] is True
@@ -234,9 +222,7 @@ def test_non_administrator_processing_control_is_limited_to_item_creator() -> No
         db.commit()
 
     def headers(subject: str, name: str) -> dict[str, str]:
-        token = create_access_token(
-            Principal(subject=subject, display_name=name, role="engineer")
-        )
+        token = create_access_token(Principal(subject=subject, display_name=name, role="engineer"))
         return {"Authorization": f"Bearer {token}"}
 
     owner_jobs = client.get(
@@ -303,8 +289,12 @@ def test_failed_regeneration_and_retry_preserve_library_and_published_outputs(tm
     from modelryx.services.storage import LocalStorageProvider
 
     number = f"PRESERVE-PUBLISHED-{uuid.uuid4().hex}"
-    completed = commit_item(client, item_number=number, name="Keep published part",
-                            files=[("part.step", b"native source")])
+    completed = commit_item(
+        client,
+        item_number=number,
+        name="Keep published part",
+        files=[("part.step", b"native source")],
+    )
     revision_id = uuid.UUID(completed["revision_id"])
     with SessionLocal() as db:
         revision = db.get(Revision, revision_id)
@@ -316,8 +306,14 @@ def test_failed_regeneration_and_retry_preserve_library_and_published_outputs(tm
         preview = tmp_path / "model.glb"
         preview.write_bytes(b"last successful preview")
         output = store_output(
-            db, LocalStorageProvider(get_settings().storage_root), revision, snapshot,
-            kind="GLB", filename="model.glb", mime_type="model/gltf-binary", source=preview,
+            db,
+            LocalStorageProvider(get_settings().storage_root),
+            revision,
+            snapshot,
+            kind="GLB",
+            filename="model.glb",
+            mime_type="model/gltf-binary",
+            source=preview,
         )
         publish_worker_outputs(db, revision, snapshot, [output])
         revision.state = "READY"
@@ -355,8 +351,12 @@ def test_failed_regeneration_and_retry_preserve_library_and_published_outputs(tm
 def test_failed_first_processing_does_not_mark_unprocessed_content_ready():
     import httpx
 
-    completed = commit_item(client, item_number=f"FIRST-FAIL-{uuid.uuid4().hex}",
-                            name="No published preview", files=[("part.step", b"source")])
+    completed = commit_item(
+        client,
+        item_number=f"FIRST-FAIL-{uuid.uuid4().hex}",
+        name="No published preview",
+        files=[("part.step", b"source")],
+    )
     revision_id = uuid.UUID(completed["revision_id"])
     with SessionLocal() as db:
         revision = db.get(Revision, revision_id)

@@ -1,6 +1,6 @@
+import uuid
 from pathlib import Path
 from types import SimpleNamespace
-import uuid
 
 import httpx
 import pytest
@@ -132,28 +132,50 @@ def test_cancelled_step_conversion_is_terminal(tmp_path: Path, monkeypatch) -> N
         processing.run_step_processing_job(source, tmp_path / "output", settings)
 
 
-def test_cancellation_is_propagated_and_does_not_share_another_jobs_conversion(tmp_path, monkeypatch):
+def test_cancellation_is_propagated_and_does_not_share_another_jobs_conversion(
+    tmp_path, monkeypatch
+):
     source = tmp_path / "same.step"
     source.write_bytes(b"same source")
     calls = []
+
     def handle(request):
         calls.append((request.method, request.url.path, request.headers["Idempotency-Key"]))
-        return httpx.Response(202, json={"state": "PROCESSING", "links": {"self": "/api/v1/jobs/unique"}})
+        return httpx.Response(
+            202, json={"state": "PROCESSING", "links": {"self": "/api/v1/jobs/unique"}}
+        )
+
     original = httpx.Client
-    monkeypatch.setattr(processing.httpx, "Client", lambda **kwargs: original(transport=httpx.MockTransport(handle), **kwargs))
-    settings = SimpleNamespace(internal_worker_key="test-key", step_worker_url="http://geometry",
-                               converter_timeout_seconds=30, worker_poll_seconds=0.1)
+    monkeypatch.setattr(
+        processing.httpx,
+        "Client",
+        lambda **kwargs: original(transport=httpx.MockTransport(handle), **kwargs),
+    )
+    settings = SimpleNamespace(
+        internal_worker_key="test-key",
+        step_worker_url="http://geometry",
+        converter_timeout_seconds=30,
+        worker_poll_seconds=0.1,
+    )
+
     def cancelled():
         raise processing.ProcessingCancelled("requested")
+
     for job_id in (uuid.uuid4(), uuid.uuid4()):
         with pytest.raises(processing.ProcessingCancelled):
-            processing.run_step_processing_job(source, tmp_path / "output", settings,
-                                               cancellation_callback=cancelled, job_id=job_id)
+            processing.run_step_processing_job(
+                source,
+                tmp_path / "output",
+                settings,
+                cancellation_callback=cancelled,
+                job_id=job_id,
+            )
     assert [path for _, path, _ in calls] == ["/api/v1/jobs", "/api/v1/jobs/unique/cancel"] * 2
     assert calls[0][2] != calls[2][2]
 
 
 def test_cancellable_requests_require_unique_job_identity(tmp_path):
     with pytest.raises(ValueError, match="unique processing job ID"):
-        processing.run_step_processing_job(tmp_path / "unused.step", tmp_path, None,
-                                           cancellation_callback=lambda: None)
+        processing.run_step_processing_job(
+            tmp_path / "unused.step", tmp_path, None, cancellation_callback=lambda: None
+        )

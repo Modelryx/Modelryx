@@ -1,6 +1,5 @@
 import hashlib
 import os
-import re
 import uuid
 from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
@@ -1917,10 +1916,12 @@ def save_assembly_analysis(
 
     def identity_token(value: object) -> str:
         from modelryx.services.cad_routing import identity_token as normalize
+
         return normalize(value, cad_document_extensions)
 
     def child_identity_token(value: object) -> str:
         from modelryx.services.cad_routing import identity_token as normalize
+
         return normalize(value, cad_document_extensions, child=True)
 
     def matching_old_line(
@@ -2551,7 +2552,9 @@ def stage_reconciled_assembly(
     if report.get("managed_bom_supported") is False:
         raise HTTPException(
             status_code=422,
-            detail="Resolve native configuration and component identities before managed BOM staging",
+            detail=(
+                "Resolve native configuration and component identities before managed BOM staging"
+            ),
         )
     if any(entry.get("status") in {"MISSING", "CONFLICT"} for entry in reconciliation):
         raise HTTPException(status_code=422, detail="Resolve assembly conflicts before staging")

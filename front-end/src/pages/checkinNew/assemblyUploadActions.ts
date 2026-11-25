@@ -136,7 +136,9 @@ export function createAssemblyUploadActions(context: Context) {
       const relatedDrawings = packageEntries.filter((entry) => entry !== main && isDrawing(entry));
       const bomReferences = managedBomReferences(dependencyReport?.references ?? []);
       const names = bomInstanceNames(bomReferences);
-      const instanceNames = new Map(bomReferences.map((reference, index) => [reference, names[index]]));
+      const instanceNames = new Map(
+        bomReferences.map((reference, index) => [reference, names[index]])
+      );
       const packageEntriesFor = (owner: FileEntry) => {
         if (owner.documentType !== 'ASSEMBLY' || !dependencyReport?.references?.length) {
           return [owner];

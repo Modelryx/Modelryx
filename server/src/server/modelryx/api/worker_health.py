@@ -130,7 +130,9 @@ def _best_heartbeat(
 
 @router.get("/preflight", response_model=WorkerPreflightResponse)
 async def worker_preflight(
-    worker_type: Annotated[str, Query(min_length=2, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9 _.:-]*$")],
+    worker_type: Annotated[
+        str, Query(min_length=2, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9 _.:-]*$")
+    ],
     db: Db,
     _: Actor,
     settings: Config,
@@ -142,22 +144,33 @@ async def worker_preflight(
     requested = worker_type.casefold()
     normalized = "".join(char for char in requested if char.isalnum())
     workers = (
-        [] if worker_id is None and worker_type.upper() in PLATFORM_WORKER_TYPES
+        []
+        if worker_id is None and worker_type.upper() in PLATFORM_WORKER_TYPES
         else discover_workers(db, settings)
     )
     candidates = [
-        worker for worker in workers
-        if worker["enabled"] and (
-            worker["id"] == worker_id if worker_id is not None else (
+        worker
+        for worker in workers
+        if worker["enabled"]
+        and (
+            worker["id"] == worker_id
+            if worker_id is not None
+            else (
                 worker["id"].casefold() == requested
-                or "".join(char for char in worker["capabilities"]["cadSystem"].casefold()
-                           if char.isalnum()) == normalized
+                or "".join(
+                    char
+                    for char in worker["capabilities"]["cadSystem"].casefold()
+                    if char.isalnum()
+                )
+                == normalized
             )
         )
     ]
     if len(candidates) > 1:
         return WorkerPreflightResponse(
-            worker_type=worker_type, available=False, compatible=False,
+            worker_type=worker_type,
+            available=False,
+            compatible=False,
             message="Multiple enabled external workers match; select a unique worker registration.",
         )
     if candidates:
@@ -182,17 +195,30 @@ async def worker_preflight(
         except (httpx.HTTPError, ValueError, TypeError):
             pass
         return WorkerPreflightResponse(
-            worker_type=worker_type, available=available, compatible=available,
+            worker_type=worker_type,
+            available=available,
+            compatible=available,
             status="IDLE" if available else None,
-            message=("External CAD worker is online and compatible." if available else
-                     "The selected external CAD worker is offline or incompatible. Check its readiness, shared key and registration."),
+            message=(
+                "External CAD worker is online and compatible."
+                if available
+                else (
+                    "The selected external CAD worker is offline or incompatible. "
+                    "Check its readiness, shared key and registration."
+                )
+            ),
             adapter_version=capabilities.get("workerVersion") if available else None,
             capabilities=capabilities if available else {},
         )
     if worker_id is not None or worker_type.upper() not in PLATFORM_WORKER_TYPES:
         return WorkerPreflightResponse(
-            worker_type=worker_type, available=False, compatible=False,
-            message="No matching enabled external CAD worker could be verified. Check its registration or configured endpoint.",
+            worker_type=worker_type,
+            available=False,
+            compatible=False,
+            message=(
+                "No matching enabled external CAD worker could be verified. "
+                "Check its registration or configured endpoint."
+            ),
         )
     heartbeat, available = _best_heartbeat(db, worker_type, settings)
     compatible = bool(available and heartbeat and heartbeat.compatibility_state != "INCOMPATIBLE")

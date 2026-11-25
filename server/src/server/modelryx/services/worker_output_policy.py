@@ -24,9 +24,14 @@ def validate_processing_profile(value, document_kinds, output_roles):
     normalized = {}
     for kind, roles in preferred.items():
         if (
-            not isinstance(roles, list) or len(roles) > 32
-            or any(not isinstance(role, str) or role not in output_roles
-                   or role in {"native-snapshot", "part-metadata", "model-preview"} for role in roles)
+            not isinstance(roles, list)
+            or len(roles) > 32
+            or any(
+                not isinstance(role, str)
+                or role not in output_roles
+                or role in {"native-snapshot", "part-metadata", "model-preview"}
+                for role in roles
+            )
             or len(set(roles)) != len(roles)
         ):
             raise ValueError("Worker preferredOutputs contains invalid or unadvertised roles")
@@ -35,7 +40,11 @@ def validate_processing_profile(value, document_kinds, output_roles):
     if not isinstance(contracts, dict) or len(contracts) > len(BUNDLE_CONTRACTS):
         raise ValueError("Worker outputContracts must be a bounded object")
     for role, contract in contracts.items():
-        if role not in output_roles or role not in BUNDLE_CONTRACTS or contract != BUNDLE_CONTRACTS[role]:
+        if (
+            role not in output_roles
+            or role not in BUNDLE_CONTRACTS
+            or contract != BUNDLE_CONTRACTS[role]
+        ):
             raise ValueError("Worker advertises an unsupported output contract")
     related = value.get("includeRelatedDrawings", False)
     if type(related) is not bool or related and "drawing" not in document_kinds:
@@ -61,7 +70,9 @@ def allowed_worker_outputs(settings, profile=None):
     return outputs
 
 
-def preferred_worker_outputs(document_kind, has_related_drawings, supported_roles=None, profile=None):
+def preferred_worker_outputs(
+    document_kind, has_related_drawings, supported_roles=None, profile=None
+):
     outputs = ["glb"]
     if document_kind == "drawing":
         outputs.append("drawing-pdf")
@@ -73,7 +84,12 @@ def preferred_worker_outputs(document_kind, has_related_drawings, supported_role
         outputs = profile["preferredOutputs"][document_kind]
     publishable = set(BASE_OUTPUTS)
     publishable.update(
-        role for role, contract in (profile or {}).get("outputContracts", {}).items()
+        role
+        for role, contract in (profile or {}).get("outputContracts", {}).items()
         if role in BUNDLE_CONTRACTS and BUNDLE_CONTRACTS[role] == contract
     )
-    return [role for role in outputs if role in publishable and (supported_roles is None or role in supported_roles)]
+    return [
+        role
+        for role in outputs
+        if role in publishable and (supported_roles is None or role in supported_roles)
+    ]

@@ -62,7 +62,9 @@ def _require_processing_control(db: Session, revision: Revision, principal: Prin
         )
 
 
-def _native_processing_type(filename: str, cad_system: str, db: Session | None = None) -> str | None:
+def _native_processing_type(
+    filename: str, cad_system: str, db: Session | None = None
+) -> str | None:
     from modelryx.services.cad_routing import processing_type_for_source
     from modelryx.services.external_workers import AmbiguousWorkerError
 

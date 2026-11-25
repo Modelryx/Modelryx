@@ -271,9 +271,8 @@ export type CadDependencyReport = {
 
 // Workers can report the same display name for repeated occurrences of one prototype.
 // Allocate unique proposal keys within each parent without treating these keys as native IDs.
-export const managedBomReferences = (
-  references: NonNullable<CadDependencyReport['references']>
-) => references.filter((reference) => reference.properties?.is_bom_occurrence !== false);
+export const managedBomReferences = (references: NonNullable<CadDependencyReport['references']>) =>
+  references.filter((reference) => reference.properties?.is_bom_occurrence !== false);
 
 export const bomInstanceNames = (
   references: NonNullable<CadDependencyReport['references']>

@@ -136,9 +136,7 @@ def convert_remote(
                             check_cancelled()
                             size += len(chunk)
                             if size > manifest["size"]:
-                                raise RuntimeError(
-                                    f"CAD output {role} exceeds its declared size"
-                                )
+                                raise RuntimeError(f"CAD output {role} exceeds its declared size")
                             digest.update(chunk)
                             stream.write(chunk)
                 if size != manifest["size"] or digest.hexdigest() != manifest["sha256"].lower():
@@ -163,7 +161,7 @@ def validate_result(request, result, state, settings, expected_adapter_version=N
     except (TypeError, ValueError) as error:
         raise RuntimeError(f"Standalone CAD result is invalid: {error}") from error
     if (
-        (expected_adapter_version is not None and result["adapterVersion"] != expected_adapter_version)
-        or state != ("Partial" if result["warnings"] else "ReadyToPublish")
-    ):
+        expected_adapter_version is not None
+        and result["adapterVersion"] != expected_adapter_version
+    ) or state != ("Partial" if result["warnings"] else "ReadyToPublish"):
         raise RuntimeError("Standalone CAD result has invalid status or converter version")

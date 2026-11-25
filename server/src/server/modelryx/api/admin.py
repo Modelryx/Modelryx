@@ -19,14 +19,18 @@ from modelryx.core.db import get_db
 from modelryx.core.roles import assign_roles, effective_role, roles_for_user, user_has_role
 from modelryx.models import ApplicationSetting, AuditLog, Item, Revision, User
 from modelryx.services.approval_escalations import create_overdue_approval_escalations
+from modelryx.services.cad_worker_settings import (
+    CAD_ANALYZER_KEY,
+    CAD_WORKER_KEY,
+    LEGACY_SETTING_KEYS,
+    analyzer_default,
+    worker_default,
+)
 from modelryx.services.checkout_notifications import (
     create_checkout_expiry_notifications,
     record_checkout_notification_run,
 )
 from modelryx.services.external_workers import PREFIX, registered_workers, validate_capabilities
-from modelryx.services.cad_worker_settings import (
-    CAD_ANALYZER_KEY, CAD_WORKER_KEY, LEGACY_SETTING_KEYS, analyzer_default, worker_default,
-)
 from modelryx.services.item_purge import (
     cascade_plan,
     item_storage_keys,
@@ -164,8 +168,14 @@ class CadWorkerSettingsResponse(BaseModel):
 
 
 class CadWorkerSettingsUpdate(BaseModel):
-    worker_url: str | None = Field(default=None, max_length=2000, validation_alias=AliasChoices("worker_url", "freecad_url"))
-    analyzer_url: str | None = Field(default=None, max_length=2000, validation_alias=AliasChoices("analyzer_url", "freecad_analyzer_url"))
+    worker_url: str | None = Field(
+        default=None, max_length=2000, validation_alias=AliasChoices("worker_url", "freecad_url")
+    )
+    analyzer_url: str | None = Field(
+        default=None,
+        max_length=2000,
+        validation_alias=AliasChoices("analyzer_url", "freecad_analyzer_url"),
+    )
 
 
 class CadWorkerConnectionStatus(BaseModel):
@@ -229,7 +239,9 @@ def _cad_worker_configurations(
         row.key: row.value
         for row in db.scalars(
             select(ApplicationSetting).where(
-                ApplicationSetting.key.in_([*CAD_WORKER_SETTING_KEYS.values(), *LEGACY_SETTING_KEYS.values()])
+                ApplicationSetting.key.in_(
+                    [*CAD_WORKER_SETTING_KEYS.values(), *LEGACY_SETTING_KEYS.values()]
+                )
             )
         )
     }
@@ -282,6 +294,7 @@ async def _probe_cad_worker(
             capabilities = response.json()
             if dependency_analysis:
                 from modelryx.services.external_workers import validate_dependency_capabilities
+
                 advertised = validate_dependency_capabilities(capabilities)
             else:
                 advertised = validate_capabilities(capabilities)
@@ -304,8 +317,9 @@ async def _probe_cad_worker(
 
 async def _probe_freecad_worker(cad_system, url, worker_key):
     """Compatibility alias; endpoint purpose, not CAD identity, selects analyzer checks."""
-    return await _probe_cad_worker(cad_system, url, worker_key,
-                                   dependency_analysis=cad_system.endswith("_analyzer"))
+    return await _probe_cad_worker(
+        cad_system, url, worker_key, dependency_analysis=cad_system.endswith("_analyzer")
+    )
 
 
 def require_admin(principal: Principal) -> None:
@@ -328,9 +342,7 @@ async def get_cad_worker_status(
     require_admin(principal)
     configurations = _cad_worker_configurations(db, settings)
     worker, analyzer = await asyncio.gather(
-        _probe_cad_worker(
-            "worker", configurations["worker_url"][0], settings.internal_worker_key
-        ),
+        _probe_cad_worker("worker", configurations["worker_url"][0], settings.internal_worker_key),
         _probe_cad_worker(
             "analyzer",
             configurations["analyzer_url"][0],
@@ -339,9 +351,7 @@ async def get_cad_worker_status(
         ),
     )
     return CadWorkerStatusResponse(
-        worker=worker.model_copy(
-            update={"configuration_source": configurations["worker_url"][1]}
-        ),
+        worker=worker.model_copy(update={"configuration_source": configurations["worker_url"][1]}),
         analyzer=analyzer.model_copy(
             update={"configuration_source": configurations["analyzer_url"][1]}
         ),

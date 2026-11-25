@@ -88,7 +88,7 @@ def test_worker_heartbeat_is_authenticated_and_reported() -> None:
     assert preflight.json()["compatible"] is False
 
 
-def test_external_worker_heartbeats_report_incompatible_runtime() -> None:
+def test_external_worker_heartbeat_alone_cannot_verify_endpoint() -> None:
     payload = {
         "worker_type": "EXAMPLE_CAD",
         "machine_name": "incompatible-example_cad-host",
@@ -109,7 +109,9 @@ def test_external_worker_heartbeats_report_incompatible_runtime() -> None:
         "/api/v1/workers/preflight?worker_type=EXAMPLE_CAD", headers=AUTH
     )
     assert preflight.status_code == 200
-    assert preflight.json()["available"] is True
+    # Heartbeats alone do not verify external native endpoints. Registration and
+    # an authenticated capability probe are required, even for a live heartbeat.
+    assert preflight.json()["available"] is False
     assert preflight.json()["compatible"] is False
 
 

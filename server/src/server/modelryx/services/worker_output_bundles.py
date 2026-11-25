@@ -45,8 +45,11 @@ def validate_worker_bundle(path, role, max_bytes, max_pdf_bytes, *, contract=Non
         manifest = json.loads(archive.read(manifest_entry))
         if not isinstance(manifest, dict):
             raise RuntimeError("Worker bundle manifest must be an object")
-        key = {"drawing-representations": "drawings", "component-geometry": "components",
-               "manufacturing-outputs": "files"}.get(role)
+        key = {
+            "drawing-representations": "drawings",
+            "component-geometry": "components",
+            "manufacturing-outputs": "files",
+        }.get(role)
         records = manifest.get(key)
         if not isinstance(records, list) or not records or len(records) > 10000:
             raise RuntimeError("Worker bundle has invalid output records")
@@ -57,11 +60,19 @@ def validate_worker_bundle(path, role, max_bytes, max_pdf_bytes, *, contract=Non
                 raise RuntimeError("Worker bundle has an invalid file reference")
             filename = record["file"]
             entry = names.get(filename.casefold())
-            if entry is None or filename != entry.filename or filename.casefold() == "manifest.json":
+            if (
+                entry is None
+                or filename != entry.filename
+                or filename.casefold() == "manifest.json"
+            ):
                 raise RuntimeError("Worker bundle output is absent or ambiguous")
             extension = PurePosixPath(filename).suffix.casefold()
             if role == "drawing-representations":
-                if filename.casefold() in used or extension != ".pdf" or entry.file_size > max_pdf_bytes:
+                if (
+                    filename.casefold() in used
+                    or extension != ".pdf"
+                    or entry.file_size > max_pdf_bytes
+                ):
                     raise RuntimeError("Worker drawing output is invalid or oversized")
                 count = record.get("sheetCount")
                 if type(count) is not int or count < 1:
@@ -76,10 +87,17 @@ def validate_worker_bundle(path, role, max_bytes, max_pdf_bytes, *, contract=Non
                     manifest.get("geometryUnits") != "millimeter"
                     or record.get("transformUnits") != "millimeter"
                     or record.get("nodeType") not in {"part", "assembly"}
-                    or not isinstance(record.get("partId"), str) or not record["partId"]
-                    or not isinstance(occurrence, str) or not occurrence or occurrence in occurrences
-                    or not isinstance(transform, list) or len(transform) != 16
-                    or any(type(value) not in {int, float} or not math.isfinite(value) for value in transform)
+                    or not isinstance(record.get("partId"), str)
+                    or not record["partId"]
+                    or not isinstance(occurrence, str)
+                    or not occurrence
+                    or occurrence in occurrences
+                    or not isinstance(transform, list)
+                    or len(transform) != 16
+                    or any(
+                        type(value) not in {int, float} or not math.isfinite(value)
+                        for value in transform
+                    )
                     or transform[12:] != [0, 0, 0, 1]
                     or extension not in {".step", ".stp"}
                 ):
@@ -91,18 +109,26 @@ def validate_worker_bundle(path, role, max_bytes, max_pdf_bytes, *, contract=Non
                         tail = head[-8192:]
                         while chunk := stream.read(1024 * 1024):
                             tail = (tail + chunk)[-8192:]
-                    if not head.lstrip().startswith(b"ISO-10303-21;") or b"END-ISO-10303-21;" not in tail:
+                    if (
+                        not head.lstrip().startswith(b"ISO-10303-21;")
+                        or b"END-ISO-10303-21;" not in tail
+                    ):
                         raise RuntimeError("Worker component STEP is incomplete")
             elif role == "manufacturing-outputs":
                 if filename.casefold() in used or extension not in {".json", ".dxf"}:
                     raise RuntimeError("Invalid Worker manufacturing output")
                 if extension == ".json":
-                    if entry.file_size > 16 * 1024 * 1024 or not isinstance(json.loads(archive.read(entry)), dict):
+                    if entry.file_size > 16 * 1024 * 1024 or not isinstance(
+                        json.loads(archive.read(entry)), dict
+                    ):
                         raise RuntimeError("Invalid Worker manufacturing metadata")
                 else:
                     with archive.open(entry) as stream:
                         header = stream.read(512)
-                    if not header.startswith(b"AutoCAD Binary DXF") and b"SECTION" not in header.upper():
+                    if (
+                        not header.startswith(b"AutoCAD Binary DXF")
+                        and b"SECTION" not in header.upper()
+                    ):
                         raise RuntimeError("Invalid Worker flat-pattern DXF")
             used.add(filename.casefold())
         if used != set(names):

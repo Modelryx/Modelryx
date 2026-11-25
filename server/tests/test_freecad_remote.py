@@ -16,15 +16,19 @@ ROLES = {
 
 
 @pytest.mark.parametrize("system", ["freecad", "Other CAD", "NX"])
-def test_remote_conversion_checks_and_downloads_outputs(tmp_path, monkeypatch, system):
+@pytest.mark.parametrize("endpoint_setting", ["cad_worker_url", "freecad_worker_url"])
+def test_remote_conversion_checks_and_downloads_outputs(
+    tmp_path, monkeypatch, system, endpoint_setting
+):
     source_dir = tmp_path / "source"
     source_dir.mkdir()
     source = source_dir / "Root.FCStd"
     source.write_bytes(b"root")
     (source_dir / "Child.FCStd").write_bytes(b"child")
     job = SimpleNamespace(id=uuid.uuid4(), attempt_count=1, snapshot_id=uuid.uuid4())
+    settings_values = {"cad_worker_url": None, endpoint_setting: "http://worker"}
     settings = Settings(
-        freecad_worker_url="http://worker", internal_worker_key="secret", converter_version="test"
+        **settings_values, internal_worker_key="secret", converter_version="test"
     )
     result = {}
 

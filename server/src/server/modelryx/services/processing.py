@@ -45,6 +45,7 @@ from modelryx.services.artifact_content import (
     has_published_derived_content,
     latest_content_snapshot_id,
 )
+from modelryx.services.cad_routing import NATIVE_JOB_TYPES, NEUTRAL_JOB_TYPES
 from modelryx.services.checkout_notifications import (
     create_checkout_expiry_notifications,
     record_checkout_notification_run,
@@ -65,7 +66,6 @@ from modelryx.services.staging_workflow import (
 )
 from modelryx.services.storage import LocalStorageProvider
 from modelryx.services.worker_output_policy import allowed_worker_outputs, preferred_worker_outputs
-from modelryx.services.cad_routing import NATIVE_JOB_TYPES, NEUTRAL_JOB_TYPES
 
 MAX_ATTEMPTS = 3
 logger = logging.getLogger("modelryx.worker")
@@ -500,7 +500,9 @@ def duplicate_check_best_effort(db: Session, revision: Revision, settings: Setti
 
 def claim_job(db: Session) -> ProcessingJob | None:
     now = datetime.now(UTC)
-    eligible = ProcessingJob.type.in_(NATIVE_JOB_TYPES | NEUTRAL_JOB_TYPES | {"ASSEMBLY_SOURCE_BUNDLE"})
+    eligible = ProcessingJob.type.in_(
+        NATIVE_JOB_TYPES | NEUTRAL_JOB_TYPES | {"ASSEMBLY_SOURCE_BUNDLE"}
+    )
     job = db.scalar(
         select(ProcessingJob)
         .where(
@@ -657,7 +659,9 @@ def run_step_processing_job(
     base_url = settings.step_worker_url.rstrip("/") + "/"
     headers = {
         "X-Modelryx-Worker-Key": settings.internal_worker_key,
-        "Idempotency-Key": f"step:{job_id}:{sha256_file(source)}" if job_id else f"step:{sha256_file(source)}",
+        "Idempotency-Key": f"step:{job_id}:{sha256_file(source)}"
+        if job_id
+        else f"step:{sha256_file(source)}",
     }
     timeout = httpx.Timeout(settings.converter_timeout_seconds)
     with httpx.Client(timeout=timeout) as client, source.open("rb") as stream:
@@ -682,7 +686,7 @@ def run_step_processing_job(
                     cancellation_callback()
                 except ProcessingCancelled:
                     try:
-                        client.post(status_url.rstrip('/') + '/cancel', headers=headers)
+                        client.post(status_url.rstrip("/") + "/cancel", headers=headers)
                     except httpx.HTTPError:
                         pass
                     raise
@@ -1074,7 +1078,9 @@ def merge_related_drawing_metadata(part_metadata: dict, manifest: dict) -> dict:
             "mime_type": "application/pdf",
             "worker_contract_version": "related-drawing-v1",
             "sections": [],
-            "entities": drawing.get("entities") if isinstance(drawing.get("entities"), list) else [],
+            "entities": drawing.get("entities")
+            if isinstance(drawing.get("entities"), list)
+            else [],
         }
         if drawing_sheets:
             record["page_count"] = len(drawing_sheets)
@@ -1344,8 +1350,11 @@ def process_step_job(db: Session, job: ProcessingJob, settings: Settings) -> Non
         raw_metadata_path = Path(directory) / "step-raw-metadata.json"
         update_stage(db, job, "CONVERTING", 35)
         worker_result = run_step_processing_job(
-            source, Path(directory), settings,
-            cancellation_callback=lambda: check_processing_cancelled(db, job), job_id=job.id,
+            source,
+            Path(directory),
+            settings,
+            cancellation_callback=lambda: check_processing_cancelled(db, job),
+            job_id=job.id,
         )
         worker_version = str(worker_result.get("worker_version") or "").strip()
         if not worker_version:
@@ -1541,7 +1550,8 @@ def process_external_cad_job(db: Session, job: ProcessingJob, settings: Settings
     )
     if processing_profile and processing_profile["includeRelatedDrawings"]:
         source_files.extend(
-            value for value in all_source_files
+            value
+            for value in all_source_files
             if value.artifact_id != primary.artifact_id
             and (container := db.get(Artifact, value.artifact_id)) is not None
             and container.classification == "AUTHORITATIVE"
@@ -1746,9 +1756,13 @@ def process_external_cad_job(db: Session, job: ProcessingJob, settings: Settings
 
         for role, contract in (processing_profile or {}).get("outputContracts", {}).items():
             if role in downloaded:
-                validate_worker_bundle(downloaded[role][0], role,
-                                       settings.max_preview_package_bytes, settings.max_pdf_preview_bytes,
-                                       contract=contract)
+                validate_worker_bundle(
+                    downloaded[role][0],
+                    role,
+                    settings.max_preview_package_bytes,
+                    settings.max_pdf_preview_bytes,
+                    contract=contract,
+                )
         required_roles = {"part-metadata", "native-snapshot", "model-preview"}
         if missing_roles := (required_roles - downloaded.keys()):
             raise RuntimeError(
@@ -2084,11 +2098,7 @@ def fail_job(db: Session, job: ProcessingJob, error: Exception) -> None:
                 preserve_published = revision.state in {"READY", "READY_WITH_WARNINGS"} or (
                     has_published_derived_content(db, revision.id)
                 )
-                revision.state = (
-                    "READY_WITH_WARNINGS"
-                    if preserve_published
-                    else "FAILED"
-                )
+                revision.state = "READY_WITH_WARNINGS" if preserve_published else "FAILED"
                 if not preserve_published and failed_stage in {"VALIDATING", "VALIDATING_OUTPUTS"}:
                     revision.metadata_status = "INVALID"
         if job.type == "ASSEMBLY_SOURCE_BUNDLE":

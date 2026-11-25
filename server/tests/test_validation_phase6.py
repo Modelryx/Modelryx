@@ -17,7 +17,9 @@ from modelryx.validation.service import (
 
 
 def test_supported_cad_extensions_include_builtin_formats() -> None:
-    assert {".fcstd", ".step", ".stp"} <= SUPPORTED_CAD_EXTENSIONS
+    assert {".step", ".stp", ".iges", ".igs"} <= SUPPORTED_CAD_EXTENSIONS
+    # Native extensions are added from enabled worker capabilities at validation time.
+    assert ".fcstd" not in SUPPORTED_CAD_EXTENSIONS
 
 
 def finding(*, severity: str = "WARNING", blocking: bool = False) -> FindingInput:

@@ -6,8 +6,8 @@ from modelryx import models
 from modelryx.core.config import get_settings
 from modelryx.core.db import SessionLocal
 from modelryx.models import (
-    ArtifactFile,
     ApplicationSetting,
+    ArtifactFile,
     MetadataExtraction,
     ProcessingJob,
     Revision,
@@ -97,18 +97,33 @@ def provision_database_test_user(request):
         # Native integration fixtures must declare support through a worker, just as
         # production uploads do. Conversion itself is mocked by execution tests.
         if not getattr(request.module, "MANAGES_NATIVE_WORKERS", False):
-            db.add(ApplicationSetting(
-                key=worker_key, updated_by=user.id, value=json.dumps({
-                    "url": "https://fixture-native.invalid", "enabled": True,
-                    "capabilities": {
-                        "contractVersion": "1.0", "cadSystem": "FreeCAD",
-                        "workerName": "Reference native fixture", "workerVersion": "test",
-                        "sourceExtensions": [".fcstd"], "documentKinds": ["part", "assembly"],
-                        "outputRoles": ["native-snapshot", "part-metadata", "model-preview", "glb"],
-                        "dependencyAnalysis": True,
-                    },
-                }),
-            ))
+            db.add(
+                ApplicationSetting(
+                    key=worker_key,
+                    updated_by=user.id,
+                    value=json.dumps(
+                        {
+                            "url": "https://fixture-native.invalid",
+                            "enabled": True,
+                            "capabilities": {
+                                "contractVersion": "1.0",
+                                "cadSystem": "FreeCAD",
+                                "workerName": "Reference native fixture",
+                                "workerVersion": "test",
+                                "sourceExtensions": [".fcstd"],
+                                "documentKinds": ["part", "assembly"],
+                                "outputRoles": [
+                                    "native-snapshot",
+                                    "part-metadata",
+                                    "model-preview",
+                                    "glb",
+                                ],
+                                "dependencyAnalysis": True,
+                            },
+                        }
+                    ),
+                )
+            )
         db.commit()
     try:
         yield
