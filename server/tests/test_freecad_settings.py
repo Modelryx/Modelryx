@@ -8,8 +8,7 @@ def test_override_is_resolved_each_time_and_can_disable_environment_default():
         row = None
 
         def get(self, _model, key):
-            assert key == FREECAD_WORKER_KEY
-            return self.row
+            return self.row if key == FREECAD_WORKER_KEY else None
 
     db = Db()
     assert configured_url(db, FREECAD_WORKER_KEY, "http://default") == "http://default"

@@ -62,27 +62,14 @@ def _require_processing_control(db: Session, revision: Revision, principal: Prin
         )
 
 
-def _native_processing_type(
-    filename: str, cad_system: str, db: Session | None = None
-) -> str | None:
-    extension = Path(filename).suffix.casefold()
-    if db is not None and extension not in {".step", ".stp"}:
-        from modelryx.services.external_workers import (
-            JOB_TYPE,
-            AmbiguousWorkerError,
-            matching_worker,
-        )
+def _native_processing_type(filename: str, cad_system: str, db: Session | None = None) -> str | None:
+    from modelryx.services.cad_routing import processing_type_for_source
+    from modelryx.services.external_workers import AmbiguousWorkerError
 
-        try:
-            if matching_worker(db, filename, cad_system):
-                return JOB_TYPE
-        except AmbiguousWorkerError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-    if extension == ".fcstd":
-        return "FCSTD_TO_MODELRYX"
-    if extension in {".step", ".stp"}:
-        return "STEP_TO_MODELRYX"
-    return None
+    try:
+        return processing_type_for_source(filename, cad_system, db)
+    except AmbiguousWorkerError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 def _processing_fix_suggestion(job: ProcessingJob) -> str | None:
@@ -123,6 +110,8 @@ def _processing_fix_suggestion(job: ProcessingJob) -> str | None:
 def _job_response_with_files(
     db: Session, job: ProcessingJob, *, can_control: bool
 ) -> ProcessingJobResponse:
+    from modelryx.services.cad_routing import can_cancel_processing
+
     status = {
         "PENDING": "QUEUE",
         "RUNNING": "PROCESSING",
@@ -146,6 +135,7 @@ def _job_response_with_files(
     return ProcessingJobResponse.model_validate(job).model_copy(
         update={
             "can_control": can_control,
+            "can_cancel": can_control and can_cancel_processing(job),
             "fix_suggestion": suggestion,
             "files": [
                 ProcessingFileStatus(
@@ -397,21 +387,12 @@ def cancel_processing_job(
         raise HTTPException(status_code=404, detail="Revision not found")
     _require_processing_control(db, revision, principal)
     if job.state == "RUNNING":
-        freecad_execution = False
-        if job.type == "CAD_SESSION_EXECUTE":
-            from modelryx.models import CADExecution, CADOperationPlan, CADSession
+        from modelryx.services.cad_routing import CANCELLABLE_JOB_TYPES
 
-            worker_id = db.scalar(
-                select(CADSession.worker_id)
-                .join(CADOperationPlan, CADOperationPlan.session_id == CADSession.id)
-                .join(CADExecution, CADExecution.plan_id == CADOperationPlan.id)
-                .where(CADExecution.processing_job_id == job.id)
-            )
-            freecad_execution = worker_id == "freecad-controlled"
-        if job.type != "FCSTD_TO_MODELRYX" and not freecad_execution:
+        if job.type not in CANCELLABLE_JOB_TYPES:
             raise HTTPException(
                 status_code=409,
-                detail="In-flight cancellation is currently supported only for FreeCAD processing",
+                detail="This processing job does not support safe in-flight cancellation",
             )
         if job.stage in {"PUBLISHING", "COMPLETED"}:
             raise HTTPException(
@@ -443,7 +424,7 @@ def cancel_processing_job(
     if job.state != "PENDING":
         raise HTTPException(
             status_code=409,
-            detail="Only pending or safely cancellable FreeCAD jobs can be cancelled",
+            detail="Only pending or safely cancellable jobs can be cancelled",
         )
     job.state = "FAILED"
     job.stage = "CANCELLED"

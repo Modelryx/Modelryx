@@ -1,4 +1,4 @@
-"""Database-side guard for unreliable FreeCAD array measurements."""
+"""Database-side guard for worker-reported unverified array measurements."""
 
 from typing import Any
 

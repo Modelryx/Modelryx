@@ -56,7 +56,6 @@ from modelryx.services.external_workers import (
     matching_worker,
     validate_capabilities,
 )
-from modelryx.services.freecad_settings import FREECAD_WORKER_KEY, configured_url
 from modelryx.services.glb_thumbnail import THUMBNAIL_NAME, render_glb_thumbnail
 from modelryx.services.staging_workflow import (
     claim_staging_workflow,
@@ -65,6 +64,8 @@ from modelryx.services.staging_workflow import (
     recover_staging_workflows,
 )
 from modelryx.services.storage import LocalStorageProvider
+from modelryx.services.worker_output_policy import allowed_worker_outputs, preferred_worker_outputs
+from modelryx.services.cad_routing import NATIVE_JOB_TYPES, NEUTRAL_JOB_TYPES
 
 MAX_ATTEMPTS = 3
 logger = logging.getLogger("modelryx.worker")
@@ -243,7 +244,7 @@ def classify_processing_failure(error: Exception) -> ProcessingFailure:
     if any(
         token in message
         for token in (
-            "invalid freecad",
+            "invalid native",
             "invalid zip",
             "bad zip",
             "corrupt",
@@ -499,10 +500,7 @@ def duplicate_check_best_effort(db: Session, revision: Revision, settings: Setti
 
 def claim_job(db: Session) -> ProcessingJob | None:
     now = datetime.now(UTC)
-    eligible = ProcessingJob.type.in_((
-        "STEP_TO_MODELRYX", EXTERNAL_CAD_JOB_TYPE, "ASSEMBLY_SOURCE_BUNDLE",
-        "FCSTD_TO_MODELRYX",
-    ))
+    eligible = ProcessingJob.type.in_(NATIVE_JOB_TYPES | NEUTRAL_JOB_TYPES | {"ASSEMBLY_SOURCE_BUNDLE"})
     job = db.scalar(
         select(ProcessingJob)
         .where(
@@ -647,14 +645,19 @@ def run_step_processing_job(
     source: Path,
     output_directory: Path,
     settings: Settings,
+    *,
+    cancellation_callback: Callable[[], None] | None = None,
+    job_id: uuid.UUID | None = None,
 ) -> dict:
     """Submit a STEP document and download the worker's complete output set."""
+    if cancellation_callback is not None and job_id is None:
+        raise ValueError("Cancellable geometry requests require a unique processing job ID")
     if not settings.internal_worker_key:
         raise RuntimeError("STEP worker authentication is not configured")
     base_url = settings.step_worker_url.rstrip("/") + "/"
     headers = {
         "X-Modelryx-Worker-Key": settings.internal_worker_key,
-        "Idempotency-Key": f"step:{sha256_file(source)}",
+        "Idempotency-Key": f"step:{job_id}:{sha256_file(source)}" if job_id else f"step:{sha256_file(source)}",
     }
     timeout = httpx.Timeout(settings.converter_timeout_seconds)
     with httpx.Client(timeout=timeout) as client, source.open("rb") as stream:
@@ -674,6 +677,15 @@ def run_step_processing_job(
         status_url = urljoin(base_url, record["links"]["self"].lstrip("/"))
         deadline = time.monotonic() + settings.converter_timeout_seconds
         while True:
+            if cancellation_callback:
+                try:
+                    cancellation_callback()
+                except ProcessingCancelled:
+                    try:
+                        client.post(status_url.rstrip('/') + '/cancel', headers=headers)
+                    except httpx.HTTPError:
+                        pass
+                    raise
             state = str(record.get("state", "")).upper()
             if state == "READY":
                 output_directory.mkdir(parents=True, exist_ok=True)
@@ -683,6 +695,8 @@ def run_step_processing_job(
                     "preview": "model-preview.json",
                     "raw_metadata": "step-raw-metadata.json",
                 }.items():
+                    if cancellation_callback:
+                        cancellation_callback()
                     output = client.get(
                         urljoin(base_url, record["links"][link_name].lstrip("/")),
                         headers=headers,
@@ -716,6 +730,7 @@ def external_output_filename(role: str, cad_system: str, index: int) -> str:
         "drawing-pdf": "drawing.pdf",
         "component-geometry": "component-meshes.zip",
         "drawing-representations": "drawing-representations.zip",
+        "manufacturing-outputs": "manufacturing-outputs.zip",
     }
     return names.get(role, f"output-{index}")
 
@@ -805,6 +820,10 @@ def validate_model_preview(preview: object) -> dict:
 
 
 def update_stage(db: Session, job: ProcessingJob, stage: str, progress: int) -> None:
+    if stage == "PUBLISHING":
+        # Serialize publication against the cancellation endpoint's job-row lock.
+        db.scalar(select(ProcessingJob).where(ProcessingJob.id == job.id).with_for_update())
+        check_processing_cancelled(db, job)
     job.stage = stage
     job.progress_percent = progress
     db.commit()
@@ -1055,7 +1074,7 @@ def merge_related_drawing_metadata(part_metadata: dict, manifest: dict) -> dict:
             "mime_type": "application/pdf",
             "worker_contract_version": "related-drawing-v1",
             "sections": [],
-            "entities": [],
+            "entities": drawing.get("entities") if isinstance(drawing.get("entities"), list) else [],
         }
         if drawing_sheets:
             record["page_count"] = len(drawing_sheets)
@@ -1324,7 +1343,10 @@ def process_step_job(db: Session, job: ProcessingJob, settings: Settings) -> Non
         metadata_path = Path(directory) / "part-metadata.json"
         raw_metadata_path = Path(directory) / "step-raw-metadata.json"
         update_stage(db, job, "CONVERTING", 35)
-        worker_result = run_step_processing_job(source, Path(directory), settings)
+        worker_result = run_step_processing_job(
+            source, Path(directory), settings,
+            cancellation_callback=lambda: check_processing_cancelled(db, job), job_id=job.id,
+        )
         worker_version = str(worker_result.get("worker_version") or "").strip()
         if not worker_version:
             raise RuntimeError("STEP worker did not report its version")
@@ -1469,26 +1491,14 @@ def process_step_job(db: Session, job: ProcessingJob, settings: Settings) -> Non
 
 
 def preferred_cad_outputs(
-    cad_system: str,
     document_kind: str,
     has_related_drawings: bool,
     supported_roles: list[str] | None = None,
+    processing_profile: dict | None = None,
 ) -> list[str]:
-    outputs = ["glb"]
-    if document_kind == "drawing":
-        outputs.append("drawing-pdf")
-    elif has_related_drawings:
-        outputs.append("drawing-representations")
-    if document_kind == "assembly":
-        outputs.append("component-geometry")
-    # Request only roles accepted by generic result validation and publication.
-    # Advertising a bundle capability must not make otherwise valid jobs fail.
-    publishable = {"glb", "drawing-pdf"}
-    return [
-        role
-        for role in outputs
-        if role in publishable and (supported_roles is None or role in supported_roles)
-    ]
+    return preferred_worker_outputs(
+        document_kind, has_related_drawings, supported_roles, processing_profile
+    )
 
 
 def process_external_cad_job(db: Session, job: ProcessingJob, settings: Settings) -> None:
@@ -1512,6 +1522,7 @@ def process_external_cad_job(db: Session, job: ProcessingJob, settings: Settings
     if external_worker is None:
         raise RuntimeError("No unique enabled external worker matches the source")
     cad_system = external_worker["capabilities"]["cadSystem"]
+    processing_profile = external_worker["capabilities"].get("processingProfile")
     server_url = external_worker["url"]
     if not settings.internal_worker_key:
         raise RuntimeError("the internal worker key is not configured")
@@ -1528,6 +1539,16 @@ def process_external_cad_job(db: Session, job: ProcessingJob, settings: Settings
         (value for value in source_files if value.role == "PRIMARY"),
         source_files[0] if source_files else None,
     )
+    if processing_profile and processing_profile["includeRelatedDrawings"]:
+        source_files.extend(
+            value for value in all_source_files
+            if value.artifact_id != primary.artifact_id
+            and (container := db.get(Artifact, value.artifact_id)) is not None
+            and container.classification == "AUTHORITATIVE"
+            and container.artifact_type in {"DRAWING", "CAD_DRAWING"}
+            and Path(value.original_filename).suffix.casefold()
+            in external_worker["capabilities"]["sourceExtensions"]
+        )
     if revision is None or source_snapshot is None or source_artifact is None:
         raise RuntimeError("verified native artifact is missing")
     storage = LocalStorageProvider(settings.storage_root)
@@ -1568,7 +1589,6 @@ def process_external_cad_job(db: Session, job: ProcessingJob, settings: Settings
             storage, source_artifact, source_files, workspace, cad_system
         )
         preferred_outputs = preferred_cad_outputs(
-            cad_system,
             document_kind,
             any(
                 container.artifact_type in {"DRAWING", "CAD_DRAWING"}
@@ -1577,6 +1597,7 @@ def process_external_cad_job(db: Session, job: ProcessingJob, settings: Settings
                 and value.artifact_id != primary.artifact_id
             ),
             external_worker["capabilities"]["outputRoles"],
+            processing_profile,
         )
         required_outputs = ["native-snapshot", "part-metadata", "model-preview"]
         request_payload = {
@@ -1602,6 +1623,7 @@ def process_external_cad_job(db: Session, job: ProcessingJob, settings: Settings
         request_path.write_text(json.dumps(request_payload), encoding="utf-8")
         update_stage(db, job, "DISPATCHING", 20)
         with httpx.Client(timeout=httpx.Timeout(60.0), follow_redirects=False) as client:
+            check_processing_cancelled(db, job)
             capability_response = client.get(f"{base_url}/api/v1/capabilities", headers=headers)
             capability_response.raise_for_status()
             capabilities = validate_capabilities(capability_response.json())
@@ -1687,15 +1709,10 @@ def process_external_cad_job(db: Session, job: ProcessingJob, settings: Settings
             validate_result(
                 request_payload,
                 result,
-                allowed_outputs={
-                    "native-snapshot": ("application/json", settings.max_preview_bom_bytes),
-                    "part-metadata": ("application/json", settings.max_preview_bom_bytes),
-                    "model-preview": ("application/json", settings.max_preview_bom_bytes),
-                    "glb": ("model/gltf-binary", settings.max_preview_glb_bytes),
-                    "drawing-pdf": ("application/pdf", settings.max_pdf_preview_bytes),
-                },
+                allowed_outputs=allowed_worker_outputs(settings, processing_profile),
             )
             manifests = result.get("outputs") or []
+            check_processing_cancelled(db, job)
             downloaded: dict[str, tuple[Path, dict]] = {}
             update_stage(db, job, "VALIDATING", 82)
             for manifest in manifests:
@@ -1713,6 +1730,7 @@ def process_external_cad_job(db: Session, job: ProcessingJob, settings: Settings
                     output_response.raise_for_status()
                     with output_path.open("wb") as output_stream:
                         for chunk in output_response.iter_bytes():
+                            check_processing_cancelled(db, job)
                             received += len(chunk)
                             if received > manifest["size"]:
                                 raise RuntimeError(
@@ -1724,6 +1742,13 @@ def process_external_cad_job(db: Session, job: ProcessingJob, settings: Settings
                 if sha256_file(output_path) != str(manifest.get("sha256") or "").casefold():
                     raise RuntimeError(f"external CAD output hash mismatch for {role}")
                 downloaded[role] = (output_path, manifest)
+        from modelryx.services.worker_output_bundles import validate_worker_bundle
+
+        for role, contract in (processing_profile or {}).get("outputContracts", {}).items():
+            if role in downloaded:
+                validate_worker_bundle(downloaded[role][0], role,
+                                       settings.max_preview_package_bytes, settings.max_pdf_preview_bytes,
+                                       contract=contract)
         required_roles = {"part-metadata", "native-snapshot", "model-preview"}
         if missing_roles := (required_roles - downloaded.keys()):
             raise RuntimeError(
@@ -1832,6 +1857,7 @@ def process_external_cad_job(db: Session, job: ProcessingJob, settings: Settings
             ("step", "model.step", "OTHER"),
             ("drawing-pdf", "drawing.pdf", "PDF"),
             ("component-geometry", "component-meshes.zip", "BUNDLE"),
+            ("manufacturing-outputs", "manufacturing-outputs.zip", "BUNDLE"),
             ("xref-dependencies", "xref-dependencies.json", "OTHER"),
         ):
             if role in downloaded:
@@ -1952,392 +1978,20 @@ def process_external_cad_job(db: Session, job: ProcessingJob, settings: Settings
 
 
 def process_job(db: Session, job: ProcessingJob, settings: Settings) -> None:
+    from modelryx.services.cad_routing import NATIVE_JOB_TYPES
+
     if job.type == "CAD_SESSION_EXECUTE":
         raise RuntimeError("Controlled CAD editing is disabled in this release")
     if job.type == "ASSEMBLY_SOURCE_BUNDLE":
         from modelryx.api.bundles import process_bundle_job
 
         process_bundle_job(db, job, settings)
-        return
-    if job.type == "STEP_TO_MODELRYX":
+    elif job.type == "STEP_TO_MODELRYX":
         process_step_job(db, job, settings)
-        return
-    if job.type == EXTERNAL_CAD_JOB_TYPE:
+    elif job.type in NATIVE_JOB_TYPES:
         process_external_cad_job(db, job, settings)
-        return
-    if job.type != "FCSTD_TO_MODELRYX":
+    else:
         raise RuntimeError(f"unsupported processing job type: {job.type}")
-    if not settings.freecad_worker_url:
-        raise RuntimeError(
-            "FreeCAD requires an external worker. Register it in External CAD Workers "
-            "or configure MODELRYX_FREECAD_WORKER_URL."
-        )
-    update_stage(db, job, "INSPECTING", 10)
-    revision = db.get(Revision, job.revision_id)
-    source_snapshot = db.get(RevisionContentSnapshot, job.snapshot_id)
-    source_files = (
-        artifact_files_for_snapshot(
-            db,
-            revision.id,
-            source_snapshot.id,
-            artifact_types={"CAD_MODEL", "CAD_ASSEMBLY"},
-        )
-        if revision is not None and source_snapshot is not None
-        else []
-    )
-    source_artifact = next(
-        (file for file in source_files if file.role == "PRIMARY"),
-        source_files[0] if source_files else None,
-    )
-    if revision is None or source_snapshot is None or source_artifact is None:
-        raise RuntimeError("verified native artifact is missing")
-    storage = LocalStorageProvider(settings.storage_root)
-    packaged_dependencies = [file for file in source_files if file.id != source_artifact.id]
-    dependency_files = packaged_dependencies or assembly_dependency_files(
-        db, revision, source_snapshot
-    )
-    job.converter_version = settings.converter_version
-    dependency_fingerprint = ":".join(
-        sorted(
-            f"{file.reference_name or file.original_filename}:{file.sha256}"
-            for file in dependency_files
-        )
-    )
-    job.cache_key = hashlib.sha256(
-        f"{source_artifact.sha256}:{dependency_fingerprint}:{settings.converter_version}".encode()
-    ).hexdigest()
-    db.commit()
-    cached_job = db.scalar(
-        select(ProcessingJob)
-        .where(
-            ProcessingJob.id != job.id,
-            ProcessingJob.cache_key == job.cache_key,
-            ProcessingJob.state == "SUCCEEDED",
-            ProcessingJob.type == "FCSTD_TO_MODELRYX",
-            ProcessingJob.converter_version == settings.converter_version,
-        )
-        .order_by(ProcessingJob.finished_at.desc())
-    )
-    if cached_job is not None:
-        cached_artifacts = (
-            [
-                artifact
-                for artifact in artifact_files_for_snapshot(
-                    db, cached_job.revision_id, cached_job.snapshot_id
-                )
-                if (
-                    artifact.kind in {"GLB", "METADATA", "OTHER"}
-                    and artifact.original_filename
-                    in {
-                        "model.glb",
-                        "model-preview.json",
-                        "cad-raw-metadata.json",
-                    }
-                )
-                or (artifact.kind == "IMAGE" and artifact.original_filename == THUMBNAIL_NAME)
-                or is_cad_drawing_preview(db, artifact)
-            ]
-            if cached_job.snapshot_id
-            else []
-        )
-        if {"GLB", "METADATA", "OTHER"}.issubset(
-            {artifact.kind for artifact in cached_artifacts}
-        ) and all(storage.exists(artifact.storage_key) for artifact in cached_artifacts):
-            update_stage(db, job, "CACHE_REUSE", 75)
-            check_processing_cancelled(db, job)
-            outputs: dict[str, ArtifactFile] = {}
-            published_outputs: list[ArtifactFile] = []
-            for cached in cached_artifacts:
-                stored = store_output(
-                    db,
-                    storage,
-                    revision,
-                    source_snapshot,
-                    kind=cached.kind,
-                    filename=cached.original_filename,
-                    mime_type=cached.mime_type,
-                    source=storage.path_for(cached.storage_key),
-                    generator_version=settings.converter_version,
-                )
-                published_outputs.append(stored)
-                outputs.setdefault(cached.kind, stored)
-            if not any(item.original_filename == THUMBNAIL_NAME for item in published_outputs):
-                with tempfile.TemporaryDirectory(prefix="modelryx-thumbnail-") as thumbnail_dir:
-                    thumbnail = generate_revision_thumbnail(
-                        storage.path_for(outputs["GLB"].storage_key),
-                        Path(thumbnail_dir),
-                        storage.path_for(outputs["METADATA"].storage_key),
-                    )
-                    if thumbnail is not None:
-                        published_outputs.append(
-                            store_output(
-                                db,
-                                storage,
-                                revision,
-                                source_snapshot,
-                                kind="IMAGE",
-                                filename=THUMBNAIL_NAME,
-                                mime_type="image/png",
-                                source=thumbnail,
-                                generator_version=settings.converter_version,
-                            )
-                        )
-            published_snapshot = publish_worker_outputs(
-                db, revision, source_snapshot, published_outputs
-            )
-            if published_snapshot is None:
-                raise RuntimeError("revision content changed before CAD publication")
-            job.snapshot_id = published_snapshot.id
-            metadata_path = storage.path_for(outputs["METADATA"].storage_key)
-            bom = json.loads(metadata_path.read_text(encoding="utf-8"))
-            cached_revision = db.get(Revision, cached_job.revision_id)
-            cached_derived = cached_revision.derived_metadata_json if cached_revision else {}
-            revision.derived_metadata_json = {
-                **bom,
-                **{key: cached_derived[key] for key in ("partMetadata",) if key in cached_derived},
-            }
-            cached_warnings = [
-                str(value)
-                for value in (cached_job.diagnostics_json or {}).get("warnings", [])
-                if str(value).strip()
-            ]
-            part_metadata = revision.derived_metadata_json.get("partMetadata")
-            if part_metadata:
-                extraction = MetadataService(db).ingest(
-                    revision=revision,
-                    snapshot=published_snapshot,
-                    raw_artifact=outputs["OTHER"],
-                    metadata=part_metadata,
-                )
-                if published_snapshot is not None:
-                    revision.state = published_revision_state(
-                        extraction.status,
-                        cached_warnings + list(part_metadata["quality"]["warnings"]),
-                    )
-            elif published_snapshot is not None:
-                revision.state = "READY_WITH_WARNINGS"
-            revision.search_text = json.dumps(
-                {"metadata": revision.metadata_json, "derived": revision.derived_metadata_json},
-                sort_keys=True,
-            )
-            workspace_files = [source_artifact, *dependency_files]
-            update_file_stages(db, job, workspace_files, "FINISH", stage="CACHE_REUSED")
-            if cached_warnings:
-                update_file_stages(
-                    db,
-                    job,
-                    [source_artifact],
-                    "WARNING",
-                    stage="CACHE_REUSED_WITH_WARNINGS",
-                    message=" ".join(cached_warnings)[:2000],
-                )
-            job.state = "SUCCEEDED"
-            job.stage = "COMPLETED"
-            job.progress_percent = 100
-            job.finished_at = datetime.now(UTC)
-            job.diagnostics_json = {
-                "warnings": cached_warnings,
-                "files": (job.diagnostics_json or {}).get("files", {}),
-                "cache": {"hit": True, "sourceJobId": str(cached_job.id)},
-            }
-            record_audit(
-                db,
-                actor_id=None,
-                action="processing.cache_reused",
-                entity_type="revision",
-                entity_id=revision.id,
-                request_id=f"job:{job.id}",
-                details={"source_job_id": str(cached_job.id), "cache_key": job.cache_key},
-            )
-            db.commit()
-            index_ai_best_effort(db, revision, settings)
-            duplicate_check_best_effort(db, revision, settings)
-            return
-    with tempfile.TemporaryDirectory(prefix=f"modelryx-{job.id}-") as directory:
-        work_directory = Path(directory)
-        workspace_files = [source_artifact, *dependency_files]
-        update_file_stages(db, job, workspace_files, "QUEUE", stage="QUEUED")
-        update_file_stages(
-            db,
-            job,
-            workspace_files,
-            "PROCESSING",
-            stage="MATERIALIZING_PACKAGE",
-            message="Preparing the native CAD package workspace.",
-        )
-        source_directory = (
-            work_directory / "source" if settings.freecad_worker_url else work_directory
-        )
-        source_directory.mkdir(exist_ok=True)
-        converter_source = materialize_cad_workspace(
-            storage, source_artifact, dependency_files, source_directory
-        )
-        check_processing_cancelled(db, job)
-        output_pfg = Path(directory) / "preview.pfg"
-        update_stage(db, job, "CONVERTING", 35)
-
-        def report_native_progress(stage: str, progress: int, message: str) -> None:
-            check_processing_cancelled(db, job)
-            update_stage(db, job, stage, progress)
-            update_file_stages(
-                db,
-                job,
-                workspace_files,
-                "PROCESSING",
-                stage=stage,
-                message=message,
-            )
-
-        from modelryx.services.freecad_remote import convert_remote
-
-        item = db.get(Item, revision.part_id)
-        convert_remote(
-            converter_source,
-            source_directory,
-            output_pfg,
-            settings,
-            job,
-            "assembly" if item and item.part_type == "ASSEMBLY" else "part",
-            lambda: check_processing_cancelled(db, job),
-            report_native_progress,
-        )
-        check_processing_cancelled(db, job)
-        update_stage(db, job, "VALIDATING", 70)
-        glb_path, bom_path, bom, diagnostics = read_converter_package(
-            output_pfg, Path(directory), settings
-        )
-        _, part_metadata = read_worker_metadata_sidecars(output_pfg)
-        drawing_previews = read_cad_drawing_previews(output_pfg, Path(directory), settings)
-        update_file_stages(db, job, workspace_files, "FINISH", stage="VALIDATED")
-        warnings = [str(value) for value in diagnostics.get("warnings", []) if str(value).strip()]
-        if warnings:
-            update_file_stages(
-                db,
-                job,
-                [source_artifact],
-                "WARNING",
-                stage="VALIDATED_WITH_WARNINGS",
-                message=" ".join(warnings)[:2000],
-            )
-        update_stage(db, job, "RENDERING_PREVIEW", 78)
-        thumbnail = generate_revision_thumbnail(glb_path, Path(directory), bom_path)
-        check_processing_cancelled(db, job)
-        update_stage(db, job, "PUBLISHING", 85)
-        outputs = [
-            store_output(
-                db,
-                storage,
-                revision,
-                source_snapshot,
-                kind="GLB",
-                filename="model.glb",
-                mime_type="model/gltf-binary",
-                source=glb_path,
-                generator_version=settings.converter_version,
-            )
-        ]
-        outputs.append(
-            store_output(
-                db,
-                storage,
-                revision,
-                source_snapshot,
-                kind="METADATA",
-                filename="model-preview.json",
-                mime_type="application/json",
-                source=bom_path,
-                generator_version=settings.converter_version,
-            )
-        )
-        raw_artifact = store_output(
-            db,
-            storage,
-            revision,
-            source_snapshot,
-            kind="OTHER",
-            filename="cad-raw-metadata.json",
-            mime_type="application/json",
-            source=output_pfg.with_suffix(".cad-raw-metadata.json"),
-            generator_version=settings.converter_version,
-        )
-        outputs.append(raw_artifact)
-        if thumbnail is not None:
-            outputs.append(
-                store_output(
-                    db,
-                    storage,
-                    revision,
-                    source_snapshot,
-                    kind="IMAGE",
-                    filename=THUMBNAIL_NAME,
-                    mime_type="image/png",
-                    source=thumbnail,
-                    generator_version=settings.converter_version,
-                )
-            )
-        outputs.extend(
-            store_output(
-                db,
-                storage,
-                revision,
-                source_snapshot,
-                kind="IMAGE",
-                filename=preview.name,
-                mime_type="image/png",
-                source=preview,
-                generator_version=settings.converter_version,
-            )
-            for preview in drawing_previews
-        )
-        published_snapshot = publish_worker_outputs(db, revision, source_snapshot, outputs)
-        if published_snapshot is None:
-            raise RuntimeError("revision content changed before CAD publication")
-        job.snapshot_id = published_snapshot.id
-        revision.derived_metadata_json = {
-            **bom,
-            "partMetadata": part_metadata,
-        }
-        extraction = MetadataService(db).ingest(
-            revision=revision,
-            snapshot=published_snapshot,
-            raw_artifact=raw_artifact,
-            metadata=part_metadata,
-        )
-        revision.search_text = json.dumps(
-            {"metadata": revision.metadata_json, "derived": revision.derived_metadata_json},
-            sort_keys=True,
-        )
-        if published_snapshot is not None:
-            revision.state = published_revision_state(
-                extraction.status, warnings + list(part_metadata["quality"]["warnings"])
-            )
-        job.state = "SUCCEEDED"
-        job.stage = "COMPLETED"
-        job.progress_percent = 100
-        job.diagnostics_json = {
-            **diagnostics,
-            "files": (job.diagnostics_json or {}).get("files", {}),
-        }
-        job.finished_at = datetime.now(UTC)
-        record_audit(
-            db,
-            actor_id=None,
-            action="processing.succeeded",
-            entity_type="revision",
-            entity_id=revision.id,
-            request_id=f"job:{job.id}",
-            details={"job_id": str(job.id), "type": job.type},
-        )
-        db.commit()
-        index_ai_best_effort(db, revision, settings)
-        duplicate_check_best_effort(db, revision, settings)
-        logger.info(
-            "job_succeeded job_id=%s revision_id=%s glb_bytes=%s bom_items=%s",
-            job.id,
-            revision.id,
-            glb_path.stat().st_size,
-            len(bom.get("items", [])),
-        )
 
 
 def fail_job(db: Session, job: ProcessingJob, error: Exception) -> None:
@@ -2425,18 +2079,14 @@ def fail_job(db: Session, job: ProcessingJob, error: Exception) -> None:
         job.state = "FAILED"
         job.stage = "FAILED"
         job.finished_at = datetime.now(UTC)
-        if revision is not None and job.type in {
-            EXTERNAL_CAD_JOB_TYPE,
-            "FCSTD_TO_MODELRYX",
-            "STEP_TO_MODELRYX",
-        }:
+        if revision is not None and job.type in NATIVE_JOB_TYPES | NEUTRAL_JOB_TYPES:
             if latest_content_snapshot_id(db, revision.id) == job.snapshot_id:
                 preserve_published = revision.state in {"READY", "READY_WITH_WARNINGS"} or (
                     has_published_derived_content(db, revision.id)
                 )
                 revision.state = (
                     "READY_WITH_WARNINGS"
-                    if preserve_published or job.type == "FCSTD_TO_MODELRYX"
+                    if preserve_published
                     else "FAILED"
                 )
                 if not preserve_published and failed_stage in {"VALIDATING", "VALIDATING_OUTPUTS"}:
@@ -2484,13 +2134,7 @@ def main() -> None:
     last_maintenance = 0.0
     while True:
         with SessionLocal() as db:
-            current_settings = settings.model_copy(
-                update={
-                    "freecad_worker_url": configured_url(
-                        db, FREECAD_WORKER_KEY, settings.freecad_worker_url
-                    )
-                }
-            )
+            current_settings = settings
             if worker_role == "general":
                 report_general_worker_heartbeat(db, status="IDLE")
             else:

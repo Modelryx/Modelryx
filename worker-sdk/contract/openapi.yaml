@@ -163,6 +163,36 @@ components:
         sourceExtensions: {type: array, items: {type: string, pattern: "^\\."}}
         outputRoles: {type: array, items: {$ref: "#/components/schemas/Role"}}
         dependencyAnalysis: {type: boolean, description: Implements the optional authenticated POST /analyze endpoint; independent of local preprocessor installation}
+        processingProfile: {$ref: "#/components/schemas/ProcessingProfile"}
+    ProcessingProfile:
+      description: >-
+        Optional worker-owned conversion policy. preferredOutputs must cover exactly the advertised
+        documentKinds and use advertised, non-required output roles. Bundle publication requires an
+        exact supported output contract; CAD system and registration ID do not select this policy.
+      type: object
+      required: [preferredOutputs]
+      properties:
+        preferredOutputs:
+          type: object
+          minProperties: 1
+          maxProperties: 5
+          additionalProperties:
+            type: array
+            maxItems: 32
+            uniqueItems: true
+            items: {$ref: "#/components/schemas/Role"}
+        outputContracts:
+          type: object
+          maxProperties: 3
+          additionalProperties: false
+          properties:
+            component-geometry: {const: component-geometry-step-v1}
+            drawing-representations: {const: related-drawing-v1}
+            manufacturing-outputs: {const: manufacturing-outputs-v1}
+        includeRelatedDrawings:
+          type: boolean
+          default: false
+          description: Include supported authoritative drawing sources from the same snapshot; requires drawing support.
     JobRequest:
       description: >-
         Generic publication requests native-snapshot, part-metadata and model-preview and prefers

@@ -124,8 +124,7 @@ def inspect_metadata_snapshot(
                 type=feature_type,
                 parameters=(
                     _sketch_parameters(native, persistent_id)
-                    if feature_type.upper() == "SKETCH"
-                    and str(source.get("system", "")).casefold() == "freecad"
+                    if feature_type.upper() == "SKETCH" and isinstance(native.get("sketches"), list)
                     else _parameters(raw.get("properties"), feature_type)
                 ),
                 native_type=None,

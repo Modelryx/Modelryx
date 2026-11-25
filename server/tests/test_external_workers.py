@@ -42,6 +42,8 @@ from modelryx.services.external_workers import (
 from sqlalchemy import select
 
 client = TestClient(app)
+# Registration and dispatch scenarios supply their own native worker registrations.
+MANAGES_NATIVE_WORKERS = True
 CAPABILITIES = {
     "workerName": "Example CAD",
     "workerVersion": "2.1.0",

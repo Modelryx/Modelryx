@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
+using System.Text.Json;
 
 namespace Modelryx.LocalCad.Agent;
 
@@ -36,7 +37,11 @@ public sealed record DependencyReport(
     [property: JsonPropertyName("files")] IReadOnlyList<DependencyFile> Files,
     [property: JsonPropertyName("missing_references")] IReadOnlyList<MissingReference> MissingReferences,
     [property: JsonPropertyName("references")] IReadOnlyList<DependencyReference>? References = null,
-    [property: JsonPropertyName("isolated_reopen_validated")] bool IsolatedReopenValidated = false);
+    [property: JsonPropertyName("isolated_reopen_validated")] bool IsolatedReopenValidated = false)
+{
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Evidence { get; init; }
+}
 
 public sealed record AnalysisOutput(DependencyReport Report, string PackagePath);
 public sealed record SelectionJob(

@@ -51,6 +51,7 @@ from modelryx.models import (
 )
 from modelryx.services.ai import AiGateway
 from modelryx.services.artifact_content import current_artifact_files
+from modelryx.services.cad_dependencies import is_managed_bom_reference
 from modelryx.services.item_numbers import allocate_item_number
 from modelryx.services.storage import LocalStorageProvider
 
@@ -1307,12 +1308,7 @@ def update_staging_proposal(
     artifact_file_ids = [
         item.staged_file_id for artifact in payload.artifacts for item in artifact.files
     ]
-    native_assembly_package = (
-        payload.revision is not None
-        and payload.revision.cad_system.casefold() == "freecad"
-        and payload.revision.native_format.casefold() == "fcstd"
-        and any(artifact.artifact_type == "CAD_ASSEMBLY" for artifact in payload.artifacts)
-    )
+    native_assembly_package = False
     if not native_assembly_package and payload.revision is not None:
         root = next(
             (
@@ -1819,22 +1815,19 @@ def save_assembly_analysis(
     reported_missing = [
         dict(entry) for entry in report.get("missing_references") or [] if isinstance(entry, dict)
     ]
-    cad_document_extensions = {".fcstd"}
     external_worker = _external_assembly_worker(
         db,
         str(report.get("root_logical_path") or ""),
         str(((staging.proposal_json or {}).get("revision") or {}).get("cad_system") or ""),
     )
+    cad_document_extensions = set(
+        external_worker["capabilities"]["sourceExtensions"] if external_worker else []
+    )
 
     def is_missing_supporting_reference(entry: dict[str, Any]) -> bool:
         if str(entry.get("kind") or "").casefold() == "linked-resource":
             return True
-        if external_worker is not None:
-            return False
-        reference = str(entry.get("reference") or "").replace("\\", "/")
-        return bool(PurePosixPath(reference).suffix) and (
-            PurePosixPath(reference).suffix.casefold() not in cad_document_extensions
-        )
+        return False
 
     report["missing_supporting_references"] = [
         entry for entry in reported_missing if is_missing_supporting_reference(entry)
@@ -1923,15 +1916,12 @@ def save_assembly_analysis(
     )
 
     def identity_token(value: object) -> str:
-        text = PurePosixPath(str(value or "").replace("\\", "/")).name
-        text = re.sub(r"\.(?:prt|iam|ipt|idw|ipn|dwg|dxf|fcstd)$", "", text, flags=re.I)
-        return re.sub(r"[^a-z0-9]+", "", text.casefold())
+        from modelryx.services.cad_routing import identity_token as normalize
+        return normalize(value, cad_document_extensions)
 
     def child_identity_token(value: object) -> str:
-        text = PurePosixPath(str(value or "").replace("\\", "/")).name
-        text = re.sub(r"\.(?:prt|iam|ipt|idw|ipn|dwg|dxf|fcstd)$", "", text, flags=re.I)
-        text = re.sub(r":\d+$", "", text)
-        return re.sub(r"[^a-z0-9]+", "", text.casefold())
+        from modelryx.services.cad_routing import identity_token as normalize
+        return normalize(value, cad_document_extensions, child=True)
 
     def matching_old_line(
         reference: dict[str, Any],
@@ -1984,6 +1974,7 @@ def save_assembly_analysis(
         dict(entry)
         for entry in report.get("references", [])
         if isinstance(entry, dict)
+        and is_managed_bom_reference(entry)
         and normalized_path(str(entry.get("parent_logical_path") or "")).casefold() == root_folded
     ]
     old_by_key = {
@@ -2120,6 +2111,7 @@ def save_assembly_analysis(
             dict(entry)
             for entry in report.get("references", [])
             if isinstance(entry, dict)
+            and is_managed_bom_reference(entry)
             and normalized_path(str(entry.get("parent_logical_path") or "")).casefold()
             == parent_path.casefold()
         ]
@@ -2556,6 +2548,11 @@ def stage_reconciled_assembly(
         )
     if not report or report.get("missing_references"):
         raise HTTPException(status_code=422, detail="A complete assembly analysis is required")
+    if report.get("managed_bom_supported") is False:
+        raise HTTPException(
+            status_code=422,
+            detail="Resolve native configuration and component identities before managed BOM staging",
+        )
     if any(entry.get("status") in {"MISSING", "CONFLICT"} for entry in reconciliation):
         raise HTTPException(status_code=422, detail="Resolve assembly conflicts before staging")
     unresolved = [
@@ -2772,17 +2769,13 @@ def stage_reconciled_assembly(
     proposal["bom"] = bom
     extension = PurePosixPath(root_path).suffix.casefold()
     revision = dict(proposal.get("revision") or {})
-    if extension == ".fcstd":
-        revision["cad_system"] = "FreeCAD"
-        revision["native_format"] = "FCStd"
-    else:
-        worker = _external_assembly_worker(db, root_path, str(revision.get("cad_system") or ""))
-        if worker is None:
-            raise HTTPException(
-                status_code=422, detail="No enabled external worker supports this assembly root"
-            )
-        revision["cad_system"] = worker["capabilities"]["cadSystem"]
-        revision["native_format"] = extension.lstrip(".").upper()
+    worker = _external_assembly_worker(db, root_path, str(revision.get("cad_system") or ""))
+    if worker is None:
+        raise HTTPException(
+            status_code=422, detail="No enabled external worker supports this assembly root"
+        )
+    revision["cad_system"] = worker["capabilities"]["cadSystem"]
+    revision["native_format"] = extension.lstrip(".").upper()
     proposal["revision"] = revision
     staging.proposal_json = proposal
     staging.snapshot_version += 1
@@ -2876,7 +2869,8 @@ def adopt_coordinated_assembly_analysis(
             "references": [
                 entry
                 for entry in report.get("references") or []
-                if str(entry.get("parent_logical_path") or "").casefold() == root_path.casefold()
+                if is_managed_bom_reference(entry)
+                and str(entry.get("parent_logical_path") or "").casefold() == root_path.casefold()
             ],
             "missing_references": [],
             "validation_issues": [],

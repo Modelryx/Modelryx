@@ -890,7 +890,7 @@ def test_atomic_assembly_commit_creates_components_and_reuses_duplicate_revision
             )
         )
         assert len(jobs) == 2
-        assert {job.type for job in jobs} == {"FCSTD_TO_MODELRYX"}
+        assert {job.type for job in jobs} == {"EXTERNAL_CAD_TO_MODELRYX"}
 
     bom = client.get(
         f"/api/v1/items/{result['item_id']}/revisions/{result['revision_id']}/bom",

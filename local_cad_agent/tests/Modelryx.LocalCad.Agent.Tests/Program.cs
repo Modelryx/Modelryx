@@ -9,6 +9,15 @@ static void Assert(bool condition, string message)
 if (args.Length == 2)
 {
     var output = args[1];
+    if (File.ReadAllText(args[0]) == "missing reference fixture")
+    {
+        Console.WriteLine(JsonSerializer.Serialize(new {
+            contract_version = "1.0", analyzer_version = "example-1", document_type = "ASSEMBLY",
+            root_file = "root.example", root_logical_path = "root.example", files = Array.Empty<object>(),
+            references = Array.Empty<object>(), missing_references = new[] { new { reference = "part.example", referenced_by = "root.example", kind = "document-reference" } },
+            isolated_reopen_validated = false }));
+        return;
+    }
     var package = Path.Combine(output, "cad-package.zip");
     using (var zip = ZipFile.Open(package, ZipArchiveMode.Create))
         zip.CreateEntryFromFile(args[0], "root.example");
@@ -19,6 +28,7 @@ if (args.Length == 2)
         files = new[] { new { logical_path = "root.example", is_root = true, document_type = "PART" } },
         references = Array.Empty<object>(), missing_references = Array.Empty<object>(),
         isolated_reopen_validated = true,
+        bom_occurrences = new[] { new { occurrence_id = "configuration-specific-occurrence" } },
     }));
     return;
 }
@@ -86,6 +96,24 @@ try
     Assert(result.Report.IsolatedReopenValidated && result.Report.Files.Count == 1,
         "registered executable returns a validated neutral package");
     Assert(File.ReadAllText(root) == "native source", "source remains unchanged");
+    Assert(result.Report.Evidence?.ContainsKey("bom_occurrences") == true &&
+        JsonSerializer.Serialize(result.Report).Contains("configuration-specific-occurrence"), "native BOM evidence survives the agent report boundary");
+    var unsupportedReport = result.Report with { Evidence = new Dictionary<string, JsonElement> {
+        ["managed_bom_supported"] = JsonSerializer.SerializeToElement(false) } };
+    try
+    {
+        PackageContractValidator.Validate(unsupportedReport, result.PackagePath);
+        throw new Exception("Unmapped native identities were accepted for managed BOM staging.");
+    }
+    catch (InvalidDataException error) when (error.Message.Contains("identity mapping")) { }
+    File.WriteAllText(root, "missing reference fixture");
+    var missingOutput = Path.Combine(directory, "missing"); Directory.CreateDirectory(missingOutput);
+    try
+    {
+        await CadAnalyzer.AnalyzeAsync(root, missingOutput, CancellationToken.None, worker);
+        throw new Exception("Incomplete dependency report was accepted.");
+    }
+    catch (InvalidDataException error) when (error.Message.Contains("part.example") && error.Message.Contains("root.example")) { }
 }
 finally
 {

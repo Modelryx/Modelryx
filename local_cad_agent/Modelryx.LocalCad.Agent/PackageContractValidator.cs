@@ -6,6 +6,10 @@ internal static class PackageContractValidator
 {
     public static void Validate(DependencyReport report, string packagePath)
     {
+        if (report.Evidence?.TryGetValue("managed_bom_supported", out var supported) == true &&
+            supported.ValueKind == System.Text.Json.JsonValueKind.False)
+            throw new InvalidDataException(
+                "This CAD package requires configuration or component identity mapping before managed BOM staging. Native occurrence evidence is retained in the analyzer output.");
         if (!report.IsolatedReopenValidated)
             throw new InvalidDataException(
                 "The CAD adapter did not confirm that the packaged root reopens in isolation.");

@@ -49,7 +49,12 @@ assert.equal(model.isDrawing(entries[2]), true);
 assert.equal(model.createsManagedItem(entries[3], { root_logical_path: 'root.assembly' }), false);
 const references = [1, 2].map(() => ({ parent_logical_path: 'root.assembly',
   child_logical_path: 'refs/child.part', instance_name: 'Child:1' }));
-const names = model.bomInstanceNames(references);
+references.unshift({ parent_logical_path: 'root.assembly', child_logical_path: 'refs/material.dat',
+  properties: { is_bom_occurrence: false } });
+references.push({ parent_logical_path: 'sheets/plan.sheet', child_logical_path: 'refs/child.part',
+  properties: { is_bom_occurrence: false } });
+assert.equal(model.managedBomReferences(references).length, 2);
+const names = model.bomInstanceNames(model.managedBomReferences(references));
 assert.equal(new Set(names).size, 2);
 const actions = load('../src/pages/checkinNew/assemblyUploadActions.ts', {
   '../../workflow-api': workflow, '../../uuid': { randomUUID }, './model': model,
@@ -68,6 +73,9 @@ await actions.createAssemblyUploadActions({
 assert.ok(submitted, 'Native assembly must reach submission');
 assert.equal(proposal.revision.cad_system, 'Example CAD');
 assert.equal(proposal.identity_decisions.length, 2, 'Only root and part create managed Items');
+assert.equal(proposal.bom.length, 2, 'Package dependencies do not create managed BOM lines');
+assert.equal(new Set(proposal.bom.map((line) => line.instance_name)).size, 2,
+  'Filtered repeated occurrences retain distinct instance names');
 assert.deepEqual(proposal.artifacts.map((artifact) => artifact.artifact_type),
   ['CAD_ASSEMBLY', 'DRAWING', 'CAD_MODEL']);
 assert.equal(proposal.artifacts[1].files[0].staged_file_id, 'file-2');

@@ -8,6 +8,7 @@ import {
   type StagingResult,
   fileSha256,
   flattenEditOccurrences,
+  managedBomReferences,
   setOccurrenceCheckoutStatus,
 } from './model';
 
@@ -360,10 +361,10 @@ export function createPrepareModifiedEditChildren(context: Context) {
             const ownerArtifact = artifacts.find(
               (artifact: any) => artifact.owner_staged_file_id === owner.fileId
             );
-            for (const reference of dependencyReport?.references?.filter(
+            for (const reference of managedBomReferences(dependencyReport?.references ?? []).filter(
               (candidate) =>
                 candidate.parent_logical_path.toLowerCase() === owner.path.toLowerCase()
-            ) ?? []) {
+            )) {
               const change = editReconciliation.find(
                 (candidate) =>
                   String(candidate.parent_logical_path ?? '').toLowerCase() ===

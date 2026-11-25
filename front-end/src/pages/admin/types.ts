@@ -48,7 +48,7 @@ export type Status = {
 };
 
 export type WorkerStatus = {
-  worker_type: 'FREECAD' | 'STEP';
+  worker_type: string;
   availability: 'ONLINE' | 'OFFLINE';
   machine_name: string | null;
   worker_version: string | null;
@@ -64,12 +64,12 @@ export type WorkerStatus = {
 };
 
 export type CadWorkerSettings = {
-  freecad_url: string | null;
-  freecad_analyzer_url: string | null;
+  worker_url: string | null;
+  analyzer_url: string | null;
 };
 
 export type CadWorkerConnectionStatus = {
-  cad_system: 'freecad' | 'freecad_analyzer';
+  cad_system: string;
   url: string | null;
   availability: 'ONLINE' | 'OFFLINE' | 'NOT_CONFIGURED';
   configuration_source:
@@ -83,8 +83,8 @@ export type CadWorkerConnectionStatus = {
 };
 
 export type CadWorkerStatus = {
-  freecad: CadWorkerConnectionStatus;
-  freecad_analyzer: CadWorkerConnectionStatus;
+  worker: CadWorkerConnectionStatus;
+  analyzer: CadWorkerConnectionStatus;
 };
 
 export type AuditEntry = {

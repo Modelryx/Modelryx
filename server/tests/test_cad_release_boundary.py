@@ -25,14 +25,8 @@ def test_processing_rejects_controlled_editing_before_accessing_native_runtime()
         process_job(None, SimpleNamespace(type="CAD_SESSION_EXECUTE"), None)
 
 
-def test_freecad_conversion_requires_external_url_before_accessing_source():
-    from types import SimpleNamespace
+def test_native_conversion_requires_matching_worker(monkeypatch):
+    from modelryx.services import cad_routing, external_workers
 
-    import pytest
-    from modelryx.services.processing import process_job
-
-    with pytest.raises(RuntimeError, match="FreeCAD requires an external worker"):
-        process_job(
-            None, SimpleNamespace(type="FCSTD_TO_MODELRYX"),
-            SimpleNamespace(freecad_worker_url=None),
-        )
+    monkeypatch.setattr(external_workers, "discover_workers", lambda *_: [])
+    assert cad_routing.processing_type_for_source("source.FCStd", "FreeCAD", object()) is None

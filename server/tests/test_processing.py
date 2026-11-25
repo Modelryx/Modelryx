@@ -272,216 +272,24 @@ def test_non_administrator_processing_control_is_limited_to_item_creator() -> No
     assert denied.status_code == 403
 
 
-def test_freecad_job_stores_outputs_and_preview_builds_pfg(monkeypatch) -> None:
-    content = f"test FCStd content {uuid.uuid4()}".encode()
+def test_native_job_uses_registration_and_reprocessing_reuses_active_job() -> None:
     completed = commit_item(
         client,
         item_number=f"PREVIEW-{uuid.uuid4().hex}",
-        name="Preview test",
-        files=[("preview.FCStd", content)],
+        name="Registered native preview",
+        files=[("preview.FCStd", b"native source")],
     )
     revision_id = completed["revision_id"]
-
-    reprocess = client.post(f"/api/v1/revisions/{revision_id}/preview/reprocess", headers=AUTH)
-    assert reprocess.status_code == 202
-    assert reprocess.json()["type"] == "FCSTD_TO_MODELRYX"
-
-    def fake_converter(
-        source: Path,
-        output: Path,
-        settings,
-        progress_callback=None,
-        cancellation_callback=None,
-    ) -> None:
-        assert source.read_bytes() == content
-        if cancellation_callback:
-            cancellation_callback()
-        if progress_callback:
-            progress_callback("EXPORTING_GEOMETRY", 55, "Exporting geometry.")
-        bom = {"schemaVersion": 1, "items": [{"name": "Body"}]}
-        with zipfile.ZipFile(output, "w") as package:
-            package.writestr(
-                "manifest.json",
-                json.dumps(
-                    {
-                        "format": "Modelryx Graphics",
-                        "version": 1,
-                        "model": "model.glb",
-                        "modelPreview": "model-preview.json",
-                    }
-                ),
-            )
-            package.writestr(
-                "model.glb", b"glTF" + (2).to_bytes(4, "little") + (12).to_bytes(4, "little")
-            )
-            package.writestr("model-preview.json", json.dumps(bom))
-            package.writestr(
-                "diagnostics.json",
-                json.dumps(
-                    {
-                        "warnings": ["Open shell has no volume."],
-                        "statistics": {"triangles": 0},
-                    }
-                ),
-            )
-        output.with_suffix(".cad-raw-metadata.json").write_text(
-            json.dumps({"document_label": "Preview"})
-        )
-        output.with_suffix(".part-metadata.json").write_text(
-            json.dumps(
-                {
-                    "schema": "modelryx.part-metadata",
-                    "schema_version": "1.0",
-                    "source": {
-                        "system": "freecad",
-                        "system_version": "1.0",
-                        "worker": "modelryx-freecad-worker",
-                        "worker_version": "test",
-                        "extracted_at": "2026-08-21T12:00:00Z",
-                    },
-                    "identity": {"name": "Preview", "kind": "part"},
-                    "geometry": {
-                        "bounding_box": {"x_mm": 10, "y_mm": 10, "z_mm": 10},
-                        "shape": {"volume_mm3": 1000, "surface_area_mm2": 600},
-                        "topology": {"solid_count": 1},
-                    },
-                    "assembly": {"is_assembly": False},
-                    "quality": {
-                        "geometry": "complete",
-                        "physical": "unavailable",
-                        "features": "unsupported",
-                        "assembly": "not_applicable",
-                        "warnings": [],
-                    },
-                }
-            )
-        )
-
-    monkeypatch.setattr("modelryx.services.processing.run_converter", fake_converter)
-    def fake_remote(source, workspace, output, settings, job, document_kind, cancel, report):
-        assert source.is_relative_to(workspace)
-        assert document_kind == "part"
-        fake_converter(source, output, settings, report, cancel)
-
-    monkeypatch.setattr("modelryx.services.freecad_remote.convert_remote", fake_remote)
-    monkeypatch.setattr(get_settings(), "freecad_worker_url", "http://worker")
-    with SessionLocal() as db:
-        job = db.scalar(
-            select(ProcessingJob).where(ProcessingJob.revision_id == uuid.UUID(revision_id))
-        )
-        job.state = "RUNNING"
-        job.attempt_count = 1
-        db.commit()
-        process_job(db, job, get_settings())
-        revision = db.get(Revision, uuid.UUID(revision_id))
-        assert revision.state == "READY_WITH_WARNINGS"
-        assert revision.derived_metadata_json["items"][0]["name"] == "Body"
-        assert job.stage == "COMPLETED"
-        assert job.progress_percent == 100
-        assert job.diagnostics_json["statistics"]["triangles"] == 0
-        assert {row["status"] for row in job.diagnostics_json["files"].values()} == {"WARNING"}
-        assert {row["stage"] for row in job.diagnostics_json["files"].values()} == {
-            "VALIDATED_WITH_WARNINGS"
-        }
-        assert "Open shell" in next(iter(job.diagnostics_json["files"].values()))["message"]
-        snapshots = list(
-            db.scalars(
-                select(RevisionContentSnapshot)
-                .where(RevisionContentSnapshot.revision_id == revision.id)
-                .order_by(RevisionContentSnapshot.sequence)
-            )
-        )
-        assert len(snapshots) == 1
-        assert job.snapshot_id == snapshots[0].id
-        relations = list(
-            db.scalars(
-                select(RevisionArtifactRelation)
-                .join(
-                    RevisionContentSnapshotArtifact,
-                    RevisionContentSnapshotArtifact.relation_id == RevisionArtifactRelation.id,
-                )
-                .where(RevisionContentSnapshotArtifact.snapshot_id == snapshots[-1].id)
-            )
-        )
-        containers = [db.get(Artifact, relation.artifact_id) for relation in relations]
-        authoritative = next(
-            container for container in containers if container.classification == "AUTHORITATIVE"
-        )
-        derived = [container for container in containers if container.classification == "DERIVED"]
-        assert {container.artifact_type for container in derived} == {
-            "GLB",
-            "METADATA",
-            "OTHER",
-        }
-        assert all(container.derived_from_artifact_id == authoritative.id for container in derived)
-        assert all(container.generator == "modelryx-cad-worker" for container in derived)
-        assert all(
-            container.generator_version == get_settings().converter_version for container in derived
-        )
-        assert all(
-            db.scalar(select(ArtifactFile.id).where(ArtifactFile.artifact_id == container.id))
-            for container in derived
-        )
-
-    published = client.get(f"/api/v1/item-revisions/{revision_id}/artifacts", headers=AUTH)
-    assert published.status_code == 200, published.text
-    assert len(published.json()) == 4
-    assert (
-        sum(entry["artifact"]["classification"] == "AUTHORITATIVE" for entry in published.json())
-        == 1
-    )
-    current_metadata = client.get(f"/api/v1/revisions/{revision_id}/metadata", headers=AUTH)
-    assert current_metadata.status_code == 200, current_metadata.text
-    assert current_metadata.json()["current"]["metadata"]["identity"]["name"] == "Preview"
-    assert current_metadata.json()["current"]["raw_metadata_url"]
-
-    cached_request = client.post(f"/api/v1/revisions/{revision_id}/preview/reprocess", headers=AUTH)
-    assert cached_request.status_code == 202
-
-    def converter_must_not_run(*_args, **_kwargs) -> None:
-        raise AssertionError("converter ran despite a matching successful cache entry")
-
-    monkeypatch.setattr("modelryx.services.processing.run_converter", converter_must_not_run)
-    with SessionLocal() as db:
-        cached_job = db.get(ProcessingJob, uuid.UUID(cached_request.json()["id"]))
-        cached_job.state = "RUNNING"
-        cached_job.attempt_count = 1
-        db.commit()
-        process_job(db, cached_job, get_settings())
-        assert cached_job.state == "SUCCEEDED"
-        assert cached_job.diagnostics_json["cache"]["hit"] is True
-        assert (
-            db.scalar(
-                select(RevisionContentSnapshot.sequence)
-                .where(RevisionContentSnapshot.revision_id == uuid.UUID(revision_id))
-                .order_by(RevisionContentSnapshot.sequence.desc())
-            )
-            == 1
-        )
-
     jobs = client.get(f"/api/v1/revisions/{revision_id}/processing-jobs", headers=AUTH)
-    assert jobs.status_code == 200
-    assert jobs.json()[0]["state"] == "SUCCEEDED"
-    assert {row["status"] for row in jobs.json()[0]["files"]} == {"WARNING"}
-    assert {row["stage"] for row in jobs.json()[0]["files"]} == {
-        "CACHE_REUSED_WITH_WARNINGS"
-    }
-
-    search = client.post("/api/v1/parts/search", headers=AUTH, json={"query": "Body"})
-    assert search.status_code == 200
-    assert any(item["part"]["id"] == completed["item_id"] for item in search.json()["items"])
-
-    preview = client.get(f"/api/v1/revisions/{revision_id}/preview", headers=AUTH)
-    assert preview.status_code == 200
-    preview_path = Path(get_settings().storage_root) / f"test-{uuid.uuid4().hex}.pfg"
-    preview_path.write_bytes(preview.content)
-    try:
-        with zipfile.ZipFile(preview_path) as package:
-            assert package.read("model.glb")[:4] == b"glTF"
-            assert json.loads(package.read("model-preview.json"))["schemaVersion"] == 1
-            assert json.loads(package.read("manifest.json"))["format"] == "Modelryx Graphics"
-    finally:
-        preview_path.unlink(missing_ok=True)
+    assert jobs.status_code == 200, jobs.text
+    original = next(job for job in jobs.json() if job["state"] == "PENDING")
+    assert original["type"] == "EXTERNAL_CAD_TO_MODELRYX"
+    assert original["can_cancel"] is True
+    reprocess = client.post(f"/api/v1/revisions/{revision_id}/preview/reprocess", headers=AUTH)
+    assert reprocess.status_code == 202, reprocess.text
+    assert reprocess.json()["id"] == original["id"]
+    # Manifest validation and publication are exercised by test_external_workers;
+    # native output caching belongs to the external worker.
 
 
 @pytest.mark.parametrize("job_type", ["EXTERNAL_CAD_TO_MODELRYX", "STEP_TO_MODELRYX"])

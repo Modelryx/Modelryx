@@ -33,10 +33,12 @@ class Settings(BaseSettings):
     checkout_expiry_seconds: int = 8 * 60 * 60
     checkout_expiry_warning_seconds: int = 60 * 60
     orphan_grace_seconds: int = 86400
-    converter_version: str = "modelryx-fcstd-29"
+    converter_version: str = "modelryx-cad-1"
     converter_timeout_seconds: int = 1800
     server_url: str = "http://localhost:8000"
     cad_analyzer_url: str | None = None
+    cad_worker_url: str | None = None
+    cad_preprocessor_url: str | None = None
     freecad_preprocessor_url: str | None = None
     step_worker_url: str = "http://localhost:8080"
     freecad_worker_url: str | None = None

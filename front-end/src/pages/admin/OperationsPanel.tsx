@@ -118,7 +118,7 @@ export function OperationsPanel({
               <h3 id="worker-health-title">CAD server availability</h3>
               <p>
                 Queue workers use heartbeats. Standalone CAD servers use direct availability checks.
-                The FreeCAD preprocessor is checked through its HTTP service.
+                CAD preprocessors are checked through their HTTP services.
               </p>
             </div>
           </div>
@@ -128,9 +128,7 @@ export function OperationsPanel({
             </p>
           )}
           <div className="worker-health-grid">
-            {(status?.workers ?? [])
-              .filter((worker) => ['STEP', 'GENERAL'].includes(worker.worker_type.toUpperCase()))
-              .map((worker) => (
+              {(status?.workers ?? []).map((worker) => (
                 <article className="worker-health-card" key={worker.worker_type}>
                   <div className="maintenance-title-row">
                     <strong>{worker.worker_type}</strong>
@@ -191,7 +189,7 @@ export function OperationsPanel({
                   {worker.detail && <p className="maintenance-warning">{worker.detail}</p>}
                 </article>
               ))}
-            {(['freecad', 'freecad_analyzer'] as const).map((system) => {
+            {(['worker', 'analyzer'] as const).map((system) => {
               const connection = cadWorkerStatus?.[system];
               if (!connection?.url) return null;
               return (
@@ -203,7 +201,7 @@ export function OperationsPanel({
                           connection?.capabilities?.cadSystem ??
                           'CAD'
                       )}
-                      {system === 'freecad' ? ' worker' : ' preprocessor'}
+                      {system === 'worker' ? ' worker' : ' preprocessor'}
                     </strong>
                     <span
                       className={`maintenance-health ${connection?.availability === 'ONLINE' ? 'healthy' : 'degraded'}`}
@@ -256,40 +254,40 @@ export function OperationsPanel({
             <div>
               <h3 id="cad-servers-title">CAD server settings</h3>
               <p>
-                Configure external FreeCAD worker and preprocessor URLs. An enabled matching worker
-                registration takes precedence. Without a registration or worker URL, FreeCAD
+                Configure a default external CAD worker and preprocessor. An enabled matching worker
+                registration takes precedence. Without a matching worker, native CAD
                 processing is unavailable. An empty preprocessor URL disables server-side analysis.
               </p>
             </div>
           </div>
           <form className="cad-worker-settings-form" onSubmit={onSaveSettings}>
             <label>
-              Standalone FreeCAD worker URL
+              Default CAD worker URL
               <input
-                name="freecadUrl"
+                name="cadWorkerUrl"
                 type="url"
                 placeholder="http://host.docker.internal:8090"
-                value={cadWorkerSettings.freecad_url ?? ''}
+                value={cadWorkerSettings.worker_url ?? ''}
                 onChange={(event) => {
                   setCadWorkerSettings((current) => ({
                     ...current,
-                    freecad_url: event.target.value || null,
+                    worker_url: event.target.value || null,
                   }));
                   setCadWorkerSettingsSaved(false);
                 }}
               />
             </label>
             <label>
-              FreeCAD preprocessor URL
+              CAD preprocessor URL
               <input
-                name="freecadAnalyzerUrl"
+                name="cadAnalyzerUrl"
                 type="url"
                 placeholder="http://host.docker.internal:8090"
-                value={cadWorkerSettings.freecad_analyzer_url ?? ''}
+                value={cadWorkerSettings.analyzer_url ?? ''}
                 onChange={(event) => {
                   setCadWorkerSettings((current) => ({
                     ...current,
-                    freecad_analyzer_url: event.target.value || null,
+                    analyzer_url: event.target.value || null,
                   }));
                   setCadWorkerSettingsSaved(false);
                 }}

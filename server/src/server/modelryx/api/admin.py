@@ -7,7 +7,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field, computed_field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -24,7 +24,9 @@ from modelryx.services.checkout_notifications import (
     record_checkout_notification_run,
 )
 from modelryx.services.external_workers import PREFIX, registered_workers, validate_capabilities
-from modelryx.services.freecad_settings import FREECAD_ANALYZER_KEY, FREECAD_WORKER_KEY
+from modelryx.services.cad_worker_settings import (
+    CAD_ANALYZER_KEY, CAD_WORKER_KEY, LEGACY_SETTING_KEYS, analyzer_default, worker_default,
+)
 from modelryx.services.item_purge import (
     cascade_plan,
     item_storage_keys,
@@ -147,17 +149,27 @@ class ApprovalEscalationRunResponse(BaseModel):
 
 
 class CadWorkerSettingsResponse(BaseModel):
-    freecad_url: str | None = None
-    freecad_analyzer_url: str | None = None
+    worker_url: str | None = None
+    analyzer_url: str | None = None
+
+    @computed_field
+    @property
+    def freecad_url(self) -> str | None:
+        return self.worker_url
+
+    @computed_field
+    @property
+    def freecad_analyzer_url(self) -> str | None:
+        return self.analyzer_url
 
 
 class CadWorkerSettingsUpdate(BaseModel):
-    freecad_url: str | None = Field(default=None, max_length=2000)
-    freecad_analyzer_url: str | None = Field(default=None, max_length=2000)
+    worker_url: str | None = Field(default=None, max_length=2000, validation_alias=AliasChoices("worker_url", "freecad_url"))
+    analyzer_url: str | None = Field(default=None, max_length=2000, validation_alias=AliasChoices("analyzer_url", "freecad_analyzer_url"))
 
 
 class CadWorkerConnectionStatus(BaseModel):
-    cad_system: Literal["freecad", "freecad_analyzer"]
+    cad_system: str
     url: str | None
     availability: Literal["ONLINE", "OFFLINE", "NOT_CONFIGURED"]
     configuration_source: CadWorkerConfigurationSource = "NOT_CONFIGURED"
@@ -170,13 +182,23 @@ class CadWorkerConnectionStatus(BaseModel):
 
 
 class CadWorkerStatusResponse(BaseModel):
-    freecad: CadWorkerConnectionStatus
-    freecad_analyzer: CadWorkerConnectionStatus
+    worker: CadWorkerConnectionStatus
+    analyzer: CadWorkerConnectionStatus
+
+    @computed_field
+    @property
+    def freecad(self) -> CadWorkerConnectionStatus:
+        return self.worker
+
+    @computed_field
+    @property
+    def freecad_analyzer(self) -> CadWorkerConnectionStatus:
+        return self.analyzer
 
 
 CAD_WORKER_SETTING_KEYS = {
-    "freecad_url": FREECAD_WORKER_KEY,
-    "freecad_analyzer_url": FREECAD_ANALYZER_KEY,
+    "worker_url": CAD_WORKER_KEY,
+    "analyzer_url": CAD_ANALYZER_KEY,
 }
 
 
@@ -207,19 +229,19 @@ def _cad_worker_configurations(
         row.key: row.value
         for row in db.scalars(
             select(ApplicationSetting).where(
-                ApplicationSetting.key.in_(CAD_WORKER_SETTING_KEYS.values())
+                ApplicationSetting.key.in_([*CAD_WORKER_SETTING_KEYS.values(), *LEGACY_SETTING_KEYS.values()])
             )
         )
     }
     defaults = {
-        "freecad_url": getattr(settings, "freecad_worker_url", None),
-        "freecad_analyzer_url": getattr(settings, "freecad_preprocessor_url", None)
-        or getattr(settings, "cad_analyzer_url", None),
+        "worker_url": worker_default(settings),
+        "analyzer_url": analyzer_default(settings),
     }
     configurations = {}
     for field, key in CAD_WORKER_SETTING_KEYS.items():
-        if key in rows:
-            value = rows[key] or None
+        configured_key = key if key in rows else LEGACY_SETTING_KEYS.get(key)
+        if configured_key in rows:
+            value = rows[configured_key] or None
             configurations[field] = (
                 value,
                 "ADMIN_OVERRIDE" if value is not None else "ADMIN_DISABLED",
@@ -238,8 +260,8 @@ def _cad_worker_urls(db: Session, settings: Settings | None = None) -> dict[str,
     }
 
 
-async def _probe_freecad_worker(
-    cad_system: Literal["freecad", "freecad_analyzer"], url: str | None, worker_key: str | None
+async def _probe_cad_worker(
+    cad_system: str, url: str | None, worker_key: str | None, *, dependency_analysis: bool = False
 ) -> CadWorkerConnectionStatus:
     checked_at = datetime.now(UTC)
     if not url:
@@ -258,31 +280,13 @@ async def _probe_freecad_worker(
             )
             response.raise_for_status()
             capabilities = response.json()
-            if not isinstance(capabilities, dict) or (
-                capabilities.get("contractVersion") != "1.0"
-                or capabilities.get("cadSystem") != "freecad"
-                or (
-                    cad_system == "freecad_analyzer"
-                    and capabilities.get("dependencyAnalysis") is not True
-                )
-                or (
-                    cad_system == "freecad"
-                    and not {"part", "assembly"}.issubset(
-                        set(capabilities.get("documentKinds", []))
-                    )
-                )
-                or (
-                    cad_system == "freecad"
-                    and not {"modelryx-preview", "part-metadata", "native-snapshot"}.issubset(
-                        set(capabilities.get("outputRoles", []))
-                    )
-                )
-            ):
-                raise ValueError(
-                    "The endpoint does not advertise the required standalone FreeCAD capabilities."
-                )
+            if dependency_analysis:
+                from modelryx.services.external_workers import validate_dependency_capabilities
+                advertised = validate_dependency_capabilities(capabilities)
+            else:
+                advertised = validate_capabilities(capabilities)
         return CadWorkerConnectionStatus(
-            cad_system=cad_system,
+            cad_system=advertised["cadSystem"],
             url=url,
             availability="ONLINE",
             checked_at=checked_at,
@@ -294,8 +298,14 @@ async def _probe_freecad_worker(
             url=url,
             availability="OFFLINE",
             checked_at=checked_at,
-            detail=f"Standalone FreeCAD check failed: {exc}",
+            detail=f"External CAD endpoint check failed: {exc}",
         )
+
+
+async def _probe_freecad_worker(cad_system, url, worker_key):
+    """Compatibility alias; endpoint purpose, not CAD identity, selects analyzer checks."""
+    return await _probe_cad_worker(cad_system, url, worker_key,
+                                   dependency_analysis=cad_system.endswith("_analyzer"))
 
 
 def require_admin(principal: Principal) -> None:
@@ -317,22 +327,23 @@ async def get_cad_worker_status(
 ) -> CadWorkerStatusResponse:
     require_admin(principal)
     configurations = _cad_worker_configurations(db, settings)
-    freecad, freecad_analyzer = await asyncio.gather(
-        _probe_freecad_worker(
-            "freecad", configurations["freecad_url"][0], settings.internal_worker_key
+    worker, analyzer = await asyncio.gather(
+        _probe_cad_worker(
+            "worker", configurations["worker_url"][0], settings.internal_worker_key
         ),
-        _probe_freecad_worker(
-            "freecad_analyzer",
-            configurations["freecad_analyzer_url"][0],
+        _probe_cad_worker(
+            "analyzer",
+            configurations["analyzer_url"][0],
             settings.internal_worker_key,
+            dependency_analysis=True,
         ),
     )
     return CadWorkerStatusResponse(
-        freecad=freecad.model_copy(
-            update={"configuration_source": configurations["freecad_url"][1]}
+        worker=worker.model_copy(
+            update={"configuration_source": configurations["worker_url"][1]}
         ),
-        freecad_analyzer=freecad_analyzer.model_copy(
-            update={"configuration_source": configurations["freecad_analyzer_url"][1]}
+        analyzer=analyzer.model_copy(
+            update={"configuration_source": configurations["analyzer_url"][1]}
         ),
     )
 
@@ -345,8 +356,8 @@ def update_cad_worker_settings(
     actor = user_for_principal(db, principal)
     values = {}
     for field, label in (
-        ("freecad_url", "FreeCAD worker URL"),
-        ("freecad_analyzer_url", "FreeCAD analyzer URL"),
+        ("worker_url", "CAD worker URL"),
+        ("analyzer_url", "CAD analyzer URL"),
     ):
         if field in payload.model_fields_set:
             values[field] = _worker_url(getattr(payload, field), label)

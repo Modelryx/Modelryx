@@ -130,84 +130,69 @@ def _best_heartbeat(
 
 @router.get("/preflight", response_model=WorkerPreflightResponse)
 async def worker_preflight(
-    worker_type: Annotated[str, Query(min_length=2, max_length=32, pattern=r"^[A-Z][A-Z0-9_-]*$")],
+    worker_type: Annotated[str, Query(min_length=2, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9 _.:-]*$")],
     db: Db,
     _: Actor,
     settings: Config,
+    worker_id: Annotated[str | None, Query(max_length=64, pattern=r"^[a-z][a-z0-9_-]*$")] = None,
 ) -> WorkerPreflightResponse:
-    if worker_type == "FREECAD":
-        from modelryx.api.admin import _probe_freecad_worker
-        from modelryx.services.external_workers import (
-            AmbiguousWorkerError,
-            matching_worker,
-            validate_capabilities,
-        )
-        from modelryx.services.freecad_settings import FREECAD_WORKER_KEY, configured_url
+    from modelryx.services.cad_routing import PLATFORM_WORKER_TYPES
+    from modelryx.services.external_workers import discover_workers, validate_capabilities
 
-        # Follow processing precedence. A selected remote service must not be
-        # masked by a healthy embedded heartbeat (or require one to be online).
-        try:
-            external = matching_worker(db, "source.FCStd", "freecad")
-        except AmbiguousWorkerError:
-            return WorkerPreflightResponse(
-                worker_type=worker_type, available=False, compatible=False,
-                message=(
-                    "Multiple enabled FreeCAD workers match this format. "
-                    "Resolve the conflicting registrations."
-                ),
+    requested = worker_type.casefold()
+    normalized = "".join(char for char in requested if char.isalnum())
+    workers = (
+        [] if worker_id is None and worker_type.upper() in PLATFORM_WORKER_TYPES
+        else discover_workers(db, settings)
+    )
+    candidates = [
+        worker for worker in workers
+        if worker["enabled"] and (
+            worker["id"] == worker_id if worker_id is not None else (
+                worker["id"].casefold() == requested
+                or "".join(char for char in worker["capabilities"]["cadSystem"].casefold()
+                           if char.isalnum()) == normalized
             )
-        if external is not None:
-            capabilities = {}
-            available = False
-            try:
-                if not settings.internal_worker_key:
-                    raise ValueError("The internal worker key is not configured.")
-                async with httpx.AsyncClient(timeout=3.0, follow_redirects=False) as client:
-                    response = await client.get(f"{external['url'].rstrip('/')}/ready")
-                    response.raise_for_status()
-                    response = await client.get(
-                        f"{external['url'].rstrip('/')}/api/v1/capabilities",
-                        headers={"X-Modelryx-Worker-Key": settings.internal_worker_key},
-                    )
-                    response.raise_for_status()
-                    capabilities = response.json()
-                    if validate_capabilities(capabilities) != external["capabilities"]:
-                        raise ValueError("Worker capabilities changed; register the worker again.")
-                available = True
-                message = "External FreeCAD worker is online and compatible."
-            except (httpx.HTTPError, ValueError, TypeError):
-                message = (
-                    "The selected external FreeCAD worker is offline or incompatible. "
-                    "Check its readiness, shared key and registration in External CAD Workers."
-                )
-            return WorkerPreflightResponse(
-                worker_type=worker_type, available=available, compatible=available,
-                status="IDLE" if available else None, message=message,
-                adapter_version=capabilities.get("workerVersion") if available else None,
-                capabilities=capabilities if available else {},
-            )
-        remote_url = configured_url(db, FREECAD_WORKER_KEY, settings.freecad_worker_url)
-        if remote_url:
-            connection = await _probe_freecad_worker(
-                "freecad", remote_url, settings.internal_worker_key
-            )
-            available = connection.availability == "ONLINE"
-            return WorkerPreflightResponse(
-                worker_type=worker_type, available=available, compatible=available,
-                status="IDLE" if available else None,
-                message=(
-                    "Standalone FreeCAD worker is online and compatible."
-                    if available else (
-                        "The configured standalone FreeCAD worker is offline or incompatible. "
-                        "Check its status in Operations."
-                    )
-                ),
-                adapter_version=connection.capabilities.get("adapterVersion"),
-                capabilities=connection.capabilities,
-            )
+        )
+    ]
+    if len(candidates) > 1:
         return WorkerPreflightResponse(
             worker_type=worker_type, available=False, compatible=False,
-            message="Configure an enabled external FreeCAD worker or external server URL.",
+            message="Multiple enabled external workers match; select a unique worker registration.",
+        )
+    if candidates:
+        external = candidates[0]
+        available = False
+        capabilities = {}
+        try:
+            if not settings.internal_worker_key:
+                raise ValueError("The internal worker key is not configured.")
+            async with httpx.AsyncClient(timeout=3.0, follow_redirects=False) as client:
+                readiness = await client.get(f"{external['url'].rstrip('/')}/ready")
+                readiness.raise_for_status()
+                response = await client.get(
+                    f"{external['url'].rstrip('/')}/api/v1/capabilities",
+                    headers={"X-Modelryx-Worker-Key": settings.internal_worker_key},
+                )
+                response.raise_for_status()
+                capabilities = response.json()
+                if validate_capabilities(capabilities) != external["capabilities"]:
+                    raise ValueError("Worker capabilities changed; register the worker again.")
+            available = True
+        except (httpx.HTTPError, ValueError, TypeError):
+            pass
+        return WorkerPreflightResponse(
+            worker_type=worker_type, available=available, compatible=available,
+            status="IDLE" if available else None,
+            message=("External CAD worker is online and compatible." if available else
+                     "The selected external CAD worker is offline or incompatible. Check its readiness, shared key and registration."),
+            adapter_version=capabilities.get("workerVersion") if available else None,
+            capabilities=capabilities if available else {},
+        )
+    if worker_id is not None or worker_type.upper() not in PLATFORM_WORKER_TYPES:
+        return WorkerPreflightResponse(
+            worker_type=worker_type, available=False, compatible=False,
+            message="No matching enabled external CAD worker could be verified. Check its registration or configured endpoint.",
         )
     heartbeat, available = _best_heartbeat(db, worker_type, settings)
     compatible = bool(available and heartbeat and heartbeat.compatibility_state != "INCOMPATIBLE")

@@ -71,7 +71,7 @@ from modelryx.models import (
     WorkerHeartbeat,
 )
 from modelryx.services.artifact_content import current_artifact_files, latest_content_snapshot_id
-from modelryx.services.freecad_settings import FREECAD_ANALYZER_KEY, configured_url
+from modelryx.services.cad_worker_settings import CAD_ANALYZER_KEY, analyzer_default, configured_url
 from modelryx.services.storage import LocalStorageProvider
 
 router = APIRouter(prefix="/api/v1", tags=["cad-workers"])
@@ -132,8 +132,8 @@ async def analyze_cad_upload(
     else:
         analyzer_url = configured_url(
             db,
-            FREECAD_ANALYZER_KEY,
-            settings.freecad_preprocessor_url or settings.cad_analyzer_url,
+            CAD_ANALYZER_KEY,
+            analyzer_default(settings),
         )
     if not analyzer_url or not settings.internal_worker_key:
         raise HTTPException(status_code=503, detail="CAD worker analysis is unavailable")

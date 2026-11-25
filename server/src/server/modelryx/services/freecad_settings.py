@@ -1,13 +1,7 @@
-"""Resolve administrator overrides for standalone FreeCAD endpoints."""
+"""Deprecated import aliases for CAD-neutral endpoint configuration."""
 
-from sqlalchemy.orm import Session
-
-from modelryx.models import ApplicationSetting
-
-FREECAD_WORKER_KEY = "cad.freecad.server_url"
-FREECAD_ANALYZER_KEY = "cad.freecad.analyzer_url"
-
-
-def configured_url(db: Session, key: str, default: str | None) -> str | None:
-    setting = db.get(ApplicationSetting, key)
-    return (setting.value or None) if setting is not None else default
+from modelryx.services.cad_worker_settings import (
+    CAD_ANALYZER_KEY as FREECAD_ANALYZER_KEY,
+    CAD_WORKER_KEY as FREECAD_WORKER_KEY,
+    configured_url,
+)

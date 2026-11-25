@@ -41,10 +41,10 @@ def test_freecad_registration_selects_generic_or_external_url_route(monkeypatch,
         external_workers, "discover_workers",
         lambda db, _settings: external_workers.registered_workers(db),
     )
-    expected = external_workers.JOB_TYPE if enabled else "FCSTD_TO_MODELRYX"
+    expected = external_workers.JOB_TYPE if enabled else None
     for route in (_native_processing_type, preview_processing_type):
         assert route("Root.FCStd", "FreeCAD", object()) == expected
-        assert route("Root.FCStd", "FreeCAD") == "FCSTD_TO_MODELRYX"
+        assert route("Root.FCStd", "FreeCAD") is None
         assert route("Root.step", "FreeCAD", object()) == "STEP_TO_MODELRYX"
     assert _external_assembly_worker(object(), "Root.FCStd", "FreeCAD") == (
         worker if enabled else None
@@ -103,7 +103,7 @@ def test_upload_preflight_probes_selected_remote_without_embedded_heartbeat(
     expected_url = "http://override" if mode == "override" else "http://remote"
     external = {"id": "freecad", "url": expected_url, "capabilities": CAPABILITIES}
     monkeypatch.setattr(
-        external_workers, "matching_worker", lambda *_args: external if mode == "external" else None
+        external_workers, "discover_workers", lambda *_args: [{**external, "enabled": True}]
     )
     monkeypatch.setattr(
         worker_health,
@@ -153,7 +153,7 @@ def test_upload_preflight_requires_external_service_even_with_heartbeat(monkeypa
     from modelryx.api import worker_health
     from modelryx.core.config import get_settings
 
-    monkeypatch.setattr(external_workers, "matching_worker", lambda *_args: None)
+    monkeypatch.setattr(external_workers, "discover_workers", lambda *_args: [])
     heartbeat = SimpleNamespace(
         compatibility_state="COMPATIBLE",
         status="BUSY",

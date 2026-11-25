@@ -38,7 +38,8 @@ def test_freecad_probe_checks_readiness_and_authenticated_capabilities(monkeypat
         def json(self):
             return {"contractVersion": "1.0", "cadSystem": "freecad",
                     "documentKinds": ["part", "assembly"], "dependencyAnalysis": True,
-                    "outputRoles": ["modelryx-preview", "part-metadata", "native-snapshot"]}
+                    "sourceExtensions": [".custom"],
+                    "outputRoles": ["modelryx-preview", "model-preview", "part-metadata", "native-snapshot"]}
 
     class Client:
         async def __aenter__(self):

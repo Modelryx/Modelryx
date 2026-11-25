@@ -31,7 +31,6 @@ PROMPT_VERSION = "phase6-validation-v1"
 SOURCE = {"validator": "phase6_staging_validator", "version": POLICY_VERSION}
 SUPPORTED_CAD_EXTENSIONS = frozenset(
     {
-        ".fcstd",
         ".step",
         ".stp",
         ".iges",
@@ -292,11 +291,11 @@ class ValidationService:
             for decision in proposal.get("identity_decisions", [])
             if decision.get("decision") == "USE_EXISTING"
         }
-        from modelryx.services.external_workers import registered_workers
+        from modelryx.services.external_workers import discover_workers
 
         supported_extensions = SUPPORTED_CAD_EXTENSIONS | {
             extension
-            for worker in registered_workers(self.db)
+            for worker in discover_workers(self.db, self.settings)
             if worker["enabled"]
             for extension in worker["capabilities"]["sourceExtensions"]
         }

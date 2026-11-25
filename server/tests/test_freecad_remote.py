@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 from modelryx.core.config import Settings
-from modelryx.services.freecad_remote import convert_remote
+from modelryx.services.cad_remote import convert_remote
 
 ROLES = {
     "modelryx-preview": ("application/zip", b"preview"),
@@ -15,7 +15,8 @@ ROLES = {
 }
 
 
-def test_remote_conversion_checks_and_downloads_outputs(tmp_path, monkeypatch):
+@pytest.mark.parametrize("system", ["freecad", "Other CAD", "NX"])
+def test_remote_conversion_checks_and_downloads_outputs(tmp_path, monkeypatch, system):
     source_dir = tmp_path / "source"
     source_dir.mkdir()
     source = source_dir / "Root.FCStd"
@@ -34,7 +35,7 @@ def test_remote_conversion_checks_and_downloads_outputs(tmp_path, monkeypatch):
                 200,
                 json={
                     "contractVersion": "1.0",
-                    "cadSystem": "freecad",
+                    "cadSystem": system,
                     "documentKinds": ["assembly"],
                     "outputRoles": list(ROLES),
                 },
@@ -84,7 +85,7 @@ def test_remote_conversion_checks_and_downloads_outputs(tmp_path, monkeypatch):
 
     original = httpx.Client
     monkeypatch.setattr(
-        "modelryx.services.freecad_remote.httpx.Client",
+        "modelryx.services.cad_remote.httpx.Client",
         lambda **kwargs: original(transport=httpx.MockTransport(handle), **kwargs),
     )
     output = tmp_path / "preview.pfg"
@@ -97,7 +98,7 @@ def test_remote_conversion_checks_and_downloads_outputs(tmp_path, monkeypatch):
 
 
 def test_remote_result_rejects_external_download_url():
-    from modelryx.services.freecad_remote import validate_result
+    from modelryx.services.cad_remote import validate_result
 
     request = {
         "contractVersion": "1.0",
@@ -137,7 +138,7 @@ def test_remote_result_rejects_external_download_url():
     [("Partial", "test"), ("ReadyToPublish", "different")],
 )
 def test_remote_result_enforces_server_status_and_version(state, version):
-    from modelryx.services.freecad_remote import validate_result
+    from modelryx.services.cad_remote import validate_result
 
     request = {
         "contractVersion": "1.0",
@@ -170,4 +171,4 @@ def test_remote_result_enforces_server_status_and_version(state, version):
         ],
     }
     with pytest.raises(RuntimeError, match="status or converter version"):
-        validate_result(request, result, state, Settings(converter_version="test"))
+        validate_result(request, result, state, Settings(converter_version="test"), "test")

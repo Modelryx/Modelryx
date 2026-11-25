@@ -1,3 +1,4 @@
+import json
 import uuid
 
 import pytest
@@ -6,6 +7,7 @@ from modelryx.core.config import get_settings
 from modelryx.core.db import SessionLocal
 from modelryx.models import (
     ArtifactFile,
+    ApplicationSetting,
     MetadataExtraction,
     ProcessingJob,
     Revision,
@@ -69,30 +71,53 @@ Session.add_all = _add_all_without_retired_fixture
 
 @pytest.fixture(autouse=True)
 def provision_database_test_user(request):
-    """Provision the signed test identity only for database-backed API modules."""
+    """Provision the test identity and native worker for database-backed API modules."""
     if not hasattr(request.module, "AUTH"):
         yield
         return
 
+    worker_key = f"external_worker.fixture_native_{uuid.uuid4().hex}"
     with SessionLocal() as db:
         user = db.scalar(select(User).where(User.external_subject == "local-development-user"))
         if user is None:
-            db.add(
-                User(
-                    external_subject="local-development-user",
-                    display_name="Local Engineer",
-                    role="administrator",
-                    is_active=True,
-                    auth_version=0,
-                )
+            user = User(
+                external_subject="local-development-user",
+                display_name="Local Engineer",
+                role="administrator",
+                is_active=True,
+                auth_version=0,
             )
+            db.add(user)
         else:
             user.display_name = "Local Engineer"
             user.role = "administrator"
             user.is_active = True
             user.auth_version = 0
+        db.flush()
+        # Native integration fixtures must declare support through a worker, just as
+        # production uploads do. Conversion itself is mocked by execution tests.
+        if not getattr(request.module, "MANAGES_NATIVE_WORKERS", False):
+            db.add(ApplicationSetting(
+                key=worker_key, updated_by=user.id, value=json.dumps({
+                    "url": "https://fixture-native.invalid", "enabled": True,
+                    "capabilities": {
+                        "contractVersion": "1.0", "cadSystem": "FreeCAD",
+                        "workerName": "Reference native fixture", "workerVersion": "test",
+                        "sourceExtensions": [".fcstd"], "documentKinds": ["part", "assembly"],
+                        "outputRoles": ["native-snapshot", "part-metadata", "model-preview", "glb"],
+                        "dependencyAnalysis": True,
+                    },
+                }),
+            ))
         db.commit()
-    yield
+    try:
+        yield
+    finally:
+        with SessionLocal() as db:
+            row = db.get(ApplicationSetting, worker_key)
+            if row is not None:
+                db.delete(row)
+                db.commit()
 
 
 @pytest.fixture

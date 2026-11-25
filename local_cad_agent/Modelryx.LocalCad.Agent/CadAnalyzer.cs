@@ -40,6 +40,9 @@ internal static class CadAnalyzer
         node["references"] ??= new JsonArray();
         var report = node.Deserialize<DependencyReport>(JsonOptions)
             ?? throw new InvalidDataException("The CAD analyzer report is incomplete.");
+        if (report.MissingReferences.Count > 0)
+            throw new InvalidDataException("Repair missing CAD references before upload: " + string.Join("; ",
+                report.MissingReferences.Take(20).Select(value => $"{value.Reference ?? "unknown reference"} (referenced by {value.ReferencedBy})")));
         var packageValue = node["package"]?.GetValue<string>();
         var package = string.IsNullOrWhiteSpace(packageValue)
             ? Path.Combine(outputDirectory, "cad-package.zip")

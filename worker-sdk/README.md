@@ -42,6 +42,38 @@ Modelryx requires these roles on conversion jobs and prefers `glb` when advertis
 roles must be supported by the server's publication profile before it can consume them. Advertising
 an arbitrary role alone does not add a new server publication behavior.
 
+Workers can declare an optional `processingProfile` to own document-specific output preferences
+and source requirements. This policy is independent of both the registration ID and `cadSystem`:
+
+```json
+{
+  "processingProfile": {
+    "preferredOutputs": {
+      "part": ["glb"],
+      "assembly": ["glb", "component-geometry"],
+      "drawing": ["drawing-pdf"]
+    },
+    "outputContracts": {"component-geometry": "component-geometry-step-v1"},
+    "includeRelatedDrawings": true
+  }
+}
+```
+
+`preferredOutputs` covers exactly the declared document kinds. Each list is bounded, unique and
+contains advertised optional roles; it cannot duplicate the three required metadata roles.
+Modelryx intersects these preferences with supported publication formats. Legacy workers without
+a profile keep their existing GLB/PDF preferences; advertising bundle roles alone does not enable them.
+
+Supported bundle contracts are `component-geometry-step-v1`, `related-drawing-v1` and
+`manufacturing-outputs-v1` on their corresponding roles. Component STEP bundles declare millimetre
+geometry, explicit occurrence/definition identities and finite row-major world affine transforms.
+Related drawings contain PDFs with sheet counts; manufacturing bundles contain DXF/JSON files.
+Modelryx checks bounded ZIP entries, manifests, file signatures, identities and applicable units before
+publication. A worker declaration does not bypass validation or authorize arbitrary output formats.
+`includeRelatedDrawings` includes supported authoritative drawing files from the revision snapshot
+and requires drawing support. Native interpretation and generation remain the worker's responsibility.
+Re-register after adding or changing a profile so cached capabilities match the live worker.
+
 For example, FreeCAD advertises:
 
 ```json
@@ -63,18 +95,33 @@ extension. More than one match is an error; neither registration order nor readi
 winner. Format discovery sent to the browser and Local CAD Agent contains worker identity
 and capabilities, not endpoint URLs or credentials. Administrators manage URLs separately.
 
-### External FreeCAD routing
+### Native CAD routing
 
 | Configuration | Processing route |
 | --- | --- |
 | One enabled matching registration | Generic external CAD job |
-| No matching registration, external FreeCAD URL configured | Generic job using live worker capabilities |
-| Neither | FreeCAD processing unavailable |
+| No matching registration, default external CAD URL configured with matching capabilities | Generic job using live worker capabilities |
+| Neither | Native CAD processing unavailable |
 
 Multiple matching registrations are errors. External failures follow normal failure/retry
-handling and never run native FreeCAD inside the platform. Registration changes affect subsequent
+handling. Native CAD runs in external workers. Registration changes affect subsequent
 routing; a queued generic job needs its matching enabled registration or reachable configured server at dispatch time.
 Controlled CAD editing sessions are disabled in this release. STEP/STP retains its separate service.
+
+Routing, readiness, output selection and dependency reconciliation use advertised capabilities,
+document kinds and output contracts. Worker registration IDs and CAD vendor names do not select
+special server behavior. Cancellation is available for all supported processing job types until
+publication begins. Previously queued `FCSTD_TO_MODELRYX` jobs use the same native CAD dispatcher.
+
+Optional default endpoints use `MODELRYX_CAD_WORKER_URL` and `MODELRYX_CAD_PREPROCESSOR_URL`.
+The corresponding admin settings are `worker_url` and `analyzer_url`. Legacy FreeCAD environment
+variables, stored settings and admin field names remain fallback aliases; explicitly empty generic
+settings disable their legacy fallback. Existing registrations need no ID changes.
+Deploy the backend, processing orchestrator and frontend together. Every native format,
+including FCStd, needs a matching registration or configured endpoint with valid capabilities.
+Native conversion and its caching belong to that worker; the platform no longer uses a
+separate legacy FreeCAD conversion/cache path. Processing responses expose `can_cancel`
+so clients do not need to infer cancellation support from CAD or job names.
 
 The in-repository [FreeCAD worker](../workers/freecad/README.md#reference-external-worker) is the
 reference implementation. External workers follow the same registration, multipart submission,

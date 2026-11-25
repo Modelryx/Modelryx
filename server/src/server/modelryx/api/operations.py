@@ -79,7 +79,9 @@ def worker_statuses(db: Session, settings: Settings, now: datetime) -> list[Work
     for heartbeat in db.scalars(
         select(WorkerHeartbeat).order_by(WorkerHeartbeat.last_heartbeat_at.desc())
     ):
-        if heartbeat.worker_type.upper() != "FREECAD":
+        # Declared native CAD endpoints are probed through external registration.
+        capabilities = heartbeat.capabilities_json or {}
+        if not (capabilities.get("cadSystem") or capabilities.get("cad_system")):
             latest.setdefault(heartbeat.worker_type, heartbeat)
     configured_urls = {
         "STEP": settings.step_worker_url,

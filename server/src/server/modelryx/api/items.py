@@ -840,7 +840,6 @@ def copy_item_revision(
             else ""
         )
         copied_processing_type = {
-            ".fcstd": "FCSTD_TO_MODELRYX",
             ".step": "STEP_TO_MODELRYX",
             ".stp": "STEP_TO_MODELRYX",
         }.get(copied_extension)
@@ -1014,7 +1013,7 @@ def revision_action_availability(
     if not filenames:
         filenames = [file.original_filename for file in source_files]
     built_in = any(
-        Path(name).suffix.casefold() in {".fcstd", ".step", ".stp"} for name in filenames
+        Path(name).suffix.casefold() in {".step", ".stp"} for name in filenames
     )
     try:
         worker_configured = built_in or any(

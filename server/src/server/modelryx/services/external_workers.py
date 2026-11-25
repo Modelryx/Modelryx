@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from modelryx.core.config import Settings, get_settings
 from modelryx.models import ApplicationSetting
+from modelryx.services.worker_output_policy import validate_processing_profile
 
 PREFIX = "external_worker."
 JOB_TYPE = "EXTERNAL_CAD_TO_MODELRYX"
@@ -21,13 +22,26 @@ class AmbiguousWorkerError(ValueError):
     """More than one enabled worker matches a source."""
 
 
-def validate_capabilities(value: object) -> dict:
-    """Accept only a bounded, supported subset of the versioned worker contract."""
+def _capability_system(value: object) -> str:
     if not isinstance(value, dict) or value.get("contractVersion") != "1.0":
         raise ValueError("Worker must advertise contract version 1.0")
     system = value.get("cadSystem")
     if not isinstance(system, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 _.-]{0,63}", system):
         raise ValueError("Worker CAD system contains invalid characters")
+    return system
+
+
+def validate_dependency_capabilities(value: object) -> dict:
+    """Preprocessors advertise analysis support without conversion output roles."""
+    system = _capability_system(value)
+    if value.get("dependencyAnalysis") is not True:
+        raise ValueError("The endpoint does not advertise dependency analysis")
+    return {"contractVersion": "1.0", "cadSystem": system, "dependencyAnalysis": True}
+
+
+def validate_capabilities(value: object) -> dict:
+    """Accept only a bounded, supported subset of the versioned worker contract."""
+    system = _capability_system(value)
     name = value.get("workerName", system)
     version = value.get("workerVersion", "unknown")
     if not isinstance(name, str) or not 1 <= len(name.strip()) <= 100:
@@ -54,7 +68,7 @@ def validate_capabilities(value: object) -> dict:
     dependency_analysis = value.get("dependencyAnalysis", False)
     if type(dependency_analysis) is not bool:
         raise ValueError("Worker dependencyAnalysis must be a boolean")
-    return {
+    capabilities = {
         "contractVersion": "1.0",
         "cadSystem": system,
         "workerName": name.strip(),
@@ -64,6 +78,11 @@ def validate_capabilities(value: object) -> dict:
         "outputRoles": outputs,
         "dependencyAnalysis": dependency_analysis,
     }
+    if "processingProfile" in value:
+        capabilities["processingProfile"] = validate_processing_profile(
+            value["processingProfile"], kinds, outputs
+        )
+    return capabilities
 
 
 def registered_workers(db: Session) -> list[dict]:
@@ -116,9 +135,9 @@ def discover_workers(db: Session, settings: Settings) -> list[dict]:
     workers = registered_workers(db)
     if not settings.internal_worker_key:
         return workers
-    from modelryx.services.freecad_settings import FREECAD_WORKER_KEY, configured_url
+    from modelryx.services.cad_worker_settings import CAD_WORKER_KEY, configured_url, worker_default
 
-    url = configured_url(db, FREECAD_WORKER_KEY, settings.freecad_worker_url)
+    url = configured_url(db, CAD_WORKER_KEY, worker_default(settings))
     if not url or any(w["enabled"] and w["url"].rstrip("/") == url.rstrip("/") for w in workers):
         return workers
     try:

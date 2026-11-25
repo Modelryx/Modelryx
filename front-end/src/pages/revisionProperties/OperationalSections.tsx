@@ -15,7 +15,7 @@ export function ProcessingSection({
   const [message, setMessage] = useState('');
 
   const runAction = async (job: ProcessingJob, action: 'retry' | 'cancel') => {
-    if (action === 'cancel' && !window.confirm('Cancel this pending processing job?')) return;
+    if (action === 'cancel' && !window.confirm('Cancel this processing job?')) return;
     setBusyJobId(job.id);
     setMessage('');
     try {
@@ -97,13 +97,13 @@ export function ProcessingSection({
                         Retry
                       </button>
                     )}
-                    {job.state === 'PENDING' && (
+                    {job.can_cancel && (
                       <button
                         type="button"
-                        disabled={busyJobId === job.id}
+                        disabled={busyJobId === job.id || job.stage === 'CANCELLING'}
                         onClick={() => void runAction(job, 'cancel')}
                       >
-                        Cancel
+                        {job.stage === 'CANCELLING' ? 'Cancelling…' : 'Cancel'}
                       </button>
                     )}
                   </div>

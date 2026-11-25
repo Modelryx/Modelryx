@@ -495,6 +495,7 @@ class ProcessingJobResponse(BaseModel):
     started_at: datetime | None
     finished_at: datetime | None
     can_control: bool = False
+    can_cancel: bool = False
     files: list[ProcessingFileStatus] = Field(default_factory=list)
     fix_suggestion: str | None = None
     item_number: str | None = None

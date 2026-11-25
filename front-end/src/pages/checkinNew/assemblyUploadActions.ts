@@ -9,6 +9,7 @@ import {
   cadProfile,
   createsManagedItem,
   bomInstanceNames,
+  managedBomReferences,
   isDrawing,
   relatedSupportPaths,
 } from './model';
@@ -133,7 +134,9 @@ export function createAssemblyUploadActions(context: Context) {
       };
       const createNewEntries = ready.filter((entry) => entry.duplicateChoice !== 'USE_EXISTING');
       const relatedDrawings = packageEntries.filter((entry) => entry !== main && isDrawing(entry));
-      const instanceNames = bomInstanceNames(dependencyReport?.references ?? []);
+      const bomReferences = managedBomReferences(dependencyReport?.references ?? []);
+      const names = bomInstanceNames(bomReferences);
+      const instanceNames = new Map(bomReferences.map((reference, index) => [reference, names[index]]));
       const packageEntriesFor = (owner: FileEntry) => {
         if (owner.documentType !== 'ASSEMBLY' || !dependencyReport?.references?.length) {
           return [owner];
@@ -264,7 +267,7 @@ export function createAssemblyUploadActions(context: Context) {
         artifacts,
         identity_decisions: identityDecisions,
         bom: dependencyReport?.references?.length
-          ? dependencyReport.references
+          ? bomReferences
               .filter(
                 (reference) =>
                   ready.some((entry) => entry.logicalPath === reference.parent_logical_path) &&
@@ -286,7 +289,7 @@ export function createAssemblyUploadActions(context: Context) {
                   parent_staged_file_id: stagedFile(parent).id,
                   child_staged_file_id: stagedFile(child).id,
                   instance_name:
-                    instanceNames[index] ||
+                    instanceNames.get(reference) ||
                     reference.occurrence_key ||
                     reference.occurrence_path ||
                     `${reference.parent_logical_path}::${

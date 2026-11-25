@@ -67,6 +67,7 @@ export type StageProcessingJob = {
   started_at: string | null;
   finished_at: string | null;
   can_control: boolean;
+  can_cancel: boolean;
   files: ProcessingFile[];
   fix_suggestion: string | null;
   item_number?: string | null;
@@ -229,7 +230,7 @@ export function StagesPanel({
     setError('');
   };
   const runProcessingAction = async (job: StageProcessingJob, action: 'retry' | 'cancel') => {
-    if (action === 'cancel' && !confirm('Cancel this queued processing stage?')) return;
+    if (action === 'cancel' && !confirm('Cancel this processing stage?')) return;
     setBusyJobId(job.id);
     setError('');
     try {
@@ -391,10 +392,7 @@ export function StagesPanel({
                         Retry
                       </button>
                     )}
-                    {(selectedJob.state === 'PENDING' ||
-                      (selectedJob.state === 'RUNNING' &&
-                        selectedJob.type === 'FCSTD_TO_MODELRYX' &&
-                        !['PUBLISHING', 'COMPLETED'].includes(selectedJob.stage))) && (
+                    {selectedJob.can_cancel && (
                       <button
                         type="button"
                         disabled={
@@ -611,10 +609,7 @@ export function StagesPanel({
                             Retry
                           </button>
                         )}
-                        {(selectedJob.state === 'PENDING' ||
-                          (selectedJob.state === 'RUNNING' &&
-                            selectedJob.type === 'FCSTD_TO_MODELRYX' &&
-                            !['PUBLISHING', 'COMPLETED'].includes(selectedJob.stage))) && (
+                        {selectedJob.can_cancel && (
                           <button
                             type="button"
                             disabled={

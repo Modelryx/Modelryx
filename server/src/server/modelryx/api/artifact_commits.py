@@ -110,27 +110,14 @@ def _content_blob_for_staged_file(
     return blob
 
 
-def _native_processing_type(
-    filename: str, cad_system: str, db: Session | None = None
-) -> str | None:
-    extension = Path(filename).suffix.casefold()
-    if db is not None and extension not in {".step", ".stp"}:
-        from modelryx.services.external_workers import (
-            JOB_TYPE,
-            AmbiguousWorkerError,
-            matching_worker,
-        )
+def _native_processing_type(filename: str, cad_system: str, db: Session | None = None) -> str | None:
+    from modelryx.services.cad_routing import processing_type_for_source
+    from modelryx.services.external_workers import AmbiguousWorkerError
 
-        try:
-            if matching_worker(db, filename, cad_system):
-                return JOB_TYPE
-        except AmbiguousWorkerError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-    if extension == ".fcstd":
-        return "FCSTD_TO_MODELRYX"
-    if extension in {".step", ".stp"}:
-        return "STEP_TO_MODELRYX"
-    return None
+    try:
+        return processing_type_for_source(filename, cad_system, db)
+    except AmbiguousWorkerError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 def _stored_result(staging: StagingSession) -> StagingCommitResponse:
@@ -731,12 +718,11 @@ def _commit_edit(
                 )
                 .limit(1)
             )
-            if candidate == JOB_TYPE or (candidate is None and was_external is not None):
+            if candidate == JOB_TYPE or (
+                candidate is None and (was_external is not None or force_reprocess)
+            ):
                 processing_type = JOB_TYPE
-    if processing_type is not None or (
-        force_reprocess and revision.native_format.lower() == "fcstd"
-    ):
-        processing_type = processing_type or "FCSTD_TO_MODELRYX"
+    if processing_type is not None:
         revision.state = "PROCESSING"
         db.add(
             ProcessingJob(

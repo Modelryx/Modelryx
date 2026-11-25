@@ -48,8 +48,8 @@ export function AdminConsole({
   const [items, setItems] = useState<Item[]>([]);
   const [status, setStatus] = useState<Status | null>(null);
   const [cadWorkerSettings, setCadWorkerSettings] = useState<CadWorkerSettings>({
-    freecad_url: null,
-    freecad_analyzer_url: null,
+    worker_url: null,
+    analyzer_url: null,
   });
   const [cadWorkerStatus, setCadWorkerStatus] = useState<CadWorkerStatus | null>(null);
   const [cadWorkerSettingsBusy, setCadWorkerSettingsBusy] = useState(false);
@@ -146,8 +146,8 @@ export function AdminConsole({
     setError('');
     try {
       const saved = await api<CadWorkerSettings>('/admin/cad-workers', 'PUT', {
-        freecad_url: String(data.get('freecadUrl') ?? '').trim() || null,
-        freecad_analyzer_url: String(data.get('freecadAnalyzerUrl') ?? '').trim() || null,
+        worker_url: String(data.get('cadWorkerUrl') ?? '').trim() || null,
+        analyzer_url: String(data.get('cadAnalyzerUrl') ?? '').trim() || null,
       });
       setCadWorkerSettings(saved);
       setCadWorkerSettingsSaved(true);
